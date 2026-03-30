@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DAR Login</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="login-body">
+
+<div class="login-container">
+    <h1>DAR SYSTEM</h1>
+
+    <form method="POST">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+
+        <label class="remember">
+            <input type="checkbox" name="remember"> Remember Me (7 days)
+        </label>
+
+        <button type="submit">Login</button>
+    </form>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+</div>
+
+</body>
+</html>

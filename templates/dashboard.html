@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="dashboard">
+
+    <div class="topbar">
+        <h2>Welcome, {{ fullname }}</h2>
+        <a href="/logout">Logout</a>
+    </div>
+
+    <div class="info">
+        <p>User: {{ username }}</p>
+        <p>Level: {{ userlevel }}</p>
+    </div>
+
+    <div class="buttons">
+
+        {% if userlevel == "SuperAdmin" %}
+            <button class="btn">Configure</button>
+        {% endif %}
+
+        <!-- TEMPLATE AREA -->
+        <div class="future-buttons">
+            <!-- Add future role-based buttons here -->
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
