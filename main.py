@@ -59,8 +59,7 @@ def logout():
     session.clear()
     return redirect("/")
 
-
 # ✅ INIT DB SAFELY (Flask 3.x compatible)
 if __name__ == "__main__":
     init_db()  # ← runs once on startup
-    app.run(host="0.0.0.0", port=200, debug=True)
+    app.run(host="0.0.0.0", port=(777), debug=True)

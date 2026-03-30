@@ -2,12 +2,29 @@
 <html>
 <head>
     <title>DAR Login</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body class="login-body">
 
+<!-- SIDEBAR -->
+<div id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <div class="burger" onclick="toggleSidebar()">☰</div>
+    </div>
+
+    <div class="menu">
+        <button class="menu-btn active">Contact Admin</button>
+        <button class="menu-btn">About</button>
+    </div>
+</div>
+
+<!-- LOGO -->
+<img src="{{ url_for('static', filename='images/DAR_logo.png') }}" class="logo">
+
+<!-- LOGIN -->
 <div class="login-container">
-    <h1>DAR SYSTEM</h1>
+    <h1>DAR Negros Island Region</h1><br>
+    <h2>Project SPLIT</h2>
 
     <form method="POST">
         <input type="text" name="username" placeholder="Username" required>
@@ -24,6 +41,17 @@
         <p class="error">{{ error }}</p>
     {% endif %}
 </div>
+
+<!-- MARQUEE -->
+<div class="marquee">
+    <p>Dedicated website of DAR-NIR for Project SPLIT Automation</p>
+</div>
+
+<script>
+function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("collapsed");
+}
+</script>
 
 </body>
 </html>

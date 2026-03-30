@@ -13,6 +13,7 @@ body {
     height: 100vh;
 }
 
+/* LOGIN BOX */
 .login-container {
     background: #111;
     padding: 40px;
@@ -35,34 +36,141 @@ body {
     padding: 10px;
     border: none;
     width: 100%;
+    cursor: pointer;
 }
 
 .error {
     color: red;
 }
 
-/* DASHBOARD */
-.dashboard {
-    background: #0b0b0b;
-    color: #00ff88;
-    min-height: 100vh;
-}
-
-.topbar {
-    background: #111;
-    padding: 15px;
+/* SIDEBAR */
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 220px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    transition: 0.3s;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
 }
 
-.buttons {
-    padding: 20px;
+/* COLLAPSED */
+.sidebar.collapsed {
+    width: 70px;
 }
 
-.btn {
-    background: #00aa55;
-    padding: 15px;
-    border: none;
-    color: white;
+/* HEADER (fix burger alignment) */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* keep left always */
+    padding-left: 18px;
+    height: 60px;
+}
+
+/* BURGER */
+.burger {
+    font-size: 24px;
+    color: #cceeff;
     cursor: pointer;
+}
+
+/* MENU */
+.menu {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* BUTTON BASE */
+.menu-btn {
+    background: transparent;
+    border: none;
+    color: #cceeff;
+    padding: 14px 20px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 15px;
+    transition: all 0.2s ease;
+
+    /* subtle separation */
+    border-left: 3px solid transparent;
+}
+
+/* HOVER EFFECT */
+.menu-btn:hover {
+    background: rgba(255,255,255,0.06);
+    color: #ffffff;
+    border-left: 3px solid rgba(0, 170, 85, 0.6);
+}
+
+/* ACTIVE (ONLY WHEN YOU SET IT IN HTML) */
+.menu-btn.active {
+    background: rgba(0, 170, 85, 0.15);
+    border-left: 3px solid #00aa55;
+    color: #ffffff;
+}
+
+.menu-btn.active {
+    background: rgba(0, 170, 85, 0.15);
+    border-left: 3px solid #00aa55;
+    color: white;
+}
+
+/* COLLAPSED TEXT */
+.sidebar.collapsed .menu-btn {
+    font-size: 0;
+    padding: 20px 0;
+}
+
+/* LOGO */
+.logo {
+    position: fixed;
+    top: 20px;
+    right: 25px;
+    width: 90px;
+    opacity: 0.9;
+}
+
+/* MARQUEE */
+.marquee {
+    position: fixed;
+    bottom: 0;
+    left: 220px; /* prevents overlap with sidebar */
+    width: 100%;
+    background: transparent;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* ADJUST WHEN COLLAPSED */
+.sidebar.collapsed ~ .marquee {
+    left: 70px;
+    width: calc(100% - 70px);
+}
+
+.marquee p {
+    position: relative;
+    white-space: nowrap;
+    color: #cccccc;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+
+    /* THIS is the key fix */
+    display: inline-block;
+    transform: translateX(100vw);
+    animation: marquee-scroll 18s linear infinite;
+}
+
+/* SMOOTH TRUE OFF-SCREEN SCROLL */
+@keyframes marquee-scroll {
+    from {
+        transform: translateX(100vw);
+    }
+    to {
+        transform: translateX(-100%);
+    }
 }
