@@ -1,0 +1,374 @@
+/* RESET */
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background:
+        radial-gradient(circle at 70% 30%, rgba(0,255,136,0.08), transparent 40%),
+        linear-gradient(135deg, #0f3d0f, #1f1f1f);
+    color: white;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 220px;
+    height: 100%;
+
+    background: rgba(10,25,10,0.85);
+    backdrop-filter: blur(10px);
+
+    border-right: 1px solid rgba(0,255,136,0.15);
+    box-shadow: 5px 0 20px rgba(0,0,0,0.4);
+
+    transition: 0.3s;
+    z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar.collapsed {
+    width: 70px;
+}
+
+.sidebar-header {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    padding-left: 15px;
+}
+
+.burger {
+    font-size: 22px;
+    cursor: pointer;
+    color: #a8d5ba;
+}
+
+/* MENU */
+.menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+}
+
+.menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 12px;
+    border-radius: 8px;
+
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(0,255,136,0.08);
+
+    color: #a8d5ba;
+    text-decoration: none;
+
+    transition: 0.25s;
+}
+
+.menu-btn:hover {
+    background: rgba(0,255,136,0.08);
+    border-color: #00ff88;
+    color: white;
+}
+
+.sidebar.collapsed .label {
+    display: none;
+}
+
+.sidebar.collapsed .menu-btn {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: 8px auto;
+}
+
+/* =========================
+   MAIN
+========================= */
+.main {
+    margin-left: 220px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: 0.3s;
+}
+
+.main.expanded {
+    margin-left: 70px;
+}
+
+/* =========================
+   TOPBAR
+========================= */
+.topbar {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid rgba(0,255,136,0.2);
+}
+
+.logout-btn {
+    padding: 8px 15px;
+    border: 1px solid rgba(0,255,136,0.4);
+    color: #a8d5ba;
+    text-decoration: none;
+}
+
+.logout-btn:hover {
+    background: rgba(0,255,136,0.15);
+    color: white;
+}
+
+/* =========================
+   MARQUEE (FIXED)
+========================= */
+.announcement-bar {
+    height: 35px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+
+    border-bottom: 1px solid rgba(0,255,136,0.15);
+
+    background: linear-gradient(
+        to right,
+        rgba(0,255,136,0.06),
+        rgba(0,255,136,0.02)
+    );
+}
+
+.announcement-track {
+    white-space: nowrap;
+    display: inline-block;
+    animation: marquee 18s linear infinite;
+}
+
+.announcement-track span {
+    padding-right: 80px;
+    font-size: 14px;
+    color: #a8d5ba;
+}
+
+@keyframes marquee {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+/* =========================
+   CONTENT
+========================= */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+    overflow: hidden;
+}
+
+/* =========================
+   NEWS PANEL (TOP SCROLL)
+========================= */
+.news-panel {
+    flex: 1;
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 8px;
+
+    background: linear-gradient(
+        145deg,
+        rgba(0,255,136,0.03),
+        rgba(0,0,0,0.25)
+    );
+
+    padding: 15px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+.news-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.news-panel::-webkit-scrollbar-thumb {
+    background: rgba(0,255,136,0.5);
+    border-radius: 10px;
+}
+
+/* =========================
+   ACTION PANEL
+========================= */
+.action-panel {
+    height: 150px;
+
+    border: 1px solid rgba(0,255,136,0.25);
+    border-radius: 10px;
+
+    background: linear-gradient(
+        145deg,
+        rgba(0,255,136,0.08),
+        rgba(0,0,0,0.3)
+    );
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 10px 15px;
+}
+
+/* =========================
+   SCROLL CONTROLS
+========================= */
+.scroll-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.scroll-btn {
+    width: 30px;
+    height: 30px;
+
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.3);
+    border-radius: 6px;
+
+    cursor: pointer;
+    color: #a8d5ba;
+}
+
+.scroll-btn:hover {
+    background: rgba(0,255,136,0.25);
+    color: white;
+}
+
+/* =========================
+   SCROLLY RAIL (BOTTOM)
+========================= */
+scrolly-rail {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+
+    padding-bottom: 10px;
+}
+
+scrolly-rail::-webkit-scrollbar {
+    height: 8px;
+}
+
+scrolly-rail::-webkit-scrollbar-track {
+    margin-top: 6px; /* spacing from buttons */
+    background: rgba(0,0,0,0.3);
+    border-radius: 10px;
+}
+
+scrolly-rail::-webkit-scrollbar-thumb {
+    background: rgba(0,255,136,0.5);
+    border-radius: 10px;
+}
+
+/* =========================
+   BUTTONS
+========================= */
+.scroll-list {
+    display: flex;
+    gap: 14px;
+    list-style: none;
+    margin: 0;
+    padding: 10px 5px 20px 5px;
+}
+
+.scroll-list li {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+}
+
+.card-btn {
+    width: 120px;
+    height: 70px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 10px;
+    border: 1px solid rgba(0,255,136,0.25);
+
+    background: linear-gradient(
+        145deg,
+        rgba(0,0,0,0.7),
+        rgba(0,255,136,0.05)
+    );
+
+    color: #a8d5ba;
+    text-decoration: none;
+    font-size: 13px;
+
+    transition: 0.2s;
+}
+
+.card-btn:hover {
+    background: rgba(0,255,136,0.15);
+    border-color: #00ff88;
+    color: white;
+}
+
+/* =========================
+   MOBILE (OVERLAY)
+========================= */
+@media (max-width: 768px) {
+
+    .sidebar {
+        left: -220px;
+    }
+
+    .sidebar.active {
+        left: 0;
+    }
+
+    .main {
+        margin-left: 0;
+    }
+}
+
+/* NEWS CARD */
+.news-card {
+    width: 220px;
+    height: 100px;
+
+    padding: 10px;
+
+    border-radius: 10px;
+    border: 1px solid rgba(0,255,136,0.2);
+
+    background: rgba(0,0,0,0.4);
+}
+
+/* SCROLLY BUTTON STYLE (GREEN THEME FIX) */
+.btn-scrolly-rail {
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.4);
+    color: #a8d5ba;
+}
+
+.btn-scrolly-rail:hover {
+    background: rgba(0,255,136,0.25);
+    color: white;
+}

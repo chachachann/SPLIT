@@ -15,7 +15,7 @@ body {
 
 /* LOGIN BOX */
 .login-container {
-    background: #111;
+    background: rgba(15, 21, 15, 0.8);
     padding: 40px;
     border-radius: 10px;
     border: 1px solid #00ff88;
@@ -68,6 +68,58 @@ body {
     width: 70px;
 }
 
+.sidebar.collapsed .label {
+    display: none;
+}
+
+.sidebar.collapsed .menu-btn {
+    justify-content: center;
+    padding: 12px;
+    margin: 8px;
+    width: 44px;
+    height: 44px;
+}
+
+.sidebar.collapsed .menu-btn {
+    background: transparent;
+    border: none;
+}
+
+.sidebar.collapsed .menu-btn::before {
+    display: none;
+}
+
+.sidebar.collapsed .menu-btn::before {
+    display: none;
+}
+
+/* ICON MODE BACKGROUND */
+.sidebar.collapsed .menu-btn {
+    justify-content: center;
+    align-items: center;
+
+    width: 44px;
+    height: 44px;
+
+    margin: 10px auto;
+    padding: 0;
+
+    border-radius: 10px;
+
+    background: rgba(0, 255, 136, 0.08);
+    border: 1px solid rgba(0, 255, 136, 0.15);
+
+    transition: all 0.25s ease;
+}
+
+.sidebar.collapsed .menu-btn:hover {
+    background: rgba(0, 255, 136, 0.18);
+    border: 1px solid #00ff88;
+
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(0,255,136,0.25);
+}
+
 /* HEADER (fix burger alignment) */
 .sidebar-header {
     display: flex;
@@ -110,6 +162,8 @@ body {
 
 /* BUTTON BASE */
 .menu-btn {
+    position: relative; /* REQUIRED */
+
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(0, 255, 136, 0.08);
     color: #a8d5ba;
@@ -118,20 +172,58 @@ body {
     margin: 6px 12px;
     border-radius: 6px;
 
-    text-align: left;
+    text-align: center;
     cursor: pointer;
     font-size: 15px;
 
+    overflow: hidden; /* IMPORTANT */
     transition: all 0.25s ease;
+
+    display: flex;
+    gap: 12px;
+}
+
+.menu_icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+.menu-btn::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+
+    width: 0%;
+    height: 100%;
+
+    background: rgba(0, 255, 136, 0.08);
+
+    transition: width 0.5s ease; /* smooth */
+    z-index: 0;
+}
+
+.menu-btn:hover::before {
+    width: 100%;
+}
+
+.menu-btn {
+    z-index: 1;
+}
+
+.menu-btn * {
+    position: relative;
+    z-index: 2;
 }
 
 /* HOVER EFFECT */
 .menu-btn:hover {
     background: rgba(0, 255, 136, 0.08);
     color: #ffffff;
-    border-left: 3px solid #00ff88;
+    border-left: 30px solid #00ff88;
 
-    padding-left: 25px; /* smooth slide */
+    padding-left: 25px;
 }
 
 /* ACTIVE (ONLY WHEN YOU SET IT IN HTML) */
@@ -201,3 +293,60 @@ body {
         transform: translateX(-100%);
     }
 }
+
+/*Dashboard*/
+
+/* DASHBOARD CONTAINER */
+.dashboard {
+    margin-left: 220px;
+    padding: 30px;
+    color: white;
+}
+
+/* SCROLL RAIL */
+.button-rail {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+
+    margin-top: 30px;
+    padding-bottom: 10px;
+
+    scroll-snap-type: x mandatory;
+}
+
+/* CARD BUTTON */
+.card-btn {
+    min-width: 220px;
+    height: 130px;
+
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(0, 255, 136, 0.15);
+    border-radius: 12px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #a8d5ba;
+    font-size: 18px;
+    text-decoration: none;
+
+    transition: all 0.25s ease;
+    scroll-snap-align: start;
+}
+
+/* HOVER */
+.card-btn:hover {
+    background: rgba(0, 255, 136, 0.08);
+    border: 1px solid #00ff88;
+    color: white;
+
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(0,255,136,0.2);
+}
+
+.main-bg {
+    background: linear-gradient(135deg, #0f3d0f, #1f1f1f);
+}
+

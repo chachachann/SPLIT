@@ -2,36 +2,146 @@
 <html>
 <head>
     <title>Dashboard</title>
-    <link rel="stylesheet" href="/static/styles.css">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
 </head>
+
 <body>
 
-<div class="dashboard">
+<!-- SIDEBAR -->
+<div id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <div class="burger" onclick="toggleSidebar()">☰</div>
+    </div>
+
+    <div class="menu">
+        {% for btn in buttons %}
+        <a href="{{ btn[1] }}" class="menu-btn">
+            <span class="menu_icon">⚙️</span>
+            <span class="label">{{ btn[0] }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- MAIN -->
+<div id="main" class="main">
 
     <div class="topbar">
-        <h2>Welcome, {{ fullname }}</h2>
-        <a href="/logout">Logout</a>
+        <div>{{ fullname }} • {{ userlevel }}</div>
+        <a href="/logout" class="logout-btn">Logout</a>
     </div>
 
-    <div class="info">
-        <p>User: {{ username }}</p>
-        <p>Level: {{ userlevel }}</p>
+    <!-- MARQUEE -->
+    <div class="announcement-bar">
+        <div class="announcement-track">
+            <span>📢 System Maintenance at 5PM • New features coming soon • Contact admin •</span>
+        </div>
     </div>
 
-    <div class="buttons">
+    <div class="content">
 
-        {% if userlevel == "SuperAdmin" %}
-            <button class="btn">Configure</button>
-        {% endif %}
+        <!-- 🔝 NEWS PANEL -->
+        <div class="news-panel">
 
-        <!-- TEMPLATE AREA -->
-        <div class="future-buttons">
-            <!-- Add future role-based buttons here -->
+            <div class="layout-layer">
+
+                <scrolly-rail data-control-previous="news-prev" data-control-next="news-next">
+                    <ul class="scroll-list">
+
+                        <li>
+                            <div class="news-card">
+                                <h4>System Update 1</h4>
+                                <p>Maintenance at 5PM.</p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="news-card">
+                                <h4>System Update 2</h4>
+                                <p>New features rollout.</p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="news-card">
+                                <h4>System Update 3</h4>
+                                <p>Performance improvements.</p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="news-card">
+                                <h4>System Update 4</h4>
+                                <p>Security patch applied.</p>
+                            </div>
+                        </li>
+
+                    </ul>
+                </scrolly-rail>
+
+                <button id="news-prev" class="btn-scrolly-rail btn-scrolly-rail--previous">←</button>
+                <button id="news-next" class="btn-scrolly-rail btn-scrolly-rail--next">→</button>
+
+            </div>
+
+        </div>
+
+        <!-- 🔽 ACTION PANEL -->
+        <div class="action-panel">
+
+            <div class="scrolly-rail-controls">
+                <button id="btn-prev" class="btn-scrolly-rail btn-scrolly-rail--previous">←</button>
+                <button id="btn-next" class="btn-scrolly-rail btn-scrolly-rail--next">→</button>
+            </div>
+
+            <scrolly-rail data-control-previous="btn-prev" data-control-next="btn-next">
+                <ul class="scroll-list">
+                    <li><a href="#" class="card-btn">Config</a></li>
+                    <li><a href="#" class="card-btn">Users</a></li>
+                    <li><a href="#" class="card-btn">Reports</a></li>
+                    <li><a href="#" class="card-btn">Logs</a></li>
+                </ul>
+            </scrolly-rail>
+
         </div>
 
     </div>
 
 </div>
+
+<script>
+function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("collapsed");
+    document.getElementById("main").classList.toggle("expanded");
+}
+</script>
+
+<script>
+class ScrollyRail extends HTMLElement {
+  static register(tag = "scrolly-rail") {
+    if ("customElements" in window) {
+      customElements.define(tag, this);
+    }
+  }
+
+  get items() {
+    const els = [...this.children];
+    return els.length === 1 ? [...els[0].children] : els;
+  }
+
+  connectedCallback() {
+    this.prevBtn = document.getElementById(this.dataset.controlPrevious);
+    this.nextBtn = document.getElementById(this.dataset.controlNext);
+
+    if (this.prevBtn) this.prevBtn.onclick = () => this.scrollBy({ left: -300, behavior: "smooth" });
+    if (this.nextBtn) this.nextBtn.onclick = () => this.scrollBy({ left: 300, behavior: "smooth" });
+  }
+}
+
+ScrollyRail.register();
+</script>
 
 </body>
 </html>

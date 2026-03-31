@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, session
 from datetime import timedelta, datetime
-from logic import init_db, validate_user
+from logic import init_db, validate_user, get_buttons
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
@@ -41,23 +41,29 @@ def login():
     return render_template("login.html")
 
 
-@app.route("/dashboard")
-def dashboard():
-    if "user" not in session:
-        return redirect("/")
 
-    return render_template(
-        "dashboard.html",
-        username=session.get("user"),
-        userlevel=session.get("userlevel"),
-        fullname=session.get("fullname")
-    )
+
 
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
+
+@app.route("/dashboard")
+def dashboard():
+    if "user" not in session:
+        return redirect("/")
+
+    buttons = get_buttons(session.get("userlevel"))
+
+    return render_template(
+        "dashboard.html",
+        username=session.get("user"),
+        userlevel=session.get("userlevel"),
+        fullname=session.get("fullname"),
+        buttons=buttons
+    )
 
 # ✅ INIT DB SAFELY (Flask 3.x compatible)
 if __name__ == "__main__":
