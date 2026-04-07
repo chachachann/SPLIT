@@ -1,168 +1,158 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DAR Login</title>
 
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "dark";
+                document.documentElement.style.colorScheme = "dark";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
-<body>
-    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+<body class="login-page">
+    <main class="login-layout">
+        <div class="login-atmosphere" aria-hidden="true">
+            <span class="login-orb login-orb-a"></span>
+            <span class="login-orb login-orb-b"></span>
+            <span class="login-grid"></span>
+        </div>
 
-    <div class="app-shell">
-        <aside id="sidebar" class="sidebar" aria-label="Primary navigation">
-            <div class="sidebar-header">
-                <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
-
+        <section class="login-hero" aria-labelledby="login-hero-title">
+            <header class="login-topbar">
                 <div class="brand brand-login">
-                    <span class="brand-emblem" aria-hidden="true">PS</span>
+                    <span class="brand-emblem" aria-hidden="true">
+                        <img src="{{ url_for('static', filename='images/SPLIT_Logo.png') }}" class="brand-emblem-logo" alt="">
+                    </span>
                     <span class="brand-copy">
                         <span class="brand-kicker">Project</span>
                         <span class="brand-name">SPLIT</span>
                     </span>
                 </div>
-            </div>
-
-            <nav class="menu" aria-label="Home shortcuts">
-                <button class="menu-btn" type="button">
-                    <span class="menu-icon">&#128222;</span>
-                    <span class="label">Contact Admin</span>
-                </button>
-
-                <button class="menu-btn" type="button">
-                    <span class="menu-icon">&#9432;</span>
-                    <span class="label">About</span>
-                </button>
-
-                <button class="menu-btn" type="button">
-                    <span class="menu-icon">?</span>
-                    <span class="label">Help</span>
-                </button>
-
-                <button class="menu-btn" type="button">
-                    <span class="menu-icon">&#128240;</span>
-                    <span class="label">News</span>
-                </button>
-            </nav>
-        </aside>
-
-        <main class="main">
-            <header class="topbar">
-                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
-
-                <div class="user-meta">
-                    <div class="page-title">Welcome</div>
-                    <div class="page-subtitle">DAR Negros Island Region &#8226; Project SPLIT</div>
-                </div>
             </header>
 
-            <section class="announcement-bar" aria-label="Announcements">
-                <div class="announcement-track">
-                    <div class="announcement-marquee">
-                        <span class="marquee">Dedicated website of DAR-NIR for Project SPLIT automation.</span>
-                        <span class="marquee">Use your assigned credentials to access the system.</span>
-                        <span class="marquee">Contact the administrator if you need account assistance.</span>
+            <div class="login-hero-content">
+                <div class="logo-wrap login-logo-wrap">
+                    <img src="{{ url_for('static', filename='images/DAR_logo.png') }}" class="logo login-logo" alt="DAR logo">
+                    <img src="{{ url_for('static', filename='images/SPLIT_Logo.png') }}" class="logo login-logo" alt="SPLIT logo">
+                </div>
+
+                <div class="login-copy">
+                    <p class="login-eyebrow">DAR Negros Island Region</p>
+                    <h1 id="login-hero-title">Supporting parcelization and individual titling under DAR Project SPLIT.</h1>
+                    <p class="login-lead">Project SPLIT is a DAR initiative supported by the World Bank to help convert collective CLOAs into individual land titles, improving land tenure security for agrarian reform beneficiaries nationwide.</p>
+                </div>
+
+                <div class="theme-switcher login-theme-switcher" aria-label="Theme settings">
+                    <div class="theme-switcher-copy">
+                        <span class="theme-switcher-title">Appearance</span>
+                        <span class="theme-switcher-state" data-theme-label>Dark mode</span>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="theme-toggle"
+                        data-theme-toggle
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Switch between dark mode and light mode"
+                    >
+                        <svg class="theme-toggle-icon theme-toggle-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"/>
+                        </svg>
+
+                        <span class="theme-toggle-track" aria-hidden="true">
+                            <span class="theme-toggle-thumb"></span>
+                        </span>
+
+                        <svg class="theme-toggle-icon theme-toggle-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2.75V5.25M12 18.75V21.25M21.25 12H18.75M5.25 12H2.75M18.54 5.46L16.77 7.23M7.23 16.77L5.46 18.54M18.54 18.54L16.77 16.77M7.23 7.23L5.46 5.46"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="login-highlights" aria-label="System highlights">
+                    <article class="highlight-card">
+                        <span class="highlight-label">DAR Mission</span>
+                        <strong>A just, safe, and equitable society</strong>
+                        <p>Uplift the quality of life of agrarian reform beneficiaries through land tenure improvement, agrarian justice, and support services.</p>
+                    </article>
+
+                    <article class="highlight-card">
+                        <span class="highlight-label">DAR Vision</span>
+                        <strong>Fair land distribution with empowered communities</strong>
+                        <p>A rural Philippines where farmers enjoy secure ownership, sustainable livelihoods, and active participation in national development.</p>
+                    </article>
+
+                    <article class="highlight-card">
+                        <span class="highlight-label">Project SPLIT</span>
+                        <strong>Operational support for parcelization work</strong>
+                        <p>Helps convert collective CLOAs into individual titles under a coordinated, nationwide implementation program.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="login-panel-shell">
+            <section class="panel login-panel" aria-labelledby="login-heading">
+                <div class="panel-header login-panel-header">
+                    <div>
+                        <p class="panel-kicker">Secure Entry</p>
+                        <h2 id="login-heading">Account Access</h2>
+                        <p>Sign in with your official account to continue to the dashboard.</p>
+                    </div>
+                </div>
+
+                <div class="panel-body login-panel-body">
+                    <div class="login-brand">
+                        <h1>DAR Negros Island Region</h1>
+                        <p>Project SPLIT operations portal</p>
+                    </div>
+
+                    <form method="POST">
+                        <div class="input-group">
+                            <input type="text" name="username" placeholder="Username" autocomplete="username" required>
+                        </div>
+
+                        <div class="input-group">
+                            <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+                        </div>
+
+                        <label class="remember">
+                            <input type="checkbox" name="remember">
+                            <span>Remember Me (7 days)</span>
+                        </label>
+
+                        <button type="submit" class="login-btn">Login</button>
+                    </form>
+
+                    {% if error %}
+                        <p class="error">{{ error }}</p>
+                    {% endif %}
+
+                    <div class="login-note">
+                        <span class="login-note-title">Authorized personnel only</span>
+                        <span class="login-note-copy">For DAR-NIR Project SPLIT personnel and authorized partner users.</span>
                     </div>
                 </div>
             </section>
+        </section>
+    </main>
 
-            <section class="home-content">
-                <div class="home-shell">
-                    <div class="logo-wrap">
-                        <img src="{{ url_for('static', filename='images/DAR_logo.png') }}" class="logo" alt="DAR logo">
-                    </div>
-
-                    <section class="panel login-panel" aria-labelledby="login-heading">
-                        <div class="panel-header">
-                            <div>
-                                <h2 id="login-heading">Account Access</h2>
-                                <p>Use your official account credentials to continue.</p>
-                            </div>
-                        </div>
-
-                        <div class="panel-body">
-                            <div class="login-brand">
-                                <h1>DAR Negros Island Region</h1>
-                                <p>Project SPLIT sign-in portal</p>
-                            </div>
-
-                            <form method="POST">
-                                <div class="input-group">
-                                    <input type="text" name="username" placeholder="Username" required>
-                                </div>
-
-                                <div class="input-group">
-                                    <input type="password" name="password" placeholder="Password" required>
-                                </div>
-
-                                <label class="remember">
-                                    <input type="checkbox" name="remember">
-                                    <span>Remember Me (7 days)</span>
-                                </label>
-
-                                <button type="submit" class="login-btn">Login</button>
-                            </form>
-
-                            {% if error %}
-                                <p class="error">{{ error }}</p>
-                            {% endif %}
-                        </div>
-                    </section>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <script>
-        function isMobile() {
-            return window.matchMedia("(max-width: 768px)").matches;
-        }
-
-        function setMobileSidebar(open) {
-            const sidebar = document.getElementById("sidebar");
-            const backdrop = document.getElementById("backdrop");
-
-            sidebar.classList.toggle("is-open", open);
-            backdrop.classList.toggle("show", open);
-            document.body.classList.toggle("sidebar-open", open);
-        }
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById("sidebar");
-
-            if (isMobile()) {
-                setMobileSidebar(!sidebar.classList.contains("is-open"));
-                return;
-            }
-
-            sidebar.classList.toggle("collapsed");
-            document.body.classList.toggle("sidebar-collapsed", sidebar.classList.contains("collapsed"));
-        }
-
-        function openSidebar() {
-            if (isMobile()) {
-                setMobileSidebar(true);
-            }
-        }
-
-        function closeSidebar() {
-            if (isMobile()) {
-                setMobileSidebar(false);
-            }
-        }
-
-        window.addEventListener("resize", function () {
-            const sidebar = document.getElementById("sidebar");
-
-            if (isMobile()) {
-                sidebar.classList.remove("collapsed");
-                document.body.classList.remove("sidebar-collapsed");
-            } else {
-                setMobileSidebar(false);
-            }
-        });
-    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

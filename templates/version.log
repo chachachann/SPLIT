@@ -1,7 +1,7 @@
 =========================================
 PROJECT: SPLIT (DAR NIR)
-VERSION: 0.01.0a
-DATE: 2026-04-07 08:41
+VERSION: 0.02.0a
+DATE: 2026-04-07 18:45
 =========================================
 
 ## VERSIONING SCHEME
@@ -17,6 +17,41 @@ Suffix:
   (Removed after stable release)
 
 # CHANGELOG
+
+## [0.02.0a] - 2026-04-07
+
+ADDED:
+
+* Account Manager, News Manager, Settings, and full news-post pages
+* Persistent news/blog system with editor, archiving, restore, image insertion, and article pages
+* Managed marquee editor with multiple styles and sorting controls
+* Global notification system with per-user read/hide state and topbar dropdowns
+* Polling-based chat system with channels, role groups, direct messages, online users, attachments, and history loading
+* Remember Me token persistence and server-side session restore
+
+IMPROVED:
+
+* Login/homepage hero, DAR mission and vision presentation, and branding polish
+* Authenticated shell layout, theme controls, icons, and favicon usage across pages
+* Mobile behavior for notifications, manager pages, and chat drawer/sheets
+* Chat thread handling with date separators, older-message loading, and less cramped composer/feed layout
+* Notification sender labels and interaction behavior
+
+FIXED:
+
+* Broken notification tray stacking and mobile clipping
+* Notification auto-read inconsistencies and click behavior
+* Mobile chat send/file controls and broader phone attachment support
+* Image deformation in news/blog rendering
+* Back-button behavior on manager/article pages
+* Account-manager icon usage and theme-colored SVG integration
+
+MISSING / TODO:
+
+* Password hashing (SECURITY)
+* Client-side validation and richer error handling
+* Chat moderation/polish pass and deeper message management UX
+* Deployment config (production-ready Flask)
 
 ## [0.01.0a] - 2026-04-07
 

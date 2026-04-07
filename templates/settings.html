@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration</title>
 
     <script>
         (function () {
@@ -22,6 +22,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
 </head>
 <body>
@@ -33,43 +34,30 @@
                 <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
 
                 <div class="brand">
-                    <span class="brand-text">Dashboard</span>
+                    <span class="brand-text">Configuration</span>
                 </div>
             </div>
 
-            <nav class="menu" aria-label="Dashboard sections">
-                <button
-                    type="button"
-                    class="menu-btn active"
-                    data-panel="news-panel"
-                    aria-controls="news-panel"
-                    aria-pressed="true"
-                    onclick="togglePanelFromSidebar(this, 'news-panel')"
-                >
-                    <span class="menu-icon">&#128240;</span>
-                    <span class="label">Updates</span>
-                </button>
+            <nav class="menu" aria-label="Configuration sections">
+                <a class="menu-btn active" href="{{ url_for('settings') }}" aria-current="page">
+                    <span class="menu-icon">&#9881;</span>
+                    <span class="label">Chat Config</span>
+                </a>
 
-                {% if is_superadmin or is_developer %}
-                    <a class="menu-btn" href="{{ url_for('account_manager') }}">
-                        <span class="menu-icon menu-icon-account-manager" aria-hidden="true">
-                            <span class="menu-icon-account-manager-glyph"></span>
-                        </span>
-                        <span class="label">Account Manager</span>
-                    </a>
+                <a class="menu-btn" href="{{ url_for('account_manager') }}">
+                    <span class="menu-icon">&#128101;</span>
+                    <span class="label">Account Manager</span>
+                </a>
 
-                    <a class="menu-btn" href="{{ url_for('news_manager') }}">
-                        <span class="menu-icon">&#9998;</span>
-                        <span class="label">News Manager</span>
-                    </a>
-                {% endif %}
+                <a class="menu-btn" href="{{ url_for('news_manager') }}">
+                    <span class="menu-icon">&#9998;</span>
+                    <span class="label">News Manager</span>
+                </a>
 
-                {% if is_superadmin %}
-                    <a class="menu-btn" href="{{ url_for('settings') }}">
-                        <span class="menu-icon">&#9881;</span>
-                        <span class="label">Configuration</span>
-                    </a>
-                {% endif %}
+                <a class="menu-btn menu-btn-back" href="{{ url_for('dashboard') }}">
+                    <span class="menu-icon">&#8592;</span>
+                    <span class="label">Back to Dashboard</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -88,7 +76,7 @@
                         aria-label="Switch between dark mode and light mode"
                     >
                         <svg class="theme-toggle-icon theme-toggle-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"/>
+                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"></path>
                         </svg>
 
                         <span class="theme-toggle-track" aria-hidden="true">
@@ -104,13 +92,13 @@
             </div>
         </aside>
 
-        <main id="main" class="main">
+        <main class="main">
             <header class="topbar">
                 <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
 
                 <div class="user-meta">
-                    <div class="page-title">Control Center</div>
-                    <div class="page-subtitle">{{ fullname }} &#8226; {{ userlevel }}</div>
+                    <div class="page-title">Configuration</div>
+                    <div class="page-subtitle">{{ fullname }} &#8226; SuperAdmin controls</div>
                 </div>
 
                 <div class="topbar-actions">
@@ -131,8 +119,8 @@
                             </div>
 
                             <div class="notification-dropdown-list">
-                                {% if notifications %}
-                                    {% for notification in notifications %}
+                                {% if topbar_notifications %}
+                                    {% for notification in topbar_notifications %}
                                         <article
                                             class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
                                             data-notification-card
@@ -182,89 +170,103 @@
                         </div>
                     </details>
 
-                    <a href="/logout" class="logout-btn">Logout</a>
+                    <a href="{{ url_for('logout') }}" class="manager-link-btn">Logout</a>
                 </div>
             </header>
 
-            <section class="announcement-bar announcement-bar-{{ marquee['style_key'] }}" aria-label="Announcements">
+            <section class="announcement-bar" aria-label="Announcements">
                 <div class="announcement-track">
                     <div class="announcement-marquee">
-                        {% if marquee['items'] %}
-                            {% for item in marquee['items'] %}
-                                <span class="marquee">{{ item.message }}</span>
-                            {% endfor %}
-                        {% else %}
-                            <span class="marquee">No marquee items have been configured yet.</span>
-                        {% endif %}
+                        <span class="marquee">Role group chat names, descriptions, and availability are controlled here.</span>
+                        <span class="marquee">Public channels 1 to 10 are editable by any logged-in user from the chat drawer.</span>
+                        <span class="marquee">Presence and unread counts update through scheduled polling.</span>
                     </div>
                 </div>
             </section>
 
-            <section class="content">
-                <section id="news-panel" class="panel news-panel" aria-labelledby="news-heading">
-                    <div class="panel-header">
-                        <div>
-                            <h2 id="news-heading">Updates</h2>
-                            <p>Recent system notices and announcements.</p>
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-main-column">
+                    <section class="panel" aria-labelledby="role-group-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="role-group-heading">Role Group Rooms</h2>
+                                <p>Adjust the chat display name, description, and visibility of each role-based room.</p>
+                            </div>
                         </div>
 
-                        <div class="panel-header-actions">
-                            <button class="panel-hide-btn" type="button" onclick="togglePanel('news-panel')">Hide</button>
-                        </div>
-                    </div>
+                        <div class="panel-body">
+                            {% if role_groups %}
+                                <div class="account-list">
+                                    {% for group in role_groups %}
+                                        <article class="account-card">
+                                            <div class="account-summary">
+                                                <div class="account-summary-copy">
+                                                    <div class="account-card-title-row">
+                                                        <h3>{{ group.title }}</h3>
+                                                    </div>
+                                                    <p>{{ group.role_name }} &#8226; {{ 'Enabled' if group.is_enabled else 'Disabled' }}</p>
+                                                </div>
 
-                    <div class="panel-body">
-                        <div class="news-grid">
-                            {% if news_posts %}
-                                {% for post in news_posts %}
-                                    <article class="news-card">
-                                        <div class="news-meta">{{ post.updated_at }} &#8226; {{ post.editor_name }}</div>
-                                        <h4>{{ post.title }}</h4>
-                                        <p>{{ post.summary_display }}</p>
-                                        <a class="news-link" href="{{ url_for('news_post', slug=post.slug) }}">See more...</a>
-                                    </article>
-                                {% endfor %}
+                                                <div class="account-summary-meta">
+                                                    <span class="account-last-mod-label">Updated</span>
+                                                    <strong class="account-last-mod-value">{{ group.updated_at }}</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="account-body" style="display:block;">
+                                                <form method="POST" class="account-form account-form-edit">
+                                                    <input type="hidden" name="action" value="update-role-group">
+                                                    <input type="hidden" name="room_key" value="{{ group.room_key }}">
+
+                                                    <div class="field-grid">
+                                                        <label class="field">
+                                                            <span class="field-label">Display Name</span>
+                                                            <input type="text" name="title" value="{{ group.title }}" required>
+                                                        </label>
+
+                                                        <label class="field">
+                                                            <span class="field-label">Role</span>
+                                                            <input type="text" value="{{ group.role_name }}" readonly>
+                                                        </label>
+
+                                                        <label class="field field-full">
+                                                            <span class="field-label">Description</span>
+                                                            <input type="text" name="description" value="{{ group.description or '' }}" placeholder="Short room description">
+                                                        </label>
+
+                                                        <label class="field field-full">
+                                                            <span class="field-label">Availability</span>
+                                                            <span class="role-option-pill" style="justify-content:flex-start; gap:12px;">
+                                                                <input type="checkbox" name="is_enabled" value="1" {% if group.is_enabled %}checked{% endif %}>
+                                                                <span class="role-option-name">Enable this role room</span>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="form-actions">
+                                                        <button type="submit" class="btn-secondary">Save Role Group</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
                             {% else %}
-                                <article class="news-card news-card-empty">
-                                    <div class="news-meta">Updates</div>
-                                    <h4>No published posts yet</h4>
-                                    <p>Create your first news entry from the News Manager to populate this panel.</p>
-                                </article>
+                                <div class="empty-state">No role group rooms are configured yet.</div>
                             {% endif %}
                         </div>
-                    </div>
-                </section>
-
-                <section class="panel action-panel" aria-labelledby="actions-heading">
-                    <div class="panel-header">
-                        <div>
-                            <h2 id="actions-heading">Quick Actions</h2>
-                            <p>Frequently used tools and modules.</p>
-                        </div>
-                    </div>
-
-                    <div class="panel-body">
-                        <div class="quick-grid">
-                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="view-map" data-module-order="1" data-module-title="View Map" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
-                                <span class="quick-icon">VM</span>
-                                <span class="quick-title">View Map</span>
-                                <span class="quick-note">Placeholder module</span>
-                            </button>
-
-                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="inventory-of-cloas" data-module-order="2" data-module-title="Inventory of CLOAs" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
-                                <span class="quick-icon">IC</span>
-                                <span class="quick-title">Inventory of CLOAs</span>
-                                <span class="quick-note">Placeholder module</span>
-                            </button>
-
-                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="field-validation" data-module-order="3" data-module-title="Field Validation" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
-                                <span class="quick-icon">FV</span>
-                                <span class="quick-title">Field Validation</span>
-                                <span class="quick-note">Placeholder module</span>
-                            </button>
-                        </div>
-                    </div>
-                </section>
+                    </section>
+                </div>
             </section>
         </main>
     </div>
@@ -272,39 +274,7 @@
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script src="{{ url_for('static', filename='chat.js') }}"></script>
     <script>
-        function setPanelState(panelId, visible) {
-            const panel = document.getElementById(panelId);
-            const button = document.querySelector(`.menu-btn[data-panel="${panelId}"]`);
-
-            if (!panel) return;
-
-            panel.classList.toggle("is-hidden", !visible);
-
-            if (button) {
-                button.classList.toggle("active", visible);
-                button.setAttribute("aria-pressed", visible ? "true" : "false");
-            }
-        }
-
-        function togglePanel(panelId) {
-            const panel = document.getElementById(panelId);
-            if (!panel) return;
-
-            const willShow = panel.classList.contains("is-hidden");
-            setPanelState(panelId, willShow);
-        }
-
-        function togglePanelFromSidebar(button, panelId) {
-            const panel = document.getElementById(panelId);
-            if (!panel) return;
-
-            const willShow = panel.classList.contains("is-hidden");
-            setPanelState(panelId, willShow);
-        }
-
-        window.addEventListener("DOMContentLoaded", function () {
-            setPanelState("news-panel", true);
-
+        (function () {
             function syncNotificationVisualState(card, isRead) {
                 card.setAttribute("data-notification-read", isRead ? "true" : "false");
                 card.classList.toggle("is-unread", !isRead);
@@ -350,7 +320,7 @@
                     }
                 });
             });
-        });
+        })();
     </script>
 </body>
 </html>

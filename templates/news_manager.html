@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Manager</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "dark";
+                document.documentElement.style.colorScheme = "dark";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='news_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+</head>
+<body data-open-post="{{ open_post }}">
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        <aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+            <div class="sidebar-header">
+                <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
+
+                <div class="brand news-manager-brand">
+                    <span class="news-manager-brand-icon" aria-hidden="true">&#9998;</span>
+                    <span class="brand-text">News Manager</span>
+                </div>
+            </div>
+
+            <nav class="menu" aria-label="News manager sections">
+                <a class="menu-btn active" href="{{ url_for('news_manager') }}" aria-current="page">
+                    <span class="menu-icon">&#128240;</span>
+                    <span class="label">Posts</span>
+                </a>
+
+                {% if is_superadmin %}
+                    <a class="menu-btn" href="{{ url_for('settings') }}">
+                        <span class="menu-icon">&#9881;</span>
+                        <span class="label">Configuration</span>
+                    </a>
+                {% endif %}
+
+                <a class="menu-btn menu-btn-back" href="{{ url_for('dashboard') }}">
+                    <span class="menu-icon">&#8592;</span>
+                    <span class="label">Back to Dashboard</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="theme-switcher" aria-label="Theme settings">
+                    <div class="theme-switcher-copy">
+                        <span class="theme-switcher-title">Appearance</span>
+                        <span class="theme-switcher-state" data-theme-label>Dark mode</span>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="theme-toggle"
+                        data-theme-toggle
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Switch between dark mode and light mode"
+                    >
+                        <svg class="theme-toggle-icon theme-toggle-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"></path>
+                        </svg>
+
+                        <span class="theme-toggle-track" aria-hidden="true">
+                            <span class="theme-toggle-thumb"></span>
+                        </span>
+
+                        <svg class="theme-toggle-icon theme-toggle-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2.75V5.25M12 18.75V21.25M21.25 12H18.75M5.25 12H2.75M18.54 5.46L16.77 7.23M7.23 16.77L5.46 18.54M18.54 18.54L16.77 16.77M7.23 7.23L5.46 5.46"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
+
+                <div class="user-meta">
+                    <div class="page-title">News Manager</div>
+                    <div class="page-subtitle">{{ fullname }} &#8226; Post editor and publication controls</div>
+                </div>
+
+                <div class="topbar-actions">
+                    {% include '_chat_widget.html' %}
+
+                    <details class="notification-menu">
+                        <summary class="notification-trigger" aria-label="Open notifications">
+                            <span class="notification-bell" aria-hidden="true">&#128276;</span>
+                            {% if unread_notifications %}
+                                <span class="notification-badge">{{ unread_notifications }}</span>
+                            {% endif %}
+                        </summary>
+
+                        <div class="notification-dropdown">
+                            <div class="notification-dropdown-header">
+                                <strong>Notifications</strong>
+                                <span>{{ unread_notifications }} unread</span>
+                            </div>
+
+                            <div class="notification-dropdown-list">
+                                {% if topbar_notifications %}
+                                    {% for notification in topbar_notifications %}
+                                        <article
+                                            class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
+                                            data-notification-card
+                                            data-notification-read="{{ 'false' if not notification.is_read else 'true' }}"
+                                            data-notification-expanded="false"
+                                        >
+                                            <div class="notification-dropdown-meta">{{ notification.sender_name }} &#8226; {{ notification.created_at }}</div>
+                                            <strong>{{ notification.title }}</strong>
+                                            <p class="notification-dropdown-preview">{{ notification.message_preview }}</p>
+
+                                            <form method="POST" action="{{ url_for('notification_action') }}" hidden data-mark-read-form>
+                                                <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                <input type="hidden" name="action" value="mark-read">
+                                            </form>
+
+                                            <div class="notification-dropdown-details">
+                                                <div class="notification-message-body">{{ notification.message_html|safe }}</div>
+                                                {% if notification.link_url %}
+                                                    <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="notification-dropdown-actions">
+                                                <form method="POST" action="{{ url_for('notification_action') }}">
+                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                    {% if notification.is_read %}
+                                                        <input type="hidden" name="action" value="mark-unread" data-action-input>
+                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Unread</button>
+                                                    {% else %}
+                                                        <input type="hidden" name="action" value="mark-read" data-action-input>
+                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Read</button>
+                                                    {% endif %}
+                                                </form>
+
+                                                <form method="POST" action="{{ url_for('notification_action') }}">
+                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                    <input type="hidden" name="action" value="hide">
+                                                    <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
+                                                </form>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="notification-empty">No active notifications.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </details>
+
+                    <a href="{{ url_for('logout') }}" class="manager-link-btn">Logout</a>
+                </div>
+            </header>
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Write update cards here, then publish them into full article pages.</span>
+                        <span class="marquee">Dashboard cards show summaries only and link to the complete blog post.</span>
+                        <span class="marquee">This module is restricted to Developer and SuperAdmin accounts.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content news-manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel" aria-labelledby="marquee-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="marquee-heading">Marquee Editor</h2>
+                                <p>Manage the moving announcement bar shown on the dashboard.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            <form method="POST" class="account-form">
+                                <input type="hidden" name="action" value="update-marquee-style">
+
+                                <label class="field">
+                                    <span class="field-label">Marquee Design</span>
+                                    <select name="style_key" class="news-select">
+                                        {% for style in marquee_styles %}
+                                            <option value="{{ style.key }}" {% if marquee['style_key'] == style.key %}selected{% endif %}>{{ style.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-secondary">Apply Style</button>
+                                </div>
+                            </form>
+
+                            <form method="POST" class="account-form">
+                                <input type="hidden" name="action" value="create-marquee-item">
+
+                                <label class="field">
+                                    <span class="field-label">New Marquee Item</span>
+                                    <input type="text" name="message" placeholder="Announcement text" required>
+                                </label>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Add Marquee Item</button>
+                                </div>
+                            </form>
+
+                            <div class="news-image-library">
+                                <div class="news-image-library-header">
+                                    <strong>Current Marquee Items</strong>
+                                    <span>These rotate across the dashboard announcement bar.</span>
+                                </div>
+
+                                {% if marquee['items'] %}
+                                    <div class="marquee-item-list">
+                                        {% for item in marquee['items'] %}
+                                            <div class="marquee-item-row">
+                                                <form method="POST" class="marquee-edit-form">
+                                                    <input type="hidden" name="action" value="update-marquee-item">
+                                                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                                                    <input type="text" name="message" value="{{ item.message }}" class="marquee-edit-input" required>
+                                                    <button type="submit" class="btn-secondary btn-inline">Save</button>
+                                                </form>
+                                                <div class="marquee-item-actions">
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="move-marquee-item">
+                                                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                                                        <input type="hidden" name="direction" value="up">
+                                                        <button type="submit" class="btn-secondary btn-inline marquee-sort-btn" aria-label="Move up">&#9650;</button>
+                                                    </form>
+
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="move-marquee-item">
+                                                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                                                        <input type="hidden" name="direction" value="down">
+                                                        <button type="submit" class="btn-secondary btn-inline marquee-sort-btn" aria-label="Move down">&#9660;</button>
+                                                    </form>
+
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="delete-marquee-item">
+                                                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                                                        <button type="submit" class="btn-danger btn-inline">Archive</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="empty-state compact-empty">No marquee items yet.</div>
+                                {% endif %}
+                            </div>
+
+                            {% if marquee['archived_items'] %}
+                                <div class="news-image-library">
+                                    <div class="news-image-library-header">
+                                        <strong>Archived Marquee Items</strong>
+                                        <span>Restore archived entries back into the active list.</span>
+                                    </div>
+
+                                    <div class="marquee-item-list">
+                                        {% for item in marquee['archived_items'] %}
+                                            <div class="marquee-item-row">
+                                                <div class="marquee-item-copy">{{ item.message }}</div>
+                                                <div class="marquee-item-actions">
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="restore-marquee-item">
+                                                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                                                        <button type="submit" class="btn-secondary btn-inline">Restore</button>
+                                                    </form>
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="permanently-delete-marquee-item">
+                                                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                                                        <button type="submit" class="btn-danger btn-inline">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="panel" aria-labelledby="notifications-manager-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="notifications-manager-heading">Notification Manager</h2>
+                                <p>Create global or role-limited notifications for all accounts.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            <form method="POST" class="account-form notification-form">
+                                <input type="hidden" name="action" value="create-notification">
+
+                                <label class="field">
+                                    <span class="field-label">Title</span>
+                                    <input type="text" name="title" placeholder="Notification title" required>
+                                </label>
+
+                                <label class="field">
+                                    <span class="field-label">Message</span>
+                                    <textarea name="message" rows="4" placeholder="Notification message. Supports hypertext like [Open memo](https://example.com)." required></textarea>
+                                </label>
+
+                                <label class="field">
+                                    <span class="field-label">Optional Link</span>
+                                    <input type="url" name="link_url" placeholder="https://example.com or internal link">
+                                </label>
+
+                                <div class="field-grid">
+                                    <div class="field">
+                                        <span class="field-label">Target Roles</span>
+                                        <div class="role-selector">
+                                            {% for role_name in notification_roles %}
+                                                <label class="role-option">
+                                                    <input type="checkbox" name="target_role" value="{{ role_name }}" {% if role_name == 'All' %}checked{% endif %}>
+                                                    <span class="role-option-pill">
+                                                        <span class="role-option-name">{{ role_name }}</span>
+                                                    </span>
+                                                </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+
+                                    <label class="field">
+                                        <span class="field-label">Style</span>
+                                        <select name="style_key" class="news-select">
+                                            <option value="info">Info</option>
+                                            <option value="success">Success</option>
+                                            <option value="warning">Warning</option>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary notification-submit-btn">Create Notification</button>
+                                </div>
+
+                                <div class="field-hint">Supports clickable syntax: <code>[Link text](https://example.com)</code></div>
+                            </form>
+
+                            <div class="news-image-library">
+                                <div class="news-image-library-header">
+                                    <strong>Active Notifications</strong>
+                                    <span>Welcome messages are automatic and do not appear here.</span>
+                                </div>
+
+                                {% if notifications %}
+                                    <div class="marquee-item-list">
+                                        {% for notification in notifications %}
+                                            <form method="POST" class="marquee-item-row marquee-item-row-notification">
+                                                <div class="marquee-item-copy">
+                                                    <strong>{{ notification.title }}</strong>
+                                                    <span>From {{ notification.sender_name }} &#8226; {{ notification.target_role }}</span>
+                                                    <div class="notification-manager-message">{{ notification.message_html|safe }}</div>
+                                                    {% if notification.link_url %}
+                                                        <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
+                                                    {% endif %}
+                                                </div>
+                                                <input type="hidden" name="action" value="delete-notification">
+                                                <input type="hidden" name="notification_id" value="{{ notification.id }}">
+                                                <button type="submit" class="btn-danger btn-inline notification-delete-btn">Archive</button>
+                                            </form>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="empty-state compact-empty">No active notifications yet.</div>
+                                {% endif %}
+                            </div>
+
+                            {% if archived_notifications %}
+                                <div class="news-image-library">
+                                    <div class="news-image-library-header">
+                                        <strong>Archived Notifications</strong>
+                                        <span>Restore an archived notification to undo it globally.</span>
+                                    </div>
+
+                                    <div class="marquee-item-list">
+                                        {% for notification in archived_notifications %}
+                                            <div class="marquee-item-row marquee-item-row-notification">
+                                            <div class="marquee-item-copy">
+                                                    <strong>{{ notification.title }}</strong>
+                                                    <span>From {{ notification.sender_name }} &#8226; {{ notification.target_role }}</span>
+                                                    <div class="notification-manager-message">{{ notification.message_html|safe }}</div>
+                                                    {% if notification.link_url %}
+                                                        <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="marquee-item-actions">
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="restore-notification">
+                                                        <input type="hidden" name="notification_id" value="{{ notification.id }}">
+                                                        <button type="submit" class="btn-secondary btn-inline notification-delete-btn">Undo</button>
+                                                    </form>
+                                                    <form method="POST">
+                                                        <input type="hidden" name="action" value="permanently-delete-notification">
+                                                        <input type="hidden" name="notification_id" value="{{ notification.id }}">
+                                                        <button type="submit" class="btn-danger btn-inline notification-delete-btn">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="panel" aria-labelledby="compose-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="compose-heading">Create Post</h2>
+                                <p>Draft a blog-style update and publish it to the dashboard feed.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            <form method="POST" class="account-form news-upload-form" enctype="multipart/form-data">
+                                <input type="hidden" name="action" value="upload-image">
+                                <input id="news-image-input" class="news-image-input" type="file" name="image_file" accept=".png,.jpg,.jpeg,.gif,.webp" required>
+
+                                <div class="field">
+                                    <span class="field-label">Upload Image</span>
+                                    <button type="button" class="btn-secondary news-image-trigger" data-image-trigger>Upload Image</button>
+                                    <span class="news-image-selected" data-image-selected>No file selected</span>
+                                </div>
+                            </form>
+
+                            <div class="news-image-library">
+                                <div class="news-image-library-header">
+                                    <strong>Uploaded Images</strong>
+                                    <span>Copy a token and paste it between paragraphs in the blog content.</span>
+                                </div>
+
+                                {% if uploaded_images %}
+                                    <div class="news-image-grid">
+                                        {% for image in uploaded_images %}
+                                            <article class="news-image-card">
+                                                <a class="news-image-preview-link" href="{{ image.src }}" target="_blank" rel="noopener noreferrer">
+                                                    <img src="{{ image.src }}" alt="{{ image.filename }}">
+                                                </a>
+                                                <div class="news-image-card-copy">
+                                                    <div class="news-image-card-meta">
+                                                        <strong>{{ image.filename }}</strong>
+                                                        {% if image.is_used %}
+                                                            <span class="news-image-usage news-image-usage-used">Used in {{ image.usage_count }} post{% if image.usage_count != 1 %}s{% endif %}</span>
+                                                        {% else %}
+                                                            <span class="news-image-usage news-image-usage-free">Unused</span>
+                                                        {% endif %}
+                                                    </div>
+
+                                                    <div class="news-image-actions">
+                                                        <button type="button" class="btn-secondary btn-copy-token" data-copy-token="{{ image.token }}">Copy Token</button>
+                                                        <form method="POST" class="news-image-delete-form">
+                                                            <input type="hidden" name="action" value="delete-image">
+                                                            <input type="hidden" name="filename" value="{{ image.filename }}">
+                                                            <button
+                                                                type="submit"
+                                                                class="btn-danger btn-inline"
+                                                                {% if image.is_used %}disabled{% endif %}
+                                                                {% if not image.is_used %}onclick="return confirm('Delete this image?');"{% endif %}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="empty-state compact-empty">No uploaded images yet.</div>
+                                {% endif %}
+                            </div>
+
+                            <details class="news-markup-guide">
+                                <summary class="news-markup-summary">
+                                    <span>Supported Formatting</span>
+                                    <span class="news-markup-summary-note">Expand syntax guide</span>
+                                </summary>
+
+                                <div class="news-markup-guide-body">
+                                    <div class="news-image-library-header">
+                                        <strong>Use these safe syntax rules in the editor.</strong>
+                                        <span>Formatting stays controlled and does not allow arbitrary HTML.</span>
+                                    </div>
+
+                                    <div class="news-markup-grid">
+                                        <code># Heading 1</code>
+                                        <code>## Heading 2</code>
+                                        <code>### Heading 3</code>
+                                        <code>**bold**</code>
+                                        <code>*italic*</code>
+                                        <code>`code`</code>
+                                        <code>- bullet item</code>
+                                        <code>1. numbered item</code>
+                                        <code>&gt; quote line</code>
+                                        <code>[Link text](https://example.com)</code>
+                                        <code>[image:filename.jpg|Caption]</code>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <form method="POST" class="account-form news-form">
+                                <input type="hidden" name="action" value="create-post">
+
+                                <label class="field">
+                                    <span class="field-label">Title</span>
+                                    <input type="text" name="title" placeholder="Post title" required>
+                                </label>
+
+                                <label class="field">
+                                    <span class="field-label">Summary</span>
+                                    <input type="text" name="summary" placeholder="Optional short summary for the updates card">
+                                </label>
+
+                                <label class="field">
+                                    <span class="field-label">Content</span>
+                                    <textarea name="content" rows="14" placeholder="Write the full article here. Separate paragraphs with a blank line. Supports headings, **bold**, *italic*, lists, links, quotes, and [image:filename|Optional caption]." required></textarea>
+                                </label>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Publish Post</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel manager-list-panel" aria-labelledby="posts-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="posts-heading">Published Posts</h2>
+                                <p>Edit, preview, or remove published articles from the dashboard feed.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            {% if posts %}
+                                <div class="account-list news-list">
+                                    {% for post in posts %}
+                                        <article class="account-card news-editor-card{% if open_post == post.id|string %} is-open{% endif %}" data-post-card data-post-id="{{ post.id }}">
+                                            <button
+                                                type="button"
+                                                class="account-summary"
+                                                data-post-toggle
+                                                aria-expanded="{% if open_post == post.id|string %}true{% else %}false{% endif %}"
+                                                aria-controls="post-body-{{ post.id }}"
+                                            >
+                                                <div class="account-summary-copy">
+                                                    <div class="account-card-title-row">
+                                                        <h3>{{ post.title }}</h3>
+                                                    </div>
+
+                                                    <p>{{ post.summary_display }}</p>
+                                                </div>
+
+                                                <div class="account-summary-meta">
+                                                    <span class="account-last-mod-label">Updated</span>
+                                                    <strong class="account-last-mod-value">{{ post.updated_at }}</strong>
+                                                    <span class="account-chevron" aria-hidden="true"></span>
+                                                </div>
+                                            </button>
+
+                                            <div id="post-body-{{ post.id }}" class="account-body" {% if open_post != post.id|string %}hidden{% endif %}>
+                                                <form method="POST" class="account-form news-form">
+                                                    <input type="hidden" name="action" value="update-post">
+                                                    <input type="hidden" name="post_id" value="{{ post.id }}">
+
+                                                    <label class="field">
+                                                        <span class="field-label">Title</span>
+                                                        <input type="text" name="title" value="{{ post.title }}" required>
+                                                    </label>
+
+                                                    <label class="field">
+                                                        <span class="field-label">Summary</span>
+                                                        <input type="text" name="summary" value="{{ post.summary or '' }}" placeholder="Optional short summary">
+                                                    </label>
+
+                                                    <label class="field">
+                                                        <span class="field-label">Content</span>
+                                                        <textarea name="content" rows="14" required>{{ post.content }}</textarea>
+                                                    </label>
+
+                                                    <div class="news-editor-actions">
+                                                        <div class="account-card-actions">
+                                                            <button type="submit" class="btn-secondary">Save Changes</button>
+                                                            <button
+                                                                type="submit"
+                                                                name="action"
+                                                                value="delete-post"
+                                                                class="btn-danger"
+                                                                formnovalidate
+                                                                onclick="return confirm('Archive this post?');"
+                                                            >
+                                                                Archive Post
+                                                            </button>
+                                                        </div>
+
+                                                        <a class="btn-secondary news-preview-link" href="{{ url_for('news_post', slug=post.slug) }}" target="_blank" rel="noopener noreferrer">Open Article</a>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state">No news posts are available yet.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    {% if archived_posts %}
+                        <section class="panel manager-list-panel" aria-labelledby="archived-posts-heading">
+                            <div class="panel-header">
+                                <div>
+                                    <h2 id="archived-posts-heading">Archived Posts</h2>
+                                    <p>Restore previously archived blog posts.</p>
+                                </div>
+                            </div>
+
+                            <div class="panel-body">
+                                <div class="marquee-item-list">
+                                    {% for post in archived_posts %}
+                                        <div class="marquee-item-row marquee-item-row-notification">
+                                            <div class="marquee-item-copy">
+                                                <strong>{{ post.title }}</strong>
+                                                <span>{{ post.updated_at }} &#8226; {{ post.editor_name }}</span>
+                                            </div>
+                                            <div class="marquee-item-actions">
+                                                <form method="POST">
+                                                    <input type="hidden" name="action" value="restore-post">
+                                                    <input type="hidden" name="post_id" value="{{ post.id }}">
+                                                    <button type="submit" class="btn-secondary btn-inline">Restore</button>
+                                                </form>
+                                                <form method="POST">
+                                                    <input type="hidden" name="action" value="permanently-delete-post">
+                                                    <input type="hidden" name="post_id" value="{{ post.id }}">
+                                                    <button type="submit" class="btn-danger btn-inline">Delete</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </section>
+                    {% endif %}
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script>
+        (function () {
+            var cards = Array.prototype.slice.call(document.querySelectorAll("[data-post-card]"));
+            var imageInput = document.getElementById("news-image-input");
+            var imageTrigger = document.querySelector("[data-image-trigger]");
+            var imageSelected = document.querySelector("[data-image-selected]");
+            function syncNotificationVisualState(card, isRead) {
+                card.setAttribute("data-notification-read", isRead ? "true" : "false");
+                card.classList.toggle("is-unread", !isRead);
+
+                var actionInput = card.querySelector("[data-action-input]");
+                var actionButton = card.querySelector("[data-action-button]");
+                if (actionInput) {
+                    actionInput.value = isRead ? "mark-unread" : "mark-read";
+                }
+                if (actionButton) {
+                    actionButton.textContent = isRead ? "Mark Unread" : "Mark Read";
+                }
+            }
+            Array.prototype.slice.call(document.querySelectorAll("[data-notification-card]")).forEach(function (card) {
+                card.addEventListener("click", function (event) {
+                    if (event.target.closest("button, a, form, summary")) {
+                        return;
+                    }
+
+                    var isExpanded = card.getAttribute("data-notification-expanded") === "true";
+                    card.setAttribute("data-notification-expanded", isExpanded ? "false" : "true");
+                    card.classList.toggle("is-expanded", !isExpanded);
+
+                    if (card.getAttribute("data-notification-read") === "true" || card.getAttribute("data-notification-pending") === "true") {
+                        return;
+                    }
+
+                    var markReadForm = card.querySelector("[data-mark-read-form]");
+                    if (markReadForm) {
+                        card.setAttribute("data-notification-pending", "true");
+                        syncNotificationVisualState(card, true);
+                        var formData = new FormData(markReadForm);
+                        fetch(markReadForm.action, {
+                            method: "POST",
+                            body: formData,
+                            headers: { "X-Requested-With": "XMLHttpRequest" }
+                        }).catch(function () {
+                            syncNotificationVisualState(card, false);
+                        }).finally(function () {
+                            card.removeAttribute("data-notification-pending");
+                        });
+                    }
+                });
+            });
+
+            if (imageInput && imageTrigger) {
+                imageTrigger.addEventListener("click", function () {
+                    imageInput.click();
+                });
+
+                imageInput.addEventListener("change", function () {
+                    var fileName = imageInput.files && imageInput.files.length ? imageInput.files[0].name : "";
+                    if (imageSelected) {
+                        imageSelected.textContent = fileName || "No file selected";
+                    }
+
+                    if (fileName) {
+                        imageInput.form.submit();
+                    }
+                });
+            }
+
+            if (!cards.length) {
+                return;
+            }
+
+            function setOpenCard(openId) {
+                cards.forEach(function (card) {
+                    var body = card.querySelector(".account-body");
+                    var toggle = card.querySelector("[data-post-toggle]");
+                    var isOpen = openId && card.dataset.postId === openId;
+
+                    card.classList.toggle("is-open", !!isOpen);
+                    if (toggle) {
+                        toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                    }
+                    if (body) {
+                        body.hidden = !isOpen;
+                    }
+                });
+            }
+
+            cards.forEach(function (card) {
+                var toggle = card.querySelector("[data-post-toggle]");
+                if (!toggle) {
+                    return;
+                }
+
+                toggle.addEventListener("click", function () {
+                    var isAlreadyOpen = card.classList.contains("is-open");
+                    setOpenCard(isAlreadyOpen ? "" : card.dataset.postId);
+                });
+            });
+
+            Array.prototype.slice.call(document.querySelectorAll("[data-copy-token]")).forEach(function (button) {
+                button.addEventListener("click", function () {
+                    var token = button.getAttribute("data-copy-token") || "";
+                    if (!token) {
+                        return;
+                    }
+
+                    navigator.clipboard.writeText(token).then(function () {
+                        var previousLabel = button.textContent;
+                        button.textContent = "Copied";
+                        window.setTimeout(function () {
+                            button.textContent = previousLabel;
+                        }, 1200);
+                    });
+                });
+            });
+
+            setOpenCard(document.body.dataset.openPost || "");
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Manager</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "dark";
+                document.documentElement.style.colorScheme = "dark";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/acc-manager.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+</head>
+<body data-open-account="{{ open_account }}">
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        <aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+            <div class="sidebar-header">
+                <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
+
+                <div class="brand account-manager-brand">
+                    <span class="account-manager-brand-icon" aria-hidden="true">
+                        <span class="account-manager-brand-glyph"></span>
+                    </span>
+                    <span class="brand-text">Account Manager</span>
+                </div>
+            </div>
+
+            <nav class="menu" aria-label="Account manager sections">
+                <a class="menu-btn active" href="{{ url_for('account_manager') }}" aria-current="page">
+                    <span class="menu-icon menu-icon-account-manager" aria-hidden="true">
+                        <span class="menu-icon-account-manager-glyph"></span>
+                    </span>
+                    <span class="label">Accounts</span>
+                </a>
+
+                {% if is_superadmin %}
+                    <a class="menu-btn" href="{{ url_for('settings') }}">
+                        <span class="menu-icon">&#9881;</span>
+                        <span class="label">Configuration</span>
+                    </a>
+                {% endif %}
+
+                <a class="menu-btn menu-btn-back" href="{{ url_for('dashboard') }}">
+                    <span class="menu-icon" aria-hidden="true">&#8592;</span>
+                    <span class="label">Back to Dashboard</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="theme-switcher" aria-label="Theme settings">
+                    <div class="theme-switcher-copy">
+                        <span class="theme-switcher-title">Appearance</span>
+                        <span class="theme-switcher-state" data-theme-label>Dark mode</span>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="theme-toggle"
+                        data-theme-toggle
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Switch between dark mode and light mode"
+                    >
+                        <svg class="theme-toggle-icon theme-toggle-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"></path>
+                        </svg>
+
+                        <span class="theme-toggle-track" aria-hidden="true">
+                            <span class="theme-toggle-thumb"></span>
+                        </span>
+
+                        <svg class="theme-toggle-icon theme-toggle-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2.75V5.25M12 18.75V21.25M21.25 12H18.75M5.25 12H2.75M18.54 5.46L16.77 7.23M7.23 16.77L5.46 18.54M18.54 18.54L16.77 16.77M7.23 7.23L5.46 5.46"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
+
+                <div class="user-meta">
+                    <div class="page-title">Account Manager</div>
+                    <div class="page-subtitle">{{ fullname }} &#8226; SuperAdmin & Developer controls</div>
+                </div>
+
+                <div class="topbar-actions">
+                    {% include '_chat_widget.html' %}
+
+                    <details class="notification-menu">
+                        <summary class="notification-trigger" aria-label="Open notifications">
+                            <span class="notification-bell" aria-hidden="true">&#128276;</span>
+                            {% if unread_notifications %}
+                                <span class="notification-badge">{{ unread_notifications }}</span>
+                            {% endif %}
+                        </summary>
+
+                        <div class="notification-dropdown">
+                            <div class="notification-dropdown-header">
+                                <strong>Notifications</strong>
+                                <span>{{ unread_notifications }} unread</span>
+                            </div>
+
+                            <div class="notification-dropdown-list">
+                                {% if topbar_notifications %}
+                                    {% for notification in topbar_notifications %}
+                                        <article
+                                            class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
+                                            data-notification-card
+                                            data-notification-read="{{ 'false' if not notification.is_read else 'true' }}"
+                                            data-notification-expanded="false"
+                                        >
+                                            <div class="notification-dropdown-meta">{{ notification.sender_name }} &#8226; {{ notification.created_at }}</div>
+                                            <strong>{{ notification.title }}</strong>
+                                            <p class="notification-dropdown-preview">{{ notification.message_preview }}</p>
+
+                                            <form method="POST" action="{{ url_for('notification_action') }}" hidden data-mark-read-form>
+                                                <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                <input type="hidden" name="action" value="mark-read">
+                                            </form>
+
+                                            <div class="notification-dropdown-details">
+                                                <div class="notification-message-body">{{ notification.message_html|safe }}</div>
+                                                {% if notification.link_url %}
+                                                    <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="notification-dropdown-actions">
+                                                <form method="POST" action="{{ url_for('notification_action') }}">
+                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                    {% if notification.is_read %}
+                                                        <input type="hidden" name="action" value="mark-unread" data-action-input>
+                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Unread</button>
+                                                    {% else %}
+                                                        <input type="hidden" name="action" value="mark-read" data-action-input>
+                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Read</button>
+                                                    {% endif %}
+                                                </form>
+
+                                                <form method="POST" action="{{ url_for('notification_action') }}">
+                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                    <input type="hidden" name="action" value="hide">
+                                                    <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
+                                                </form>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="notification-empty">No active notifications.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </details>
+
+                    <a href="{{ url_for('logout') }}" class="manager-link-btn">Logout</a>
+                </div>
+            </header>
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">This module is restricted to SuperAdmin and Developer accounts.</span>
+                        <span class="marquee">Accounts can now carry multiple roles at once.</span>
+                        <span class="marquee">Modification history records who changed an account and what changed.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel" aria-labelledby="create-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="create-heading">Create Account</h2>
+                                <p>Add a new user and assign one or more roles immediately.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            <form method="POST" class="account-form">
+                                <input type="hidden" name="action" value="create-account">
+
+                                <div class="field-grid">
+                                    <label class="field">
+                                        <span class="field-label">Username</span>
+                                        <input type="text" name="username" placeholder="e.g. RO_MIS" required>
+                                    </label>
+
+                                    <label class="field">
+                                        <span class="field-label">Full Name</span>
+                                        <input type="text" name="fullname" placeholder="Full name" required>
+                                    </label>
+
+                                    <label class="field">
+                                        <span class="field-label">Designation</span>
+                                        <input type="text" name="designation" placeholder="Optional designation">
+                                    </label>
+
+                                    <label class="field">
+                                        <span class="field-label">Password</span>
+                                        <input type="text" name="password" placeholder="Temporary or assigned password" required>
+                                    </label>
+
+                                    <div class="field field-full">
+                                        <span class="field-label">Account Roles</span>
+                                        <div class="role-selector">
+                                            {% for role in available_roles %}
+                                                <label class="role-option">
+                                                    <input type="checkbox" name="roles" value="{{ role.name }}">
+                                                    <span class="role-option-pill">
+                                                        <span class="role-option-name">{{ role.name }}</span>
+                                                        <span class="role-option-meta">
+                                                            {% if role.is_locked %}
+                                                                Locked
+                                                            {% else %}
+                                                                {{ role.assigned_count }} assigned
+                                                            {% endif %}
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Create Account</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel manager-list-panel" aria-labelledby="directory-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="directory-heading">Account Directory</h2>
+                                <p>Click an account to expand it, edit details, review roles, and inspect recorded changes.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            {% if users %}
+                                <div class="account-list">
+                                    {% for account in users %}
+                                        <article
+                                            class="account-card{% if open_account == account.id|string %} is-open{% endif %}"
+                                            data-account-card
+                                            data-account-id="{{ account.id }}"
+                                        >
+                                            <button
+                                                type="button"
+                                                class="account-summary"
+                                                data-account-toggle
+                                                aria-expanded="{% if open_account == account.id|string %}true{% else %}false{% endif %}"
+                                                aria-controls="account-body-{{ account.id }}"
+                                            >
+                                                <div class="account-summary-copy">
+                                                    <div class="account-card-title-row">
+                                                        <h3>{{ account.fullname }}</h3>
+                                                        {% if account.username == username %}
+                                                            <span class="account-badge">Current Session</span>
+                                                        {% endif %}
+                                                    </div>
+
+                                                    <p>@{{ account.username }}{% if account.designation %} &#8226; {{ account.designation }}{% endif %}</p>
+
+                                                    <div class="role-badge-row">
+                                                        {% for role in account.roles %}
+                                                            <span class="role-pill" data-role="{{ role|lower }}">{{ role }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+
+                                                <div class="account-summary-meta">
+                                                    <span class="account-last-mod-label">Last modified</span>
+                                                    <strong class="account-last-mod-value">{{ account.last_modified_at }}</strong>
+                                                    <span class="account-chevron" aria-hidden="true"></span>
+                                                </div>
+                                            </button>
+
+                                            <div id="account-body-{{ account.id }}" class="account-body" {% if open_account != account.id|string %}hidden{% endif %}>
+                                                <form method="POST" class="account-form account-form-edit">
+                                                    <input type="hidden" name="user_id" value="{{ account.id }}">
+                                                    <input type="hidden" name="current_username" value="{{ account.username }}">
+
+                                                    <div class="field-grid compact-grid">
+                                                        <label class="field">
+                                                            <span class="field-label">Username</span>
+                                                            <input type="text" name="username" value="{{ account.username }}" required>
+                                                        </label>
+
+                                                        <label class="field">
+                                                            <span class="field-label">Full Name</span>
+                                                            <input type="text" name="fullname" value="{{ account.fullname }}" required>
+                                                        </label>
+
+                                                        <label class="field">
+                                                            <span class="field-label">Designation</span>
+                                                            <input type="text" name="designation" value="{{ account.designation or '' }}">
+                                                        </label>
+
+                                                        <label class="field">
+                                                            <span class="field-label">New Password</span>
+                                                            <input type="text" name="password" placeholder="Leave blank to keep the current password">
+                                                        </label>
+
+                                                        <div class="field field-full">
+                                                            <span class="field-label">Assigned Roles</span>
+                                                            <div class="role-selector">
+                                                                {% for role in available_roles %}
+                                                                    <label class="role-option">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            name="roles"
+                                                                            value="{{ role.name }}"
+                                                                            {% if role.name in account.roles %}checked{% endif %}
+                                                                        >
+                                                                        <span class="role-option-pill">
+                                                                            <span class="role-option-name">{{ role.name }}</span>
+                                                                            <span class="role-option-meta">
+                                                                                {% if role.is_locked %}
+                                                                                    Locked
+                                                                                {% else %}
+                                                                                    {{ role.assigned_count }} assigned
+                                                                                {% endif %}
+                                                                            </span>
+                                                                        </span>
+                                                                    </label>
+                                                                {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="account-card-actions">
+                                                        <button type="submit" name="action" value="update-account" class="btn-secondary">Save Changes</button>
+                                                        <button
+                                                            type="submit"
+                                                            name="action"
+                                                            value="delete-account"
+                                                            class="btn-danger"
+                                                            formnovalidate
+                                                            {% if account.username == username %}disabled{% endif %}
+                                                            onclick="return confirm('Delete this account?');"
+                                                        >
+                                                            Delete Account
+                                                        </button>
+                                                    </div>
+                                                </form>
+
+                                                <section class="history-section" aria-labelledby="history-heading-{{ account.id }}">
+                                                    <div class="history-header">
+                                                        <div>
+                                                            <h4 id="history-heading-{{ account.id }}">Modification History</h4>
+                                                            <p>Recorded changes from this point onward.</p>
+                                                        </div>
+
+                                                        <div class="history-last-date">
+                                                            <span>Last modification date</span>
+                                                            <strong>{{ account.last_modified_at }}</strong>
+                                                        </div>
+                                                    </div>
+
+                                                    {% if account.history %}
+                                                        <div class="history-table-wrap">
+                                                            <table class="history-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Date</th>
+                                                                        <th>Changed By</th>
+                                                                        <th>Action</th>
+                                                                        <th>Details</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for entry in account.history %}
+                                                                        <tr>
+                                                                            <td>{{ entry.created_at }}</td>
+                                                                            <td>{{ entry.actor_username }}</td>
+                                                                            <td>{{ entry.action }}</td>
+                                                                            <td>{{ entry.details }}</td>
+                                                                        </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    {% else %}
+                                                        <div class="empty-state compact-empty">No recorded changes yet for this account.</div>
+                                                    {% endif %}
+                                                </section>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state">No accounts are available yet.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="panel role-library-panel" aria-labelledby="roles-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="roles-heading">Role Library</h2>
+                                <p>Create custom roles here, then assign them from any account card above.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            <form method="POST" class="role-create-form">
+                                <input type="hidden" name="action" value="create-role">
+
+                                <label class="field field-grow">
+                                    <span class="field-label">New Role</span>
+                                    <input type="text" name="role_name" placeholder="e.g. Auditor">
+                                </label>
+
+                                <button type="submit" class="btn-primary">Save Role</button>
+                            </form>
+
+                            <div class="role-library">
+                                {% for role in available_roles %}
+                                    <form method="POST" class="role-library-item">
+                                        <input type="hidden" name="action" value="delete-role">
+                                        <input type="hidden" name="role_id" value="{{ role.id }}">
+
+                                        <div class="role-library-copy">
+                                            <div class="role-library-top">
+                                                <strong>{{ role.name }}</strong>
+                                                {% if role.is_locked %}
+                                                    <span class="role-status role-status-locked">Locked</span>
+                                                {% elif role.assigned_count > 0 %}
+                                                    <span class="role-status role-status-used">In Use</span>
+                                                {% else %}
+                                                    <span class="role-status role-status-free">Unused</span>
+                                                {% endif %}
+                                            </div>
+
+                                            <p>
+                                                {{ role.assigned_count }} account{% if role.assigned_count != 1 %}s{% endif %} assigned
+                                                {% if role.is_locked %} &#8226; protected system role{% endif %}
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            class="btn-danger btn-inline"
+                                            {% if role.is_locked or role.assigned_count > 0 %}disabled{% endif %}
+                                        >
+                                            Delete Role
+                                        </button>
+                                    </form>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script>
+        (function () {
+            var cards = Array.prototype.slice.call(document.querySelectorAll("[data-account-card]"));
+            function syncNotificationVisualState(card, isRead) {
+                card.setAttribute("data-notification-read", isRead ? "true" : "false");
+                card.classList.toggle("is-unread", !isRead);
+
+                var actionInput = card.querySelector("[data-action-input]");
+                var actionButton = card.querySelector("[data-action-button]");
+                if (actionInput) {
+                    actionInput.value = isRead ? "mark-unread" : "mark-read";
+                }
+                if (actionButton) {
+                    actionButton.textContent = isRead ? "Mark Unread" : "Mark Read";
+                }
+            }
+
+            Array.prototype.slice.call(document.querySelectorAll("[data-notification-card]")).forEach(function (card) {
+                card.addEventListener("click", function (event) {
+                    if (event.target.closest("button, a, form, summary")) {
+                        return;
+                    }
+
+                    var isExpanded = card.getAttribute("data-notification-expanded") === "true";
+                    card.setAttribute("data-notification-expanded", isExpanded ? "false" : "true");
+                    card.classList.toggle("is-expanded", !isExpanded);
+
+                    if (card.getAttribute("data-notification-read") === "true" || card.getAttribute("data-notification-pending") === "true") {
+                        return;
+                    }
+
+                    var markReadForm = card.querySelector("[data-mark-read-form]");
+                    if (markReadForm) {
+                        card.setAttribute("data-notification-pending", "true");
+                        syncNotificationVisualState(card, true);
+                        var formData = new FormData(markReadForm);
+                        fetch(markReadForm.action, {
+                            method: "POST",
+                            body: formData,
+                            headers: { "X-Requested-With": "XMLHttpRequest" }
+                        }).catch(function () {
+                            syncNotificationVisualState(card, false);
+                        }).finally(function () {
+                            card.removeAttribute("data-notification-pending");
+                        });
+                    }
+                });
+            });
+
+            if (!cards.length) {
+                return;
+            }
+
+            function setOpenCard(openId) {
+                cards.forEach(function (card) {
+                    var body = card.querySelector(".account-body");
+                    var toggle = card.querySelector("[data-account-toggle]");
+                    var isOpen = openId && card.dataset.accountId === openId;
+
+                    card.classList.toggle("is-open", !!isOpen);
+                    if (toggle) {
+                        toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                    }
+                    if (body) {
+                        body.hidden = !isOpen;
+                    }
+                });
+            }
+
+            cards.forEach(function (card) {
+                var toggle = card.querySelector("[data-account-toggle]");
+                if (!toggle) {
+                    return;
+                }
+
+                toggle.addEventListener("click", function () {
+                    var isAlreadyOpen = card.classList.contains("is-open");
+                    setOpenCard(isAlreadyOpen ? "" : card.dataset.accountId);
+                });
+            });
+
+            setOpenCard(document.body.dataset.openAccount || "");
+        })();
+    </script>
+</body>
+</html>

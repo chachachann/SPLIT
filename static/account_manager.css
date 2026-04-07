@@ -1,0 +1,932 @@
+.account-manager-brand {
+    gap: 8px;
+    min-width: 0;
+}
+
+.account-manager-brand-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: 1px solid rgba(67, 228, 147, 0.22);
+    background:
+        linear-gradient(135deg, rgba(67, 228, 147, 0.18), rgba(67, 228, 147, 0.05)),
+        rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 10px 20px rgba(0, 0, 0, 0.18);
+}
+
+.account-manager-brand-glyph {
+    width: 19px;
+    height: 19px;
+    display: block;
+    background-color: currentColor;
+    -webkit-mask: url("images/acc-manager.svg") center / contain no-repeat;
+    mask: url("images/acc-manager.svg") center / contain no-repeat;
+}
+
+.account-manager-brand .brand-text {
+    font-size: 15px;
+    letter-spacing: 0.1px;
+}
+
+html[data-theme="light"] .account-manager-brand-icon {
+    border-color: rgba(43, 83, 64, 0.16);
+    background:
+        linear-gradient(135deg, rgba(23, 138, 88, 0.10), rgba(255, 209, 79, 0.08)),
+        rgba(255, 255, 255, 0.82);
+    color: #173623;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.74),
+        0 10px 20px rgba(97, 108, 91, 0.12);
+}
+
+.menu-btn-back .menu-icon {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.menu-btn-back .label {
+    letter-spacing: 0.02em;
+}
+
+.menu-icon-account-manager {
+    padding: 0;
+}
+
+.menu-icon-account-manager-glyph {
+    width: 18px;
+    height: 18px;
+    display: block;
+    background-color: currentColor;
+    -webkit-mask: url("images/acc-manager.svg") center / contain no-repeat;
+    mask: url("images/acc-manager.svg") center / contain no-repeat;
+}
+
+.menu-btn-back {
+    border-color: rgba(255, 120, 120, 0.18);
+    background: rgba(255, 95, 95, 0.08);
+}
+
+.menu-btn-back .menu-icon,
+.menu-btn-back .label {
+    color: #ffb1b1;
+}
+
+.menu-btn-back:hover {
+    background: rgba(255, 95, 95, 0.16);
+    border-color: rgba(255, 120, 120, 0.32);
+    box-shadow:
+        0 14px 24px rgba(0, 0, 0, 0.16),
+        0 0 18px rgba(255, 95, 95, 0.12);
+}
+
+html[data-theme="light"] .menu-btn-back {
+    background: rgba(201, 63, 63, 0.08);
+    border-color: rgba(201, 63, 63, 0.18);
+}
+
+html[data-theme="light"] .menu-btn-back .menu-icon,
+html[data-theme="light"] .menu-btn-back .label {
+    color: #9b3333;
+}
+
+html[data-theme="light"] .menu-btn-back:hover {
+    background: rgba(201, 63, 63, 0.12);
+    border-color: rgba(201, 63, 63, 0.24);
+    box-shadow:
+        0 12px 22px rgba(97, 108, 91, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.manager-link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.manager-link-btn:hover {
+    background: rgba(67, 228, 147, 0.12);
+    border-color: rgba(67, 228, 147, 0.30);
+    transform: translateY(-2px);
+    box-shadow:
+        0 16px 28px rgba(0, 0, 0, 0.18),
+        0 0 22px rgba(67, 228, 147, 0.14);
+}
+
+.manager-link-btn:active {
+    transform: translateY(0) scale(0.985);
+}
+
+html[data-theme="light"] .manager-link-btn {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(43, 83, 64, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
+}
+
+html[data-theme="light"] .manager-link-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 242, 210, 0.98));
+    border-color: rgba(201, 151, 41, 0.22);
+    box-shadow:
+        0 16px 28px rgba(97, 108, 91, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.manager-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 18px;
+    padding: 18px;
+    align-items: start;
+}
+
+.manager-full-span {
+    grid-column: 1 / -1;
+}
+
+.manager-column,
+.manager-main-column {
+    display: grid;
+    gap: 18px;
+    align-content: start;
+}
+
+.notice-stack {
+    display: grid;
+    gap: 10px;
+}
+
+.notice {
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.notice-success {
+    border-color: rgba(67, 228, 147, 0.24);
+    background: rgba(67, 228, 147, 0.10);
+    color: var(--text);
+}
+
+.notice-error {
+    border-color: rgba(255, 120, 120, 0.22);
+    background: rgba(255, 80, 80, 0.10);
+    color: #ffd7d7;
+}
+
+html[data-theme="light"] .notice-error {
+    color: #8f3737;
+}
+
+.account-form {
+    display: grid;
+    gap: 16px;
+}
+
+.field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.compact-grid {
+    gap: 12px;
+}
+
+.field {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+.field-full {
+    grid-column: 1 / -1;
+}
+
+.field-grow {
+    flex: 1 1 240px;
+}
+
+.field-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.field input {
+    width: 100%;
+    min-height: 46px;
+    padding: 0 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(150, 255, 206, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    outline: none;
+    transition:
+        border-color 0.24s ease,
+        box-shadow 0.24s ease,
+        background 0.24s ease,
+        color 0.24s ease;
+}
+
+.field input::placeholder {
+    color: rgba(169, 196, 180, 0.80);
+}
+
+.field input:focus {
+    border-color: rgba(67, 228, 147, 0.36);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow:
+        0 0 0 1px rgba(67, 228, 147, 0.28),
+        0 0 0 4px rgba(67, 228, 147, 0.08);
+}
+
+html[data-theme="light"] .field input {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(43, 83, 64, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+html[data-theme="light"] .field input::placeholder {
+    color: rgba(91, 114, 103, 0.90);
+}
+
+html[data-theme="light"] .field input:focus {
+    background: rgba(255, 255, 255, 0.98);
+    border-color: rgba(201, 151, 41, 0.26);
+    box-shadow:
+        0 0 0 1px rgba(23, 138, 88, 0.18),
+        0 0 0 4px rgba(255, 196, 95, 0.16);
+}
+
+.role-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.role-option {
+    min-width: 0;
+}
+
+.role-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.role-option-pill {
+    min-height: 74px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    transition:
+        transform 0.22s ease,
+        background 0.24s ease,
+        border-color 0.24s ease,
+        box-shadow 0.24s ease,
+        color 0.24s ease;
+}
+
+.role-option-pill:hover {
+    transform: translateY(-2px);
+    border-color: rgba(67, 228, 147, 0.28);
+    background: rgba(67, 228, 147, 0.10);
+    box-shadow:
+        0 12px 20px rgba(0, 0, 0, 0.14),
+        0 0 18px rgba(67, 228, 147, 0.10);
+}
+
+.role-option input:checked + .role-option-pill {
+    border-color: rgba(67, 228, 147, 0.34);
+    background: linear-gradient(180deg, rgba(67, 228, 147, 0.18), rgba(67, 228, 147, 0.10));
+    box-shadow:
+        0 12px 22px rgba(0, 0, 0, 0.16),
+        0 0 20px rgba(67, 228, 147, 0.14);
+}
+
+.role-option input:focus-visible + .role-option-pill {
+    outline: none;
+    border-color: rgba(67, 228, 147, 0.40);
+    box-shadow:
+        0 0 0 1px rgba(67, 228, 147, 0.30),
+        0 0 0 4px rgba(67, 228, 147, 0.10);
+}
+
+html[data-theme="light"] .role-option-pill {
+    background: rgba(255, 255, 255, 0.84);
+    border-color: rgba(43, 83, 64, 0.12);
+    color: #173623;
+}
+
+html[data-theme="light"] .role-option-pill:hover {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 242, 209, 0.98));
+    border-color: rgba(201, 151, 41, 0.22);
+    box-shadow:
+        0 12px 22px rgba(97, 108, 91, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+html[data-theme="light"] .role-option input:checked + .role-option-pill {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 242, 209, 0.98));
+    border-color: rgba(23, 138, 88, 0.28);
+}
+
+.role-option-name {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.role-option-meta {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.form-actions,
+.account-card-actions,
+.role-create-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.btn-inline {
+    min-width: 120px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #43e493, #19ba73);
+    border-color: rgba(67, 228, 147, 0.32);
+    color: #062517;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--line-strong);
+    color: var(--text);
+}
+
+.btn-danger {
+    background: rgba(255, 95, 95, 0.10);
+    border-color: rgba(255, 120, 120, 0.22);
+    color: #ffd8d8;
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-danger:hover {
+    transform: translateY(-2px);
+}
+
+.btn-primary:hover {
+    box-shadow:
+        0 18px 30px rgba(0, 0, 0, 0.18),
+        0 0 22px rgba(67, 228, 147, 0.18);
+}
+
+.btn-secondary:hover {
+    background: rgba(67, 228, 147, 0.12);
+    border-color: rgba(67, 228, 147, 0.30);
+    box-shadow:
+        0 14px 24px rgba(0, 0, 0, 0.16),
+        0 0 18px rgba(67, 228, 147, 0.12);
+}
+
+.btn-danger:hover {
+    background: rgba(255, 95, 95, 0.16);
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.16);
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.btn-danger:active {
+    transform: translateY(0) scale(0.985);
+}
+
+html[data-theme="light"] .btn-primary {
+    border-color: rgba(201, 151, 41, 0.22);
+    background: linear-gradient(135deg, #1ea764, #ffd14f);
+    color: #13281d;
+}
+
+html[data-theme="light"] .btn-secondary {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(43, 83, 64, 0.14);
+    color: #173623;
+}
+
+html[data-theme="light"] .btn-danger {
+    background: rgba(201, 63, 63, 0.08);
+    border-color: rgba(201, 63, 63, 0.18);
+    color: #8f3737;
+}
+
+html[data-theme="light"] .btn-primary:hover {
+    box-shadow:
+        0 18px 30px rgba(97, 108, 91, 0.14),
+        0 0 18px rgba(255, 196, 95, 0.18);
+}
+
+html[data-theme="light"] .btn-secondary:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 239, 201, 0.98));
+    border-color: rgba(201, 151, 41, 0.22);
+    box-shadow:
+        0 12px 22px rgba(97, 108, 91, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+html[data-theme="light"] .btn-danger:hover {
+    background: rgba(201, 63, 63, 0.12);
+    box-shadow: 0 12px 22px rgba(97, 108, 91, 0.12);
+}
+
+.account-list {
+    display: grid;
+    gap: 12px;
+}
+
+.account-card {
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(67, 228, 147, 0.04));
+    overflow: hidden;
+    transition:
+        border-color 0.24s ease,
+        background 0.24s ease,
+        box-shadow 0.24s ease;
+}
+
+.account-card.is-open {
+    border-color: rgba(67, 228, 147, 0.22);
+    box-shadow:
+        0 16px 28px rgba(0, 0, 0, 0.16),
+        0 0 22px rgba(67, 228, 147, 0.08);
+}
+
+html[data-theme="light"] .account-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 243, 231, 0.96));
+    border-color: rgba(43, 83, 64, 0.12);
+}
+
+.account-summary {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 18px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.account-summary:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.account-summary:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px rgba(67, 228, 147, 0.30);
+}
+
+html[data-theme="light"] .account-summary:hover {
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.account-summary-copy {
+    min-width: 0;
+}
+
+.account-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.account-card-title-row h3 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.account-summary-copy p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.role-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.account-summary-meta {
+    display: grid;
+    justify-items: end;
+    gap: 4px;
+    min-width: 140px;
+}
+
+.account-last-mod-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.account-last-mod-value {
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: right;
+}
+
+.account-chevron {
+    width: 12px;
+    height: 12px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg);
+    transition: transform 0.22s ease, border-color 0.22s ease;
+}
+
+.account-card.is-open .account-chevron {
+    transform: rotate(225deg);
+    border-color: var(--accent);
+}
+
+.account-body {
+    padding: 0 18px 18px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 18px;
+}
+
+.account-body[hidden] {
+    display: none;
+}
+
+.account-form-edit {
+    padding-top: 18px;
+}
+
+.history-section {
+    display: grid;
+    gap: 12px;
+}
+
+.history-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.history-header h4 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.history-header p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.history-last-date {
+    display: grid;
+    gap: 4px;
+    justify-items: end;
+    text-align: right;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.history-last-date strong {
+    color: var(--text);
+    font-size: 13px;
+}
+
+.history-table-wrap {
+    overflow-x: auto;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="light"] .history-table-wrap {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(43, 83, 64, 0.12);
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+}
+
+.history-table th,
+.history-table td {
+    padding: 12px 14px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.history-table th {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.history-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.compact-empty {
+    padding: 16px;
+}
+
+.account-badge,
+.role-pill,
+.role-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.account-badge {
+    border: 1px solid rgba(67, 228, 147, 0.20);
+    background: rgba(67, 228, 147, 0.10);
+    color: var(--text);
+}
+
+.role-pill {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.role-pill[data-role="superadmin"] {
+    border-color: rgba(67, 228, 147, 0.24);
+    background: rgba(67, 228, 147, 0.12);
+}
+
+.role-pill[data-role="admin"] {
+    border-color: rgba(255, 196, 95, 0.24);
+    background: rgba(255, 196, 95, 0.12);
+}
+
+.role-pill[data-role="staff"] {
+    border-color: rgba(124, 167, 255, 0.24);
+    background: rgba(124, 167, 255, 0.12);
+}
+
+.role-library {
+    display: grid;
+    gap: 12px;
+}
+
+.role-library-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(67, 228, 147, 0.04));
+}
+
+html[data-theme="light"] .role-library-item {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 243, 231, 0.96));
+    border-color: rgba(43, 83, 64, 0.12);
+}
+
+.role-library-copy {
+    min-width: 0;
+}
+
+.role-library-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.role-library-top strong {
+    font-size: 15px;
+}
+
+.role-library-copy p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.role-status-locked {
+    border: 1px solid rgba(67, 228, 147, 0.24);
+    background: rgba(67, 228, 147, 0.12);
+    color: var(--text);
+}
+
+.role-status-used {
+    border: 1px solid rgba(255, 196, 95, 0.24);
+    background: rgba(255, 196, 95, 0.12);
+    color: var(--text);
+}
+
+.role-status-free {
+    border: 1px solid rgba(124, 167, 255, 0.24);
+    background: rgba(124, 167, 255, 0.12);
+    color: var(--text);
+}
+
+.empty-state {
+    padding: 22px;
+    border-radius: 16px;
+    border: 1px dashed var(--line-strong);
+    color: var(--muted);
+    text-align: center;
+}
+
+@media (max-width: 1120px) {
+    .manager-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .topbar {
+        height: auto;
+        min-height: var(--topbar-h);
+        padding-top: 12px;
+        padding-bottom: 12px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .topbar .user-meta {
+        flex: 1 1 220px;
+    }
+
+    .topbar .page-title,
+    .topbar .page-subtitle {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+    .topbar .manager-link-btn {
+        margin-left: auto;
+    }
+
+    .manager-content {
+        gap: 14px;
+        padding: 14px;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .manager-link-btn {
+        min-height: 48px;
+        padding: 0 18px;
+    }
+
+    .btn-inline {
+        min-width: 0;
+    }
+
+    .form-actions > *,
+    .account-card-actions > *,
+    .role-create-form > * {
+        flex: 1 1 180px;
+    }
+
+    .panel-header {
+        padding: 14px 14px 10px;
+    }
+
+    .panel-body {
+        padding: 14px;
+    }
+
+    .account-summary,
+    .account-body {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .account-body {
+        padding-bottom: 14px;
+    }
+}
+
+@media (max-width: 560px) {
+    .manager-link-btn {
+        min-height: 42px;
+        padding: 0 12px;
+        font-size: 13px;
+    }
+
+    .field-grid,
+    .role-library-item,
+    .account-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .history-header,
+    .role-create-form,
+    .account-card-actions,
+    .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .btn-inline,
+    .role-create-form > *,
+    .form-actions > *,
+    .account-card-actions > * {
+        width: 100%;
+    }
+
+    .account-summary-meta,
+    .history-last-date {
+        justify-items: start;
+        text-align: left;
+    }
+}
+
+@media (max-width: 420px) {
+    .topbar .manager-link-btn {
+        min-height: 40px;
+        padding: 0 10px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+}

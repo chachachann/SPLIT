@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ post.title }}</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "dark";
+                document.documentElement.style.colorScheme = "dark";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='news_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+</head>
+<body class="news-post-page">
+    <main class="news-post-shell">
+        <header class="news-post-header">
+            <a class="news-post-back" href="{{ url_for('dashboard') }}">
+                &#8592; Back to Dashboard
+            </a>
+            <div class="news-post-header-actions">
+                {% if is_authenticated %}
+                    {% include '_chat_widget.html' %}
+
+                    <details class="notification-menu">
+                        <summary class="notification-trigger" aria-label="Open notifications">
+                            <span class="notification-bell" aria-hidden="true">&#128276;</span>
+                            {% if unread_notifications %}
+                                <span class="notification-badge">{{ unread_notifications }}</span>
+                            {% endif %}
+                        </summary>
+
+                        <div class="notification-dropdown">
+                            <div class="notification-dropdown-header">
+                                <strong>Notifications</strong>
+                                <span>{{ unread_notifications }} unread</span>
+                            </div>
+
+                            <div class="notification-dropdown-list">
+                                {% if topbar_notifications %}
+                                    {% for notification in topbar_notifications %}
+                                        <article
+                                            class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
+                                            data-notification-card
+                                            data-notification-read="{{ 'false' if not notification.is_read else 'true' }}"
+                                            data-notification-expanded="false"
+                                        >
+                                            <div class="notification-dropdown-meta">{{ notification.sender_name }} &#8226; {{ notification.created_at }}</div>
+                                            <strong>{{ notification.title }}</strong>
+                                            <p class="notification-dropdown-preview">{{ notification.message_preview }}</p>
+
+                                            <form method="POST" action="{{ url_for('notification_action') }}" hidden data-mark-read-form>
+                                                <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                <input type="hidden" name="action" value="mark-read">
+                                            </form>
+
+                                            <div class="notification-dropdown-details">
+                                                <div class="notification-message-body">{{ notification.message_html|safe }}</div>
+                                                {% if notification.link_url %}
+                                                    <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="notification-dropdown-actions">
+                                                <form method="POST" action="{{ url_for('notification_action') }}">
+                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                    {% if notification.is_read %}
+                                                        <input type="hidden" name="action" value="mark-unread" data-action-input>
+                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Unread</button>
+                                                    {% else %}
+                                                        <input type="hidden" name="action" value="mark-read" data-action-input>
+                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Read</button>
+                                                    {% endif %}
+                                                </form>
+
+                                                <form method="POST" action="{{ url_for('notification_action') }}">
+                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
+                                                    <input type="hidden" name="action" value="hide">
+                                                    <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
+                                                </form>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="notification-empty">No active notifications.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </details>
+                {% endif %}
+
+                <div class="theme-switcher" aria-label="Theme settings">
+                    <div class="theme-switcher-copy">
+                        <span class="theme-switcher-title">Appearance</span>
+                        <span class="theme-switcher-state" data-theme-label>Dark mode</span>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="theme-toggle"
+                        data-theme-toggle
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Switch between dark mode and light mode"
+                    >
+                        <svg class="theme-toggle-icon theme-toggle-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"></path>
+                        </svg>
+
+                        <span class="theme-toggle-track" aria-hidden="true">
+                            <span class="theme-toggle-thumb"></span>
+                        </span>
+
+                        <svg class="theme-toggle-icon theme-toggle-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2.75V5.25M12 18.75V21.25M21.25 12H18.75M5.25 12H2.75M18.54 5.46L16.77 7.23M7.23 16.77L5.46 18.54M18.54 18.54L16.77 16.77M7.23 7.23L5.46 5.46"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <article class="news-post-article">
+            <p class="news-post-kicker">Project SPLIT Update</p>
+            <h1>{{ post.title }}</h1>
+
+            <div class="news-post-meta">
+                <span>{{ post.updated_at }}</span>
+                <span>{{ post.editor_name }}</span>
+            </div>
+
+            {% if post.summary %}
+                <p class="news-post-summary">{{ post.summary }}</p>
+            {% endif %}
+
+            <div class="news-post-content">{{ post.content_html | safe }}</div>
+        </article>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% if is_authenticated %}
+        <script src="{{ url_for('static', filename='chat.js') }}"></script>
+        <script>
+            (function () {
+                function syncNotificationVisualState(card, isRead) {
+                    card.setAttribute("data-notification-read", isRead ? "true" : "false");
+                    card.classList.toggle("is-unread", !isRead);
+
+                    var actionInput = card.querySelector("[data-action-input]");
+                    var actionButton = card.querySelector("[data-action-button]");
+                    if (actionInput) {
+                        actionInput.value = isRead ? "mark-unread" : "mark-read";
+                    }
+                    if (actionButton) {
+                        actionButton.textContent = isRead ? "Mark Unread" : "Mark Read";
+                    }
+                }
+
+                Array.prototype.slice.call(document.querySelectorAll("[data-notification-card]")).forEach(function (card) {
+                    card.addEventListener("click", function (event) {
+                        if (event.target.closest("button, a, form, summary")) {
+                            return;
+                        }
+
+                        var isExpanded = card.getAttribute("data-notification-expanded") === "true";
+                        card.setAttribute("data-notification-expanded", isExpanded ? "false" : "true");
+                        card.classList.toggle("is-expanded", !isExpanded);
+
+                        if (card.getAttribute("data-notification-read") === "true" || card.getAttribute("data-notification-pending") === "true") {
+                            return;
+                        }
+
+                        var markReadForm = card.querySelector("[data-mark-read-form]");
+                        if (markReadForm) {
+                            card.setAttribute("data-notification-pending", "true");
+                            syncNotificationVisualState(card, true);
+                            var formData = new FormData(markReadForm);
+                            fetch(markReadForm.action, {
+                                method: "POST",
+                                body: formData,
+                                headers: { "X-Requested-With": "XMLHttpRequest" }
+                            }).catch(function () {
+                                syncNotificationVisualState(card, false);
+                            }).finally(function () {
+                                card.removeAttribute("data-notification-pending");
+                            });
+                        }
+                    });
+                });
+            })();
+        </script>
+    {% endif %}
+</body>
+</html>

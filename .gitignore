@@ -6,6 +6,7 @@ venv/
 .env
 dist/
 build/
+static/uploads/
 Super_GIT_Batchfile.bat
 version.log
 !templates/version.log
