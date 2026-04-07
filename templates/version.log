@@ -1,0 +1,51 @@
+=========================================
+PROJECT: SPLIT (DAR NIR)
+VERSION: 0.01.0a
+DATE: 2026-04-07 08:41
+=========================================
+
+## VERSIONING SCHEME
+
+Primary (Major):    X.00.0
+Secondary (Minor):  0.XX.0
+Tertiary (Patch):   0.00.X
+
+Suffix:
+
+* a = alpha
+* b = beta
+  (Removed after stable release)
+
+# CHANGELOG
+
+## [0.01.0a] - 2026-04-07
+
+ADDED:
+
+* Shared `app.css` theme for shell, sidebar, topbar, panels, and responsive behavior
+* Refined login brand lockup for Project SPLIT in the sidebar
+* Release version log for `0.01.0a`
+
+IMPROVED:
+
+* Unified visual language between login and dashboard pages
+* Cleaner login header by removing the inactive Sign In badge
+* Sidebar collapse behavior on the dashboard with proper main-content offset
+* HTML entity cleanup for dashboard symbols and labels
+
+FIXED:
+
+* Mismatched styling between login and dashboard CSS files
+* Login sidebar branding that looked like an online-status indicator
+* Tracked version file mismatch between `version-log` and `version.log`
+
+MISSING / TODO:
+
+* Password hashing (SECURITY)
+* Role-based filtering on frontend (quick cards)
+* Form validation (client-side)
+* Error handling improvements
+* Logout confirmation / UX polish
+* Database management UI (admin panel)
+* Activity logging system
+* Deployment config (production-ready Flask)

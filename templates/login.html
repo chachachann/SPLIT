@@ -1,74 +1,168 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DAR Login</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
-<body class="login-body">
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
-<!-- SIDEBAR -->
-<div id="sidebar" class="sidebar">
-    <div class="sidebar-header">
-        <div class="burger" onclick="toggleSidebar()">☰</div>
+    <div class="app-shell">
+        <aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+            <div class="sidebar-header">
+                <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
+
+                <div class="brand brand-login">
+                    <span class="brand-emblem" aria-hidden="true">PS</span>
+                    <span class="brand-copy">
+                        <span class="brand-kicker">Project</span>
+                        <span class="brand-name">SPLIT</span>
+                    </span>
+                </div>
+            </div>
+
+            <nav class="menu" aria-label="Home shortcuts">
+                <button class="menu-btn" type="button">
+                    <span class="menu-icon">&#128222;</span>
+                    <span class="label">Contact Admin</span>
+                </button>
+
+                <button class="menu-btn" type="button">
+                    <span class="menu-icon">&#9432;</span>
+                    <span class="label">About</span>
+                </button>
+
+                <button class="menu-btn" type="button">
+                    <span class="menu-icon">?</span>
+                    <span class="label">Help</span>
+                </button>
+
+                <button class="menu-btn" type="button">
+                    <span class="menu-icon">&#128240;</span>
+                    <span class="label">News</span>
+                </button>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
+
+                <div class="user-meta">
+                    <div class="page-title">Welcome</div>
+                    <div class="page-subtitle">DAR Negros Island Region &#8226; Project SPLIT</div>
+                </div>
+            </header>
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Dedicated website of DAR-NIR for Project SPLIT automation.</span>
+                        <span class="marquee">Use your assigned credentials to access the system.</span>
+                        <span class="marquee">Contact the administrator if you need account assistance.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="home-content">
+                <div class="home-shell">
+                    <div class="logo-wrap">
+                        <img src="{{ url_for('static', filename='images/DAR_logo.png') }}" class="logo" alt="DAR logo">
+                    </div>
+
+                    <section class="panel login-panel" aria-labelledby="login-heading">
+                        <div class="panel-header">
+                            <div>
+                                <h2 id="login-heading">Account Access</h2>
+                                <p>Use your official account credentials to continue.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            <div class="login-brand">
+                                <h1>DAR Negros Island Region</h1>
+                                <p>Project SPLIT sign-in portal</p>
+                            </div>
+
+                            <form method="POST">
+                                <div class="input-group">
+                                    <input type="text" name="username" placeholder="Username" required>
+                                </div>
+
+                                <div class="input-group">
+                                    <input type="password" name="password" placeholder="Password" required>
+                                </div>
+
+                                <label class="remember">
+                                    <input type="checkbox" name="remember">
+                                    <span>Remember Me (7 days)</span>
+                                </label>
+
+                                <button type="submit" class="login-btn">Login</button>
+                            </form>
+
+                            {% if error %}
+                                <p class="error">{{ error }}</p>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
     </div>
 
-<div class="menu">
-    <button class="menu-btn">
-        <span class="menu_icon">📞</span>
-        <span class="label">Contact Admin</span>
-    </button>
+    <script>
+        function isMobile() {
+            return window.matchMedia("(max-width: 768px)").matches;
+        }
 
-    <button class="menu-btn">
-        <span class="menu_icon">ℹ️</span>
-        <span class="label">About</span>
-    </button>
+        function setMobileSidebar(open) {
+            const sidebar = document.getElementById("sidebar");
+            const backdrop = document.getElementById("backdrop");
 
-    <button class="menu-btn">
-        <span class="menu_icon">❓</span>
-        <span class="label">Help</span>
-    </button>
+            sidebar.classList.toggle("is-open", open);
+            backdrop.classList.toggle("show", open);
+            document.body.classList.toggle("sidebar-open", open);
+        }
 
-    <button class="menu-btn">
-        <span class="menu_icon">📰</span>
-        <span class="label">News</span>
-    </button>
-</div>
-</div>
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
 
-<!-- LOGO -->
-<img src="{{ url_for('static', filename='images/DAR_logo.png') }}" class="logo">
+            if (isMobile()) {
+                setMobileSidebar(!sidebar.classList.contains("is-open"));
+                return;
+            }
 
-<!-- LOGIN -->
-<div class="login-container">
-    <h1>DAR Negros Island Region</h1><br>
-    <h2>Project SPLIT</h2>
+            sidebar.classList.toggle("collapsed");
+            document.body.classList.toggle("sidebar-collapsed", sidebar.classList.contains("collapsed"));
+        }
 
-    <form method="POST">
-        <input type="text" name="username" placeholder="Username" required>
-        <input type="password" name="password" placeholder="Password" required>
+        function openSidebar() {
+            if (isMobile()) {
+                setMobileSidebar(true);
+            }
+        }
 
-        <label class="remember">
-            <input type="checkbox" name="remember"> Remember Me (7 days)
-        </label>
+        function closeSidebar() {
+            if (isMobile()) {
+                setMobileSidebar(false);
+            }
+        }
 
-        <button type="submit">Login</button>
-    </form>
+        window.addEventListener("resize", function () {
+            const sidebar = document.getElementById("sidebar");
 
-    {% if error %}
-        <p class="error">{{ error }}</p>
-    {% endif %}
-</div>
-
-<!-- MARQUEE -->
-<div class="marquee">
-    <p>Dedicated website of DAR-NIR for Project SPLIT Automation</p>
-</div>
-
-<script>
-function toggleSidebar() {
-    document.getElementById("sidebar").classList.toggle("collapsed");
-}
-</script>
-
+            if (isMobile()) {
+                sidebar.classList.remove("collapsed");
+                document.body.classList.remove("sidebar-collapsed");
+            } else {
+                setMobileSidebar(false);
+            }
+        });
+    </script>
 </body>
 </html>

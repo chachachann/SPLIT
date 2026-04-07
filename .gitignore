@@ -7,3 +7,5 @@ venv/
 dist/
 build/
 Super_GIT_Batchfile.bat
+version.log
+!templates/version.log

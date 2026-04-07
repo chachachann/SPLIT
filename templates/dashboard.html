@@ -1,147 +1,282 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
 </head>
-
 <body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
-<!-- SIDEBAR -->
-<div id="sidebar" class="sidebar">
-    <div class="sidebar-header">
-        <div class="burger" onclick="toggleSidebar()">☰</div>
-    </div>
+    <div class="app-shell">
+        <aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+            <div class="sidebar-header">
+                <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
 
-    <div class="menu">
-        {% for btn in buttons %}
-        <a href="{{ btn[1] }}" class="menu-btn">
-            <span class="menu_icon">⚙️</span>
-            <span class="label">{{ btn[0] }}</span>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- MAIN -->
-<div id="main" class="main">
-
-    <div class="topbar">
-        <div>{{ fullname }} • {{ userlevel }}</div>
-        <a href="/logout" class="logout-btn">Logout</a>
-    </div>
-
-    <!-- MARQUEE -->
-    <div class="announcement-bar">
-        <div class="announcement-track">
-            <span>📢 System Maintenance at 5PM • New features coming soon • Contact admin •</span>
-        </div>
-    </div>
-
-    <div class="content">
-
-        <!-- 🔝 NEWS PANEL -->
-        <div class="news-panel">
-
-            <div class="layout-layer">
-
-                <scrolly-rail data-control-previous="news-prev" data-control-next="news-next">
-                    <ul class="scroll-list">
-
-                        <li>
-                            <div class="news-card">
-                                <h4>System Update 1</h4>
-                                <p>Maintenance at 5PM.</p>
-                            </div>
-                        </li>
-
-                        <li>
-                            <div class="news-card">
-                                <h4>System Update 2</h4>
-                                <p>New features rollout.</p>
-                            </div>
-                        </li>
-
-                        <li>
-                            <div class="news-card">
-                                <h4>System Update 3</h4>
-                                <p>Performance improvements.</p>
-                            </div>
-                        </li>
-
-                        <li>
-                            <div class="news-card">
-                                <h4>System Update 4</h4>
-                                <p>Security patch applied.</p>
-                            </div>
-                        </li>
-
-                    </ul>
-                </scrolly-rail>
-
-                <button id="news-prev" class="btn-scrolly-rail btn-scrolly-rail--previous">←</button>
-                <button id="news-next" class="btn-scrolly-rail btn-scrolly-rail--next">→</button>
-
+                <div class="brand">
+                    <span class="brand-mark">&#9673;</span>
+                    <span class="brand-text">Dashboard</span>
+                </div>
             </div>
 
-        </div>
+            <nav class="menu" aria-label="Dashboard sections">
+                <button
+                    type="button"
+                    class="menu-btn active"
+                    data-panel="news-panel"
+                    aria-controls="news-panel"
+                    aria-pressed="true"
+                    onclick="togglePanelFromSidebar(this, 'news-panel')"
+                >
+                    <span class="menu-icon">&#128240;</span>
+                    <span class="label">Updates</span>
+                </button>
+            </nav>
+        </aside>
 
-        <!-- 🔽 ACTION PANEL -->
-        <div class="action-panel">
+        <main id="main" class="main">
+            <header class="topbar">
+                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
 
-            <div class="scrolly-rail-controls">
-                <button id="btn-prev" class="btn-scrolly-rail btn-scrolly-rail--previous">←</button>
-                <button id="btn-next" class="btn-scrolly-rail btn-scrolly-rail--next">→</button>
-            </div>
+                <div class="user-meta">
+                    <div class="page-title">Control Center</div>
+                    <div class="page-subtitle">{{ fullname }} &#8226; {{ userlevel }}</div>
+                </div>
 
-            <scrolly-rail data-control-previous="btn-prev" data-control-next="btn-next">
-                <ul class="scroll-list">
-                    <li><a href="#" class="card-btn">Config</a></li>
-                    <li><a href="#" class="card-btn">Users</a></li>
-                    <li><a href="#" class="card-btn">Reports</a></li>
-                    <li><a href="#" class="card-btn">Logs</a></li>
-                </ul>
-            </scrolly-rail>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </header>
 
-        </div>
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee m1">&#128226; This system is under development.</span>
+                        <span class="marquee m2">&#128226; Hello, hi, hewow</span>
+                        <span class="marquee m3">&#128226; New features coming soon</span>
+                    </div>
+                </div>
+            </section>
 
+            <section class="content">
+                <section id="news-panel" class="panel news-panel" aria-labelledby="news-heading">
+                    <div class="panel-header">
+                        <div>
+                            <h2 id="news-heading">Updates</h2>
+                            <p>Recent system notices and announcements.</p>
+                        </div>
+
+                        <div class="panel-header-actions">
+                            <button class="panel-hide-btn" type="button" onclick="togglePanel('news-panel')">Hide</button>
+                        </div>
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="news-grid">
+                            <article class="news-card">
+                                <div class="news-meta">System Update 1</div>
+                                <h4>Dashboard foundation</h4>
+                                <p>Initial dashboard content has been prepared for testing, review, and layout validation.</p>
+                            </article>
+
+                            <article class="news-card">
+                                <div class="news-meta">System Update 2</div>
+                                <h4>Layout refinement</h4>
+                                <p>Spacing, alignment, and container behavior are designed to adapt cleanly as the sidebar changes.</p>
+                            </article>
+
+                            <article class="news-card">
+                                <div class="news-meta">System Update 3</div>
+                                <h4>Navigation behavior</h4>
+                                <p>The sidebar now supports desktop push behavior and mobile overlay behavior without breaking the page flow.</p>
+                            </article>
+
+                            <article class="news-card">
+                                <div class="news-meta">System Update 4</div>
+                                <h4>Flexible content</h4>
+                                <p>Update cards and action cards are built to resize naturally with the available grid space.</p>
+                            </article>
+
+                            <article class="news-card">
+                                <div class="news-meta">System Update 5</div>
+                                <h4>Expandable later</h4>
+                                <p>This area is ready for more modules, notices, and role-based content once your backend logic is added.</p>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel action-panel" aria-labelledby="actions-heading">
+                    <div class="panel-header">
+                        <div>
+                            <h2 id="actions-heading">Quick Actions</h2>
+                            <p>Frequently used tools and modules.</p>
+                        </div>
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="quick-grid">
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="view-map" data-module-order="1" data-module-title="View Map" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">VM</span>
+                                <span class="quick-title">View Map</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="inventory-of-cloas" data-module-order="2" data-module-title="Inventory of CLOAs" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">IC</span>
+                                <span class="quick-title">Inventory of CLOAs</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="field-validation" data-module-order="3" data-module-title="Field Validation" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">FV</span>
+                                <span class="quick-title">Field Validation</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="survey" data-module-order="4" data-module-title="Survey" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">SV</span>
+                                <span class="quick-title">Survey</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="documentation" data-module-order="5" data-module-title="Documentation" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">DC</span>
+                                <span class="quick-title">Documentation</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="registration" data-module-order="6" data-module-title="Registration" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">RG</span>
+                                <span class="quick-title">Registration</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="redistribution" data-module-order="7" data-module-title="Redistribution" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">RD</span>
+                                <span class="quick-title">Redistribution</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="pending-requests" data-module-order="8" data-module-title="Pending Requests" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">PR</span>
+                                <span class="quick-title">Pending Requests</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="notifications" data-module-order="9" data-module-title="Notifications" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">NT</span>
+                                <span class="quick-title">Notifications</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="backlogs" data-module-order="10" data-module-title="Backlogs" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">BL</span>
+                                <span class="quick-title">Backlogs</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="modification-history" data-module-order="11" data-module-title="Modification History" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">MH</span>
+                                <span class="quick-title">Modification History</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+
+                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="contacts" data-module-order="12" data-module-title="Contacts" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
+                                <span class="quick-icon">CT</span>
+                                <span class="quick-title">Contacts</span>
+                                <span class="quick-note">Placeholder module</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </main>
     </div>
 
-</div>
+    <script>
+        function isMobile() {
+            return window.matchMedia("(max-width: 768px)").matches;
+        }
 
-<script>
-function toggleSidebar() {
-    document.getElementById("sidebar").classList.toggle("collapsed");
-    document.getElementById("main").classList.toggle("expanded");
-}
-</script>
+        function setMobileSidebar(open) {
+            const sidebar = document.getElementById("sidebar");
+            const backdrop = document.getElementById("backdrop");
 
-<script>
-class ScrollyRail extends HTMLElement {
-  static register(tag = "scrolly-rail") {
-    if ("customElements" in window) {
-      customElements.define(tag, this);
-    }
-  }
+            sidebar.classList.toggle("is-open", open);
+            backdrop.classList.toggle("show", open);
+            document.body.classList.toggle("sidebar-open", open);
+        }
 
-  get items() {
-    const els = [...this.children];
-    return els.length === 1 ? [...els[0].children] : els;
-  }
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
 
-  connectedCallback() {
-    this.prevBtn = document.getElementById(this.dataset.controlPrevious);
-    this.nextBtn = document.getElementById(this.dataset.controlNext);
+            if (isMobile()) {
+                setMobileSidebar(!sidebar.classList.contains("is-open"));
+                return;
+            }
 
-    if (this.prevBtn) this.prevBtn.onclick = () => this.scrollBy({ left: -300, behavior: "smooth" });
-    if (this.nextBtn) this.nextBtn.onclick = () => this.scrollBy({ left: 300, behavior: "smooth" });
-  }
-}
+            sidebar.classList.toggle("collapsed");
+            document.body.classList.toggle("sidebar-collapsed", sidebar.classList.contains("collapsed"));
+        }
 
-ScrollyRail.register();
-</script>
+        function openSidebar() {
+            if (isMobile()) {
+                setMobileSidebar(true);
+            }
+        }
 
+        function closeSidebar() {
+            if (isMobile()) {
+                setMobileSidebar(false);
+            }
+        }
+
+        function setPanelState(panelId, visible) {
+            const panel = document.getElementById(panelId);
+            const button = document.querySelector(`.menu-btn[data-panel="${panelId}"]`);
+
+            if (!panel) return;
+
+            panel.classList.toggle("is-hidden", !visible);
+
+            if (button) {
+                button.classList.toggle("active", visible);
+                button.setAttribute("aria-pressed", visible ? "true" : "false");
+            }
+        }
+
+        function togglePanel(panelId) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            const willShow = panel.classList.contains("is-hidden");
+            setPanelState(panelId, willShow);
+        }
+
+        function togglePanelFromSidebar(button, panelId) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            const willShow = panel.classList.contains("is-hidden");
+            setPanelState(panelId, willShow);
+        }
+
+        window.addEventListener("DOMContentLoaded", function () {
+            setPanelState("news-panel", true);
+        });
+
+        window.addEventListener("resize", function () {
+            const sidebar = document.getElementById("sidebar");
+
+            if (isMobile()) {
+                sidebar.classList.remove("collapsed");
+                document.body.classList.remove("sidebar-collapsed");
+            } else {
+                setMobileSidebar(false);
+            }
+        });
+    </script>
 </body>
 </html>
