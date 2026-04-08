@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit {{ form.title }}</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    {% set visible_keys = visible_fields|map(attribute='key')|list %}
+
+    <div class="app-shell">
+        {% set workflow_sidebar_brand = 'Edit Request' %}
+        {% set workflow_sidebar_active = 'form_edit' %}
+        {% set workflow_sidebar_show_form_home = true %}
+        {% set workflow_sidebar_form_key = form.form_key %}
+        {% set workflow_sidebar_show_edit_draft = true %}
+        {% set workflow_sidebar_submission_id = submission.id %}
+        {% set workflow_sidebar_show_review_queue = false %}
+        {% include '_workflow_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = form.title %}
+            {% set topbar_subtitle %}{{ submission.tracking_number or ('Draft #' ~ submission.id) }} &#8226; Draft editor{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Autosave tracks text changes. Uploads are saved only when you manually save draft or submit.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-main-column manager-full-span">
+                    <div class="workflow-detail-grid">
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Submission Data</h2>
+                                    <p>Required fields are marked with an asterisk. Hidden fields appear automatically when their conditions become true.</p>
+                                </div>
+                                <div class="workflow-inline-actions">
+                                    <span class="workflow-inline-note" data-autosave-status>Autosave ready</span>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <form method="POST" enctype="multipart/form-data" class="workflow-field-stack" data-workflow-edit-form data-autosave-url="{{ url_for('form_autosave_submission', submission_id=submission.id) }}">
+                                    {% for field in schema %}
+                                        {% set current_value = submission.data.get(field.key, field.default_value if field.default_value is not none else '') %}
+                                        <div class="workflow-field-block" data-field-key="{{ field.key }}" {% if field.key not in visible_keys %}hidden{% endif %}>
+                                            <label class="workflow-field-label" for="field__{{ field.key }}">
+                                                <span>{{ field.label }}</span>
+                                                {% if field.required %}
+                                                    <span class="workflow-field-required">*</span>
+                                                {% endif %}
+                                            </label>
+
+                                            {% if field.help_text %}
+                                                <div class="workflow-field-help">{{ field.help_text }}</div>
+                                            {% endif %}
+
+                                            {% if field.type == 'short_text' %}
+                                                <input id="field__{{ field.key }}" type="text" name="field__{{ field.key }}" value="{{ current_value }}">
+                                            {% elif field.type == 'long_text' %}
+                                                <textarea id="field__{{ field.key }}" class="workflow-textarea" name="field__{{ field.key }}">{{ current_value }}</textarea>
+                                            {% elif field.type == 'number' %}
+                                                <input id="field__{{ field.key }}" type="number" name="field__{{ field.key }}" value="{{ current_value }}">
+                                            {% elif field.type == 'date' %}
+                                                <input id="field__{{ field.key }}" type="date" name="field__{{ field.key }}" value="{{ current_value }}">
+                                            {% elif field.type == 'dropdown' %}
+                                                <select id="field__{{ field.key }}" class="workflow-select" name="field__{{ field.key }}">
+                                                    <option value="">Select an option</option>
+                                                    {% for option in field.options %}
+                                                        <option value="{{ option }}" {% if option == current_value %}selected{% endif %}>{{ option }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% elif field.type == 'checkbox' %}
+                                                <label class="role-option-pill workflow-checkbox-row" for="field__{{ field.key }}">
+                                                    <input id="field__{{ field.key }}" type="checkbox" name="field__{{ field.key }}" value="1" {% if current_value %}checked{% endif %}>
+                                                    <span class="role-option-name">Checked</span>
+                                                </label>
+                                            {% elif field.type == 'image_upload' %}
+                                                <input id="field__{{ field.key }}" type="file" name="field_file__{{ field.key }}" accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.heic,.heif" multiple>
+                                                <div class="workflow-input-note">Up to 5 images total across this submission. 50 MB max per file.</div>
+                                            {% elif field.type == 'file_upload' %}
+                                                <input id="field__{{ field.key }}" type="file" name="field_file__{{ field.key }}" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" multiple>
+                                                <div class="workflow-input-note">Up to 20 document attachments total across this submission. 50 MB max per file.</div>
+                                            {% endif %}
+
+                                            {% if file_groups.get(field.key) %}
+                                                <div class="workflow-file-list">
+                                                    {% for file in file_groups.get(field.key) %}
+                                                        <div class="workflow-file-item">
+                                                            <div class="workflow-file-row">
+                                                                <a href="{{ url_for('static', filename='uploads/forms/submissions/' ~ file.stored_name) }}" target="_blank" rel="noopener noreferrer">{{ file.original_name }}</a>
+                                                                <span>{{ (file.file_size_bytes / 1048576)|round(2) }} MB</span>
+                                                            </div>
+                                                            <label class="workflow-inline-check">
+                                                                <input type="checkbox" name="remove_file_ids" value="{{ file.id }}">
+                                                                <span>Remove on next save</span>
+                                                            </label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+
+                                    <div class="form-actions">
+                                        <button type="submit" name="action" value="save-draft" class="btn-secondary">Save Draft</button>
+                                        <button type="submit" name="action" value="submit" class="btn-primary">Submit for Review</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </section>
+
+                        <aside class="workflow-sidebar-stack">
+                            <section class="panel">
+                                <div class="panel-header">
+                                    <div class="workflow-panel-copy">
+                                        <h2>Draft Summary</h2>
+                                        <p>Workflow metadata and file policy for this submission.</p>
+                                    </div>
+                                </div>
+                                <div class="panel-body">
+                                    <div class="workflow-field-stack">
+                                        <div class="workflow-meta-row">
+                                            <span>Status</span>
+                                            <strong>{{ submission.status|title }}</strong>
+                                        </div>
+                                        <div class="workflow-meta-row">
+                                            <span>Tracking</span>
+                                            <strong>{{ submission.tracking_number or 'Generated on submit' }}</strong>
+                                        </div>
+                                        <div class="workflow-meta-row">
+                                            <span>Version</span>
+                                            <strong>v{{ form.current_version.version_number if form.current_version else 1 }}</strong>
+                                        </div>
+                                        <div class="workflow-meta-row">
+                                            <span>Updated</span>
+                                            <strong>{{ submission.updated_at }}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="panel">
+                                <div class="panel-header">
+                                    <div class="workflow-panel-copy">
+                                        <h2>Submission Rules</h2>
+                                        <p>Validation and upload limits enforced by the workflow backend.</p>
+                                    </div>
+                                </div>
+                                <div class="panel-body">
+                                    <div class="workflow-pill-list">
+                                        <span class="workflow-pill">50 MB per file</span>
+                                        <span class="workflow-pill">5 images max</span>
+                                        <span class="workflow-pill">20 documents max</span>
+                                        {% if form.allow_cancel %}
+                                            <span class="workflow-pill">Cancelable after submit</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </section>
+                        </aside>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script id="workflow-edit-schema" type="application/json">{{ schema|tojson }}</script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='forms.js') }}"></script>
+</body>
+</html>

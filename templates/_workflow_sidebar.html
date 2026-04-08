@@ -1,0 +1,58 @@
+{% set workflow_sidebar_brand = workflow_sidebar_brand|default('Workflow') %}
+{% set workflow_sidebar_nav_label = workflow_sidebar_nav_label|default('Workflow sections') %}
+{% set workflow_sidebar_active = workflow_sidebar_active|default('') %}
+{% set workflow_sidebar_show_form_home = workflow_sidebar_show_form_home|default(false) %}
+{% set workflow_sidebar_show_edit_draft = workflow_sidebar_show_edit_draft|default(false) %}
+{% set workflow_sidebar_show_my_requests = workflow_sidebar_show_my_requests|default(true) %}
+{% set workflow_sidebar_show_review_queue = workflow_sidebar_show_review_queue|default(true) %}
+{% set workflow_sidebar_form_home_label = workflow_sidebar_form_home_label|default('Form Home') %}
+{% set workflow_sidebar_edit_label = workflow_sidebar_edit_label|default('Edit Draft') %}
+{% set workflow_sidebar_my_requests_icon = workflow_sidebar_my_requests_icon|default('&#128203;') %}
+
+<aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+    <div class="sidebar-header">
+        <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
+        <div class="brand"><span class="brand-text">{{ workflow_sidebar_brand }}</span></div>
+    </div>
+
+    <nav class="menu" aria-label="{{ workflow_sidebar_nav_label }}">
+        <a class="menu-btn{% if workflow_sidebar_active == 'dashboard' %} active{% endif %}" href="{{ url_for('dashboard') }}"{% if workflow_sidebar_active == 'dashboard' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#8962;</span>
+            <span class="label">Dashboard</span>
+        </a>
+        <a class="menu-btn{% if workflow_sidebar_active == 'profile' %} active{% endif %}" href="{{ url_for('profile') }}"{% if workflow_sidebar_active == 'profile' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#128100;</span>
+            <span class="label">Profile</span>
+        </a>
+
+        {% if workflow_sidebar_show_form_home %}
+            <a class="menu-btn{% if workflow_sidebar_active == 'form_home' %} active{% endif %}" href="{{ url_for('form_home', form_key=workflow_sidebar_form_key) }}"{% if workflow_sidebar_active == 'form_home' %} aria-current="page"{% endif %}>
+                <span class="menu-icon">&#128221;</span>
+                <span class="label">{{ workflow_sidebar_form_home_label }}</span>
+            </a>
+        {% endif %}
+
+        {% if workflow_sidebar_show_edit_draft %}
+            <a class="menu-btn{% if workflow_sidebar_active == 'form_edit' %} active{% endif %}" href="{{ url_for('form_edit_submission', submission_id=workflow_sidebar_submission_id) }}"{% if workflow_sidebar_active == 'form_edit' %} aria-current="page"{% endif %}>
+                <span class="menu-icon">&#9998;</span>
+                <span class="label">{{ workflow_sidebar_edit_label }}</span>
+            </a>
+        {% endif %}
+
+        {% if workflow_sidebar_show_my_requests %}
+            <a class="menu-btn{% if workflow_sidebar_active == 'my_requests' %} active{% endif %}" href="{{ url_for('my_requests') }}"{% if workflow_sidebar_active == 'my_requests' %} aria-current="page"{% endif %}>
+                <span class="menu-icon">{{ workflow_sidebar_my_requests_icon|safe }}</span>
+                <span class="label">My Requests</span>
+            </a>
+        {% endif %}
+
+        {% if workflow_sidebar_show_review_queue %}
+            <a class="menu-btn{% if workflow_sidebar_active == 'review_queue' %} active{% endif %}" href="{{ url_for('review_queue') }}"{% if workflow_sidebar_active == 'review_queue' %} aria-current="page"{% endif %}>
+                <span class="menu-icon">&#128269;</span>
+                <span class="label">Review Queue</span>
+            </a>
+        {% endif %}
+    </nav>
+
+    {% include '_sidebar_footer.html' %}
+</aside>

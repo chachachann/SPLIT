@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='profile.css') }}">
+</head>
+<body class="profile-shell">
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        <aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+            <div class="sidebar-header">
+                <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
+                <div class="brand"><span class="brand-text">Dashboard</span></div>
+            </div>
+
+            <nav class="menu" aria-label="Dashboard sections">
+                <a class="menu-btn" href="{{ url_for('dashboard') }}">
+                    <span class="menu-icon">&#8962;</span>
+                    <span class="label">Dashboard</span>
+                </a>
+                <a class="menu-btn active" href="{{ url_for('profile') }}" aria-current="page">
+                    <span class="menu-icon">&#128100;</span>
+                    <span class="label">Profile</span>
+                </a>
+                <a class="menu-btn" href="{{ url_for('dashboard') }}">
+                    <span class="menu-icon">&#8617;</span>
+                    <span class="label">Back</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                {% include '_sidebar_profile_badge.html' %}
+                <div class="theme-switcher" aria-label="Theme settings">
+                    <div class="theme-switcher-copy">
+                        <span class="theme-switcher-title">Appearance</span>
+                        <span class="theme-switcher-state" data-theme-label>Dark mode</span>
+                    </div>
+                    <button type="button" class="theme-toggle" data-theme-toggle role="switch" aria-checked="false" aria-label="Switch between dark mode and light mode">
+                        <svg class="theme-toggle-icon theme-toggle-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="currentColor" d="M20.08 14.09A8.5 8.5 0 0 1 9.91 3.92a.75.75 0 0 0-.98-.98A10 10 0 1 0 21.06 15.07a.75.75 0 0 0-.98-.98Z"></path>
+                        </svg>
+                        <span class="theme-toggle-track" aria-hidden="true"><span class="theme-toggle-thumb"></span></span>
+                        <svg class="theme-toggle-icon theme-toggle-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2.75V5.25M12 18.75V21.25M21.25 12H18.75M5.25 12H2.75M18.54 5.46L16.77 7.23M7.23 16.77L5.46 18.54M18.54 18.54L16.77 16.77M7.23 7.23L5.46 5.46"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            {% set topbar_title = 'Profile' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; Manage your identity, privacy, preferences, and password request{% endset %}
+            {% set topbar_logout_class = 'logout-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Private fields stay visible only to you in the interface. Profile photo and display name stay visible to logged-in users.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="content" data-profile-page data-active-tab="{{ active_tab }}">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="profile-layout">
+                    <div class="profile-hero">
+                        <section class="profile-summary-card">
+                            <div class="profile-avatar" aria-hidden="true">
+                                {% if profile_context.profile.avatar_url %}
+                                    <img src="{{ profile_context.profile.avatar_url }}" alt="{{ profile_context.profile.display_name }}">
+                                {% else %}
+                                    <span>{{ profile_context.profile.avatar_initials }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="profile-summary-copy">
+                                <span class="profile-summary-badge">My Profile</span>
+                                <h1>{{ profile_context.profile.display_name }}</h1>
+                                <div class="profile-summary-meta">
+                                    <span>@{{ profile_context.profile.username }}</span>
+                                    <span>{{ profile_context.profile.designation or 'No designation assigned' }}</span>
+                                </div>
+                                <div class="profile-summary-meta">
+                                    <span>Theme: {{ profile_context.profile.theme_preference|title }}</span>
+                                    <span>{{ profile_context.password_requests|length }} password request{{ '' if profile_context.password_requests|length == 1 else 's' }}</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside class="profile-status-card">
+                            <h2>Visibility</h2>
+                            <p>Display name and profile photo stay visible. Every other field can be hidden per field in the Privacy tab.</p>
+                            <div class="profile-quick-facts">
+                                <div class="profile-fact-row">
+                                    <span>Visible Route</span>
+                                    <strong>/users/{{ profile_context.profile.username }}</strong>
+                                </div>
+                                <div class="profile-fact-row">
+                                    <span>Designation</span>
+                                    <strong>{{ profile_context.profile.designation or 'Not assigned' }}</strong>
+                                </div>
+                                <div class="profile-fact-row">
+                                    <span>Photo Rule</span>
+                                    <strong>One image, overwrite on upload</strong>
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+
+                    <div class="profile-tab-list" role="tablist" aria-label="Profile sections">
+                        <button type="button" class="profile-tab-button" data-profile-tab="basic" aria-selected="false">Basic Info</button>
+                        <button type="button" class="profile-tab-button" data-profile-tab="privacy" aria-selected="false">Privacy</button>
+                        <button type="button" class="profile-tab-button" data-profile-tab="preferences" aria-selected="false">Preferences</button>
+                        <button type="button" class="profile-tab-button" data-profile-tab="security" aria-selected="false">Security Request</button>
+                    </div>
+
+                    <section class="profile-tab-panel" data-profile-panel="basic">
+                        <h2>Basic Info</h2>
+                        <p>Update your visible identity details. Designation stays admin-managed.</p>
+                        <form method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="action" value="save-basic">
+                            <div class="profile-form-grid">
+                                <label class="profile-field">
+                                    <span>Full Name</span>
+                                    <input type="text" name="full_name" value="{{ profile_context.profile.full_name }}">
+                                </label>
+                                <label class="profile-field">
+                                    <span>Display Name</span>
+                                    <input type="text" name="display_name" value="{{ profile_context.profile.display_name }}">
+                                </label>
+                                <div class="profile-field">
+                                    <span>Designation</span>
+                                    <div class="profile-readonly-value">{{ profile_context.profile.designation or 'Not assigned' }}</div>
+                                </div>
+                                <label class="profile-field">
+                                    <span>Department or Office</span>
+                                    <input type="text" name="department" value="{{ profile_context.profile.department }}">
+                                </label>
+                                <label class="profile-field">
+                                    <span>Phone</span>
+                                    <input type="text" name="phone" value="{{ profile_context.profile.phone }}">
+                                </label>
+                                <label class="profile-field">
+                                    <span>Email</span>
+                                    <input type="email" name="email" value="{{ profile_context.profile.email }}">
+                                </label>
+                                <label class="profile-field-full">
+                                    <span>Address</span>
+                                    <input type="text" name="address" value="{{ profile_context.profile.address }}">
+                                </label>
+                                <label class="profile-field">
+                                    <span>Birthday</span>
+                                    <input type="date" name="birthday" value="{{ profile_context.profile.birthday }}">
+                                </label>
+                                <label class="profile-field">
+                                    <span>Profile Photo</span>
+                                    <input type="file" name="avatar_file" accept="image/png,image/jpeg,image/webp,image/gif">
+                                </label>
+                                <label class="profile-field-full">
+                                    <span>About</span>
+                                    <textarea name="bio">{{ profile_context.profile.bio }}</textarea>
+                                </label>
+                            </div>
+
+                            <div class="profile-action-bar">
+                                <button type="submit" class="profile-primary-btn">Save Profile</button>
+                                <span class="profile-avatar-note">Profile photos are displayed in square format across chat, comments, and user lists. Max 50 MB.</span>
+                            </div>
+                        </form>
+                        {% if profile_context.profile.avatar_url %}
+                            <form method="POST">
+                                <input type="hidden" name="action" value="remove-avatar">
+                                <button type="submit" class="profile-secondary-btn">Remove Photo</button>
+                            </form>
+                        {% endif %}
+                    </section>
+
+                    <section class="profile-tab-panel" data-profile-panel="privacy">
+                        <h2>Privacy</h2>
+                        <p>Private fields are hidden from every other user in the UI, including admins and developers.</p>
+                        <form method="POST">
+                            <input type="hidden" name="action" value="save-privacy">
+                            <div class="profile-checkbox-grid">
+                                {% for item in profile_context.privacy_options %}
+                                    <div class="profile-checkbox-row">
+                                        <label>
+                                            <input type="checkbox" name="private_fields" value="{{ item.key }}" {% if item.checked %}checked{% endif %}>
+                                            <span>{{ item.label }}</span>
+                                        </label>
+                                        <span class="profile-privacy-pill">{{ 'Private' if item.checked else 'Visible' }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="profile-action-bar profile-action-bar-compact">
+                                <button type="submit" class="profile-primary-btn">Save Privacy</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="profile-tab-panel" data-profile-panel="preferences">
+                        <h2>Preferences</h2>
+                        <p>Theme preference is saved to your profile and kept in sync with the dashboard toggle.</p>
+                        <form method="POST" data-profile-preferences-form>
+                            <input type="hidden" name="action" value="save-preferences">
+                            <div class="profile-form-grid">
+                                <label class="profile-field">
+                                    <span>Theme</span>
+                                    <select name="theme_preference">
+                                        <option value="dark" {% if profile_context.profile.theme_preference == 'dark' %}selected{% endif %}>Dark</option>
+                                        <option value="light" {% if profile_context.profile.theme_preference == 'light' %}selected{% endif %}>Light</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="profile-action-bar profile-action-bar-compact">
+                                <button type="submit" class="profile-primary-btn">Save Preferences</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="profile-tab-panel" data-profile-panel="security">
+                        <h2>Password Change Request</h2>
+                        <p>Submit a password change request for developer and superadmin review. Approval applies the new password immediately.</p>
+                        <form method="POST">
+                            <input type="hidden" name="action" value="submit-password-request">
+                            <div class="profile-password-grid">
+                                <label class="profile-password-row">
+                                    <span>New Password</span>
+                                    <div class="profile-password-control">
+                                        <input id="profile-new-password" type="password" name="new_password" required>
+                                        <button type="button" class="profile-password-toggle" data-password-toggle="#profile-new-password">Show</button>
+                                    </div>
+                                </label>
+                                <label class="profile-password-row">
+                                    <span>Confirm Password</span>
+                                    <div class="profile-password-control">
+                                        <input id="profile-confirm-password" type="password" name="confirm_password" required>
+                                        <button type="button" class="profile-password-toggle" data-password-toggle="#profile-confirm-password">Show</button>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="profile-action-bar profile-action-bar-compact">
+                                <button type="submit" class="profile-primary-btn">Submit Request</button>
+                            </div>
+                        </form>
+
+                        <div class="profile-request-list">
+                            {% if profile_context.password_requests %}
+                                {% for item in profile_context.password_requests %}
+                                    <article class="profile-request-item">
+                                        <strong>{{ item.title }}</strong>
+                                        <span class="profile-status-pill status-{{ item.status }}">{{ item.status_label }}</span>
+                                        <div class="profile-request-meta">
+                                            <span>Created {{ item.created_at }}</span>
+                                            {% if item.reviewed_at %}
+                                                <span>Reviewed {{ item.reviewed_at }}</span>
+                                            {% endif %}
+                                            {% if item.reviewed_by_display_name %}
+                                                <span>By {{ item.reviewed_by_display_name }}</span>
+                                            {% endif %}
+                                        </div>
+                                        {% if item.rejection_note %}
+                                            <p>{{ item.rejection_note }}</p>
+                                        {% endif %}
+                                    </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="profile-empty-note">No password change requests have been submitted yet.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='profile.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Queue</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    {% set counts = namespace(actionable=0, waiting=0) %}
+    {% for item in queue_items %}
+        {% if item.is_actionable %}
+            {% set counts.actionable = counts.actionable + 1 %}
+        {% else %}
+            {% set counts.waiting = counts.waiting + 1 %}
+        {% endif %}
+    {% endfor %}
+    {% for item in password_queue_items %}
+        {% set counts.actionable = counts.actionable + 1 %}
+    {% endfor %}
+
+    <div class="app-shell">
+        {% set workflow_sidebar_active = 'review_queue' %}
+        {% set workflow_sidebar_my_requests_icon = '&#128221;' %}
+        {% include '_workflow_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = 'Review Queue' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; Actionable tasks first, future stages read-only{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Parallel stages require every active reviewer to approve. Sequential stages stay viewable but remain read-only until activated.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Queue Health</h2>
+                                <p>Actionable tasks are items you can approve or reject right now. Waiting items are visible but still locked by workflow order.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-metric-grid">
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.actionable }}</strong>
+                                    <span>Actionable</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.waiting }}</strong>
+                                    <span>Waiting</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ queue_items|length + password_queue_items|length }}</strong>
+                                    <span>Total Visible</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Assigned Reviews</h2>
+                                <p>Open a submission to inspect attachments, comments, history, and review controls.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            {% if queue_items %}
+                                <div class="workflow-card-list">
+                                    {% for item in queue_items %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ item.form_title }}</h3>
+                                                    <div class="workflow-card-meta">
+                                                        {{ item.tracking_number or ('Submission #' ~ item.submission_id) }} &#8226;
+                                                        Owner {{ item.owner_display_name }} &#8226;
+                                                        Updated {{ item.updated_at }}
+                                                    </div>
+                                                </div>
+                                                <span class="workflow-status-pill {% if item.is_actionable %}status-pending{% else %}status-draft{% endif %}">
+                                                    {{ 'Action Required' if item.is_actionable else 'Read Only' }}
+                                                </span>
+                                            </div>
+
+                                            <div class="workflow-meta-grid">
+                                                <div class="workflow-meta-row">
+                                                    <span>Stage</span>
+                                                    <strong>{{ item.stage_index + 1 }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Sequence</span>
+                                                    <strong>{{ item.task_order }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Reviewer</span>
+                                                    <strong>{{ item.reviewer_type|title }}: {{ item.reviewer_value }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Task Status</span>
+                                                    <strong>{{ item.task_status|title }}</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="workflow-card-actions">
+                                                <a class="btn-primary" href="{{ url_for('form_submission_detail', submission_id=item.submission_id) }}">Open Submission</a>
+                                                {% if not item.is_actionable %}
+                                                    <span class="workflow-inline-note">Visible for awareness only until prior workflow steps complete.</span>
+                                                {% endif %}
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No submissions are assigned to your current user or roles.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Password Change Reviews</h2>
+                                <p>Approve or reject built-in profile security requests here.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            {% if password_queue_items %}
+                                <div class="workflow-card-list">
+                                    {% for item in password_queue_items %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ item.title }}</h3>
+                                                    <div class="workflow-card-meta">
+                                                        {{ item.requester_display_name }} &#8226;
+                                                        @{{ item.username }} &#8226;
+                                                        Submitted {{ item.created_at }}
+                                                    </div>
+                                                </div>
+                                                <span class="workflow-status-pill status-pending">Action Required</span>
+                                            </div>
+
+                                            <div class="workflow-meta-grid">
+                                                <div class="workflow-meta-row">
+                                                    <span>Requester</span>
+                                                    <strong><a href="{{ item.requester_profile_url }}">{{ item.requester_display_name }}</a></strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Designation</span>
+                                                    <strong>{{ item.requester_designation or 'Not shared' }}</strong>
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" action="{{ url_for('review_profile_password_request', request_id=item.id) }}" class="workflow-review-form">
+                                                <textarea class="workflow-textarea workflow-textarea-compact" name="rejection_note" placeholder="Rejection note is required if rejecting."></textarea>
+                                                <div class="workflow-card-actions">
+                                                    <button type="submit" class="btn-primary" name="review_action" value="approve">Approve</button>
+                                                    <button type="submit" class="workflow-danger-btn" name="review_action" value="reject">Reject</button>
+                                                </div>
+                                            </form>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No password change requests are waiting for review.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

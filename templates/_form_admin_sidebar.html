@@ -1,0 +1,43 @@
+{% set form_admin_sidebar_brand = form_admin_sidebar_brand|default('Form Manager') %}
+{% set form_admin_sidebar_nav_label = form_admin_sidebar_nav_label|default('Configuration sections') %}
+{% set form_admin_sidebar_active = form_admin_sidebar_active|default('forms_manage') %}
+{% set form_admin_sidebar_back_href = form_admin_sidebar_back_href|default(url_for('dashboard')) %}
+{% set form_admin_sidebar_back_label = form_admin_sidebar_back_label|default('Back to Dashboard') %}
+
+<aside id="sidebar" class="sidebar" aria-label="Primary navigation">
+    <div class="sidebar-header">
+        <button class="burger" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">&#9776;</button>
+        <div class="brand">
+            <span class="brand-text">{{ form_admin_sidebar_brand }}</span>
+        </div>
+    </div>
+
+    <nav class="menu" aria-label="{{ form_admin_sidebar_nav_label }}">
+        <a class="menu-btn{% if form_admin_sidebar_active == 'settings' %} active{% endif %}" href="{{ url_for('settings') }}"{% if form_admin_sidebar_active == 'settings' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#9881;</span>
+            <span class="label">Chat Config</span>
+        </a>
+
+        <a class="menu-btn{% if form_admin_sidebar_active == 'profile' %} active{% endif %}" href="{{ url_for('profile') }}"{% if form_admin_sidebar_active == 'profile' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#128100;</span>
+            <span class="label">Profile</span>
+        </a>
+
+        <a class="menu-btn{% if form_admin_sidebar_active == 'forms_manage' %} active{% endif %}" href="{{ url_for('forms_manage') }}"{% if form_admin_sidebar_active == 'forms_manage' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#128221;</span>
+            <span class="label">Form Manager</span>
+        </a>
+
+        <a class="menu-btn{% if form_admin_sidebar_active == 'smtp_settings' %} active{% endif %}" href="{{ url_for('smtp_settings') }}"{% if form_admin_sidebar_active == 'smtp_settings' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#9993;</span>
+            <span class="label">SMTP Settings</span>
+        </a>
+
+        <a class="menu-btn menu-btn-back" href="{{ form_admin_sidebar_back_href }}">
+            <span class="menu-icon">&#8592;</span>
+            <span class="label">{{ form_admin_sidebar_back_label }}</span>
+        </a>
+    </nav>
+
+    {% include '_sidebar_footer.html' %}
+</aside>

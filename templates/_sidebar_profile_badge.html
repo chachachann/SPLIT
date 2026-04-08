@@ -1,0 +1,13 @@
+<a href="{{ url_for('profile') }}" class="sidebar-profile-badge">
+    <span class="sidebar-profile-avatar" aria-hidden="true">
+        {% if current_avatar_url %}
+            <img src="{{ current_avatar_url }}" alt="">
+        {% else %}
+            <span>{{ current_avatar_initials or 'U' }}</span>
+        {% endif %}
+    </span>
+    <span class="sidebar-profile-copy">
+        <strong>{{ current_display_name or current_username }}</strong>
+        <span>@{{ current_username }}</span>
+    </span>
+</a>

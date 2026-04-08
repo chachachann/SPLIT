@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{ current_theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,12 +9,15 @@
         (function () {
             try {
                 var savedTheme = localStorage.getItem("split-theme");
-                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
                 document.documentElement.dataset.theme = resolvedTheme;
                 document.documentElement.style.colorScheme = resolvedTheme;
             } catch (error) {
-                document.documentElement.dataset.theme = "dark";
-                document.documentElement.style.colorScheme = "dark";
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
             }
         })();
     </script>
@@ -24,6 +27,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
 </head>
 <body data-open-account="{{ open_account }}">
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
@@ -49,7 +53,7 @@
                     <span class="label">Accounts</span>
                 </a>
 
-                {% if is_superadmin %}
+                {% if is_superadmin or is_developer %}
                     <a class="menu-btn" href="{{ url_for('settings') }}">
                         <span class="menu-icon">&#9881;</span>
                         <span class="label">Configuration</span>
@@ -63,6 +67,7 @@
             </nav>
 
             <div class="sidebar-footer">
+                {% include '_sidebar_profile_badge.html' %}
                 <div class="theme-switcher" aria-label="Theme settings">
                     <div class="theme-switcher-copy">
                         <span class="theme-switcher-title">Appearance</span>
@@ -95,86 +100,10 @@
         </aside>
 
         <main class="main">
-            <header class="topbar">
-                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
-
-                <div class="user-meta">
-                    <div class="page-title">Account Manager</div>
-                    <div class="page-subtitle">{{ fullname }} &#8226; SuperAdmin & Developer controls</div>
-                </div>
-
-                <div class="topbar-actions">
-                    {% include '_chat_widget.html' %}
-
-                    <details class="notification-menu">
-                        <summary class="notification-trigger" aria-label="Open notifications">
-                            <span class="notification-bell" aria-hidden="true">&#128276;</span>
-                            {% if unread_notifications %}
-                                <span class="notification-badge">{{ unread_notifications }}</span>
-                            {% endif %}
-                        </summary>
-
-                        <div class="notification-dropdown">
-                            <div class="notification-dropdown-header">
-                                <strong>Notifications</strong>
-                                <span>{{ unread_notifications }} unread</span>
-                            </div>
-
-                            <div class="notification-dropdown-list">
-                                {% if topbar_notifications %}
-                                    {% for notification in topbar_notifications %}
-                                        <article
-                                            class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
-                                            data-notification-card
-                                            data-notification-read="{{ 'false' if not notification.is_read else 'true' }}"
-                                            data-notification-expanded="false"
-                                        >
-                                            <div class="notification-dropdown-meta">{{ notification.sender_name }} &#8226; {{ notification.created_at }}</div>
-                                            <strong>{{ notification.title }}</strong>
-                                            <p class="notification-dropdown-preview">{{ notification.message_preview }}</p>
-
-                                            <form method="POST" action="{{ url_for('notification_action') }}" hidden data-mark-read-form>
-                                                <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                <input type="hidden" name="action" value="mark-read">
-                                            </form>
-
-                                            <div class="notification-dropdown-details">
-                                                <div class="notification-message-body">{{ notification.message_html|safe }}</div>
-                                                {% if notification.link_url %}
-                                                    <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
-                                                {% endif %}
-                                            </div>
-
-                                            <div class="notification-dropdown-actions">
-                                                <form method="POST" action="{{ url_for('notification_action') }}">
-                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                    {% if notification.is_read %}
-                                                        <input type="hidden" name="action" value="mark-unread" data-action-input>
-                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Unread</button>
-                                                    {% else %}
-                                                        <input type="hidden" name="action" value="mark-read" data-action-input>
-                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Read</button>
-                                                    {% endif %}
-                                                </form>
-
-                                                <form method="POST" action="{{ url_for('notification_action') }}">
-                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                    <input type="hidden" name="action" value="hide">
-                                                    <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
-                                                </form>
-                                            </div>
-                                        </article>
-                                    {% endfor %}
-                                {% else %}
-                                    <div class="notification-empty">No active notifications.</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </details>
-
-                    <a href="{{ url_for('logout') }}" class="manager-link-btn">Logout</a>
-                </div>
-            </header>
+            {% set topbar_title = 'Account Manager' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; SuperAdmin & Developer controls{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
 
             <section class="announcement-bar" aria-label="Announcements">
                 <div class="announcement-track">

@@ -1,0 +1,10 @@
+<a href="{{ url_for('profile') }}" class="topbar-profile-chip" aria-label="Open my profile">
+    <span class="topbar-profile-avatar" aria-hidden="true">
+        {% if current_avatar_url %}
+            <img src="{{ current_avatar_url }}" alt="">
+        {% else %}
+            <span>{{ current_avatar_initials or 'U' }}</span>
+        {% endif %}
+    </span>
+    <span class="topbar-profile-name">{{ current_display_name or current_username }}</span>
+</a>

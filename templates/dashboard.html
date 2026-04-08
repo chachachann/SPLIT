@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{ current_theme }}">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,12 +9,15 @@
         (function () {
             try {
                 var savedTheme = localStorage.getItem("split-theme");
-                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
                 document.documentElement.dataset.theme = resolvedTheme;
                 document.documentElement.style.colorScheme = resolvedTheme;
             } catch (error) {
-                document.documentElement.dataset.theme = "dark";
-                document.documentElement.style.colorScheme = "dark";
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
             }
         })();
     </script>
@@ -23,6 +26,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
 </head>
 <body>
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
@@ -50,6 +54,11 @@
                     <span class="label">Updates</span>
                 </button>
 
+                <a class="menu-btn" href="{{ url_for('profile') }}">
+                    <span class="menu-icon">&#128100;</span>
+                    <span class="label">Profile</span>
+                </a>
+
                 {% if is_superadmin or is_developer %}
                     <a class="menu-btn" href="{{ url_for('account_manager') }}">
                         <span class="menu-icon menu-icon-account-manager" aria-hidden="true">
@@ -64,7 +73,7 @@
                     </a>
                 {% endif %}
 
-                {% if is_superadmin %}
+                {% if is_superadmin or is_developer %}
                     <a class="menu-btn" href="{{ url_for('settings') }}">
                         <span class="menu-icon">&#9881;</span>
                         <span class="label">Configuration</span>
@@ -73,6 +82,7 @@
             </nav>
 
             <div class="sidebar-footer">
+                {% include '_sidebar_profile_badge.html' %}
                 <div class="theme-switcher" aria-label="Theme settings">
                     <div class="theme-switcher-copy">
                         <span class="theme-switcher-title">Appearance</span>
@@ -105,86 +115,10 @@
         </aside>
 
         <main id="main" class="main">
-            <header class="topbar">
-                <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
-
-                <div class="user-meta">
-                    <div class="page-title">Control Center</div>
-                    <div class="page-subtitle">{{ fullname }} &#8226; {{ userlevel }}</div>
-                </div>
-
-                <div class="topbar-actions">
-                    {% include '_chat_widget.html' %}
-
-                    <details class="notification-menu">
-                        <summary class="notification-trigger" aria-label="Open notifications">
-                            <span class="notification-bell" aria-hidden="true">&#128276;</span>
-                            {% if unread_notifications %}
-                                <span class="notification-badge">{{ unread_notifications }}</span>
-                            {% endif %}
-                        </summary>
-
-                        <div class="notification-dropdown">
-                            <div class="notification-dropdown-header">
-                                <strong>Notifications</strong>
-                                <span>{{ unread_notifications }} unread</span>
-                            </div>
-
-                            <div class="notification-dropdown-list">
-                                {% if notifications %}
-                                    {% for notification in notifications %}
-                                        <article
-                                            class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
-                                            data-notification-card
-                                            data-notification-read="{{ 'false' if not notification.is_read else 'true' }}"
-                                            data-notification-expanded="false"
-                                        >
-                                            <div class="notification-dropdown-meta">{{ notification.sender_name }} &#8226; {{ notification.created_at }}</div>
-                                            <strong>{{ notification.title }}</strong>
-                                            <p class="notification-dropdown-preview">{{ notification.message_preview }}</p>
-
-                                            <form method="POST" action="{{ url_for('notification_action') }}" hidden data-mark-read-form>
-                                                <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                <input type="hidden" name="action" value="mark-read">
-                                            </form>
-
-                                            <div class="notification-dropdown-details">
-                                                <div class="notification-message-body">{{ notification.message_html|safe }}</div>
-                                                {% if notification.link_url %}
-                                                    <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
-                                                {% endif %}
-                                            </div>
-
-                                            <div class="notification-dropdown-actions">
-                                                <form method="POST" action="{{ url_for('notification_action') }}">
-                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                    {% if notification.is_read %}
-                                                        <input type="hidden" name="action" value="mark-unread" data-action-input>
-                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Unread</button>
-                                                    {% else %}
-                                                        <input type="hidden" name="action" value="mark-read" data-action-input>
-                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Read</button>
-                                                    {% endif %}
-                                                </form>
-
-                                                <form method="POST" action="{{ url_for('notification_action') }}">
-                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                    <input type="hidden" name="action" value="hide">
-                                                    <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
-                                                </form>
-                                            </div>
-                                        </article>
-                                    {% endfor %}
-                                {% else %}
-                                    <div class="notification-empty">No active notifications.</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </details>
-
-                    <a href="/logout" class="logout-btn">Logout</a>
-                </div>
-            </header>
+            {% set topbar_title = 'Control Center' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; {{ userlevel }}{% endset %}
+            {% set topbar_logout_class = 'logout-btn' %}
+            {% include '_app_topbar.html' %}
 
             <section class="announcement-bar announcement-bar-{{ marquee['style_key'] }}" aria-label="Announcements">
                 <div class="announcement-track">
@@ -245,23 +179,31 @@
 
                     <div class="panel-body">
                         <div class="quick-grid">
-                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="view-map" data-module-order="1" data-module-title="View Map" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
-                                <span class="quick-icon">VM</span>
-                                <span class="quick-title">View Map</span>
-                                <span class="quick-note">Placeholder module</span>
-                            </button>
-
-                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="inventory-of-cloas" data-module-order="2" data-module-title="Inventory of CLOAs" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
-                                <span class="quick-icon">IC</span>
-                                <span class="quick-title">Inventory of CLOAs</span>
-                                <span class="quick-note">Placeholder module</span>
-                            </button>
-
-                            <button type="button" class="quick-card" data-kind="quick-action" data-module-key="field-validation" data-module-order="3" data-module-title="Field Validation" data-route="" data-roles='[]' data-state="placeholder" data-enabled="false">
-                                <span class="quick-icon">FV</span>
-                                <span class="quick-title">Field Validation</span>
-                                <span class="quick-note">Placeholder module</span>
-                            </button>
+                            {% if workflow_forms %}
+                                {% for form in workflow_forms %}
+                                    <a
+                                        class="quick-card quick-card-form quick-card-tone-{{ form.quick_card_style.tone or 'mint' }}"
+                                        href="{{ url_for('form_home', form_key=form.form_key) }}"
+                                        style="--quick-accent: {{ form.quick_card_style.accent or '#43e493' }}"
+                                    >
+                                        <span class="quick-icon quick-icon-form">
+                                            {% if form.quick_icon_type == 'image' and form.quick_icon_value %}
+                                                <img src="{{ url_for('static', filename=form.quick_icon_value) }}" alt="" />
+                                            {% else %}
+                                                {{ form.quick_icon_value or form.quick_label[:2] }}
+                                            {% endif %}
+                                        </span>
+                                        <span class="quick-title">{{ form.quick_label }}</span>
+                                        <span class="quick-note">{{ form.title }}</span>
+                                    </a>
+                                {% endfor %}
+                            {% else %}
+                                <article class="quick-card quick-card-empty">
+                                    <span class="quick-icon">FM</span>
+                                    <span class="quick-title">No published forms</span>
+                                    <span class="quick-note">Publish a form from Form Manager to surface it here.</span>
+                                </article>
+                            {% endif %}
                         </div>
                     </div>
                 </section>
@@ -271,6 +213,7 @@
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='forms.js') }}"></script>
     <script>
         function setPanelState(panelId, visible) {
             const panel = document.getElementById(panelId);

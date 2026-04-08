@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sqlite3
@@ -5,13 +6,18 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 from html import escape
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 DB_PATH = r"C:\SPLIT\db\database.db"
 NEWS_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "static", "uploads", "news")
 NEWS_IMAGE_WEB_PATH = "uploads/news"
 CHAT_ATTACHMENT_DIR = os.path.join(os.path.dirname(__file__), "static", "uploads", "chat")
 CHAT_ATTACHMENT_WEB_PATH = "uploads/chat"
+PROFILE_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "static", "uploads", "profiles")
+PROFILE_IMAGE_WEB_PATH = "uploads/profiles"
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+ALLOWED_PROFILE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 ALLOWED_CHAT_ATTACHMENT_EXTENSIONS = {
     ".png",
     ".jpg",
@@ -35,12 +41,36 @@ ALLOWED_CHAT_ATTACHMENT_EXTENSIONS = {
 REMEMBER_ME_DAYS = 7
 CHAT_PRESENCE_WINDOW_SECONDS = 150
 CHAT_CHANNEL_COUNT = 10
+MAX_CHAT_ATTACHMENT_SIZE_BYTES = 15 * 1024 * 1024
+MAX_PROFILE_IMAGE_SIZE_BYTES = 50 * 1024 * 1024
 DEFAULT_ROLES = (
     ("SuperAdmin", 1),
     ("Admin", 0),
     ("Staff", 0),
     ("Developer", 0),
 )
+PROFILE_FIELD_LABELS = {
+    "full_name": "Full Name",
+    "designation": "Designation",
+    "department": "Department or Office",
+    "phone": "Phone",
+    "email": "Email",
+    "address": "Address",
+    "birthday": "Birthday",
+    "bio": "About",
+}
+PROFILE_PRIVATE_FIELDS = tuple(PROFILE_FIELD_LABELS.keys())
+PASSWORD_REQUEST_STATUSES = {"pending", "approved", "rejected", "archived"}
+THEME_CHOICES = {"dark", "light"}
+PROFILE_AUDIT_EVENT_LABELS = {
+    "profile.avatar-removed": "Avatar Removed",
+    "profile.basic-updated": "Profile Updated",
+    "profile.password-request-approved": "Password Change Approved",
+    "profile.password-request-rejected": "Password Change Rejected",
+    "profile.password-request-submitted": "Password Change Requested",
+    "profile.preferences-updated": "Preferences Updated",
+    "profile.privacy-updated": "Privacy Updated",
+}
 DEFAULT_MARQUEE_STYLE = "broadcast"
 MARQUEE_STYLE_CHOICES = (
     ("broadcast", "Broadcast"),
@@ -91,11 +121,512 @@ def ensure_chat_attachment_folder():
     os.makedirs(CHAT_ATTACHMENT_DIR, exist_ok=True)
 
 
+def ensure_profile_image_folder():
+    os.makedirs(PROFILE_IMAGE_DIR, exist_ok=True)
+
+
 def connect_db():
     ensure_db_folder()
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def json_loads(value, fallback):
+    if not value:
+        return fallback
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if isinstance(parsed, type(fallback)) else fallback
+
+
+def json_dumps(value):
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def normalize_theme(value):
+    theme = (value or "").strip().lower()
+    return theme if theme in THEME_CHOICES else "dark"
+
+
+def get_initials(value, fallback="U"):
+    words = [item for item in re.split(r"\s+", str(value or "").strip()) if item]
+    if not words:
+        return fallback
+    if len(words) == 1:
+        return words[0][:2].upper()
+    return (words[0][:1] + words[1][:1]).upper()
+
+
+def build_static_upload_url(relative_path):
+    clean_path = (relative_path or "").strip().replace("\\", "/")
+    return f"/static/{clean_path}" if clean_path else ""
+
+
+def is_password_hash(value):
+    clean_value = (value or "").strip()
+    return clean_value.startswith("pbkdf2:") or clean_value.startswith("scrypt:")
+
+
+def hash_password(value):
+    return generate_password_hash((value or "").strip())
+
+
+def build_profile_private_fields(value):
+    items = []
+    seen = set()
+    for field_key in json_loads(value, []):
+        clean_key = str(field_key or "").strip().lower()
+        if clean_key not in PROFILE_FIELD_LABELS or clean_key in seen:
+            continue
+        seen.add(clean_key)
+        items.append(clean_key)
+    return items
+
+
+def get_user_row_by_username(connection, username):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, username, password, designation, userlevel, fullname, date_created, last_login_at
+        FROM users
+        WHERE lower(username) = lower(?)
+        """,
+        ((username or "").strip(),),
+    )
+    return cursor.fetchone()
+
+
+def get_user_row_by_id(connection, user_id):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, username, password, designation, userlevel, fullname, date_created, last_login_at
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,),
+    )
+    return cursor.fetchone()
+
+
+def ensure_user_profile(connection, user_row):
+    if not user_row:
+        return None
+
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_row["id"],))
+    profile_row = cursor.fetchone()
+    now = timestamp_now()
+    fallback_display = (user_row["fullname"] or "").strip() or user_row["username"]
+
+    if not profile_row:
+        cursor.execute(
+            """
+            INSERT INTO user_profiles (
+                user_id,
+                display_name,
+                private_fields_json,
+                theme_preference,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, '[]', 'dark', ?, ?)
+            """,
+            (user_row["id"], fallback_display, now, now),
+        )
+        connection.commit()
+        cursor.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_row["id"],))
+        return cursor.fetchone()
+
+    profile_data = dict(profile_row)
+    display_name = (profile_data.get("display_name") or "").strip()
+    created_at = profile_data.get("created_at")
+    updated_at = profile_data.get("updated_at")
+    needs_update = False
+
+    if not display_name:
+        profile_data["display_name"] = fallback_display
+        needs_update = True
+    if not created_at:
+        profile_data["created_at"] = now
+        needs_update = True
+    if not updated_at:
+        profile_data["updated_at"] = now
+        needs_update = True
+
+    if needs_update:
+        cursor.execute(
+            """
+            UPDATE user_profiles
+            SET display_name = ?, created_at = COALESCE(created_at, ?), updated_at = COALESCE(updated_at, ?)
+            WHERE user_id = ?
+            """,
+            (profile_data["display_name"], profile_data["created_at"], profile_data["updated_at"], user_row["id"]),
+        )
+        connection.commit()
+        cursor.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_row["id"],))
+        return cursor.fetchone()
+
+    return profile_row
+
+
+def seed_default_user_profiles(connection):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, username, fullname
+        FROM users
+        ORDER BY id
+        """
+    )
+    for user_row in cursor.fetchall():
+        ensure_user_profile(connection, user_row)
+
+
+def migrate_plaintext_passwords(connection):
+    cursor = connection.cursor()
+    cursor.execute("SELECT id, password FROM users")
+    for row in cursor.fetchall():
+        raw_password = (row["password"] or "").strip()
+        if raw_password and not is_password_hash(raw_password):
+            cursor.execute(
+                """
+                UPDATE users
+                SET password = ?
+                WHERE id = ?
+                """,
+                (hash_password(raw_password), row["id"]),
+            )
+
+
+def build_profile_avatar(relative_path, display_name):
+    return {
+        "path": (relative_path or "").strip(),
+        "url": build_static_upload_url(relative_path),
+        "initials": get_initials(display_name, "U"),
+    }
+
+
+def build_profile_identity(connection, user_row, profile_row=None, viewer_username=None):
+    if not user_row:
+        return None
+
+    profile_row = profile_row or ensure_user_profile(connection, user_row)
+    profile_data = dict(profile_row or {})
+    full_name = (user_row["fullname"] or "").strip()
+    display_name = (profile_data.get("display_name") or "").strip() or full_name or user_row["username"]
+    private_fields = set(build_profile_private_fields(profile_data.get("private_fields_json")))
+    is_self = (viewer_username or "").casefold() == (user_row["username"] or "").casefold()
+    designation = (user_row["designation"] or "").strip()
+
+    def visible(field_key, value):
+        if is_self or field_key not in private_fields:
+            return value
+        return ""
+
+    avatar = build_profile_avatar(profile_data.get("avatar_path"), display_name)
+    return {
+        "user_id": user_row["id"],
+        "username": user_row["username"],
+        "full_name": full_name,
+        "display_name": display_name,
+        "designation": visible("designation", designation),
+        "designation_raw": designation,
+        "department": visible("department", (profile_data.get("department") or "").strip()),
+        "phone": visible("phone", (profile_data.get("phone") or "").strip()),
+        "email": visible("email", (profile_data.get("email") or "").strip()),
+        "address": visible("address", (profile_data.get("address") or "").strip()),
+        "birthday": visible("birthday", (profile_data.get("birthday") or "").strip()),
+        "bio": visible("bio", (profile_data.get("bio") or "").strip()),
+        "theme_preference": normalize_theme(profile_data.get("theme_preference")),
+        "private_fields": sorted(private_fields),
+        "avatar_path": avatar["path"],
+        "avatar_url": avatar["url"],
+        "avatar_initials": avatar["initials"],
+        "profile_url": f"/users/{user_row['username']}",
+        "last_login_at": user_row["last_login_at"] or "",
+        "is_self": is_self,
+    }
+
+
+def get_profile_identity_map(connection, usernames, viewer_username=None):
+    clean_usernames = []
+    seen = set()
+    for username in usernames or []:
+        clean_username = " ".join((username or "").split())
+        if not clean_username:
+            continue
+        key = clean_username.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean_usernames.append(clean_username)
+
+    if not clean_usernames:
+        return {}
+
+    placeholders = ", ".join("?" for _ in clean_usernames)
+    cursor = connection.cursor()
+    cursor.execute(
+        f"""
+        SELECT
+            u.id,
+            u.username,
+            u.password,
+            u.designation,
+            u.userlevel,
+            u.fullname,
+            u.date_created,
+            u.last_login_at,
+            p.display_name,
+            p.department,
+            p.phone,
+            p.email,
+            p.address,
+            p.birthday,
+            p.bio,
+            p.avatar_path,
+            p.private_fields_json,
+            p.theme_preference,
+            p.created_at AS profile_created_at,
+            p.updated_at AS profile_updated_at
+        FROM users u
+        LEFT JOIN user_profiles p ON p.user_id = u.id
+        WHERE lower(u.username) IN ({placeholders})
+        """,
+        tuple(item.casefold() for item in clean_usernames),
+    )
+    mapping = {}
+    for row in cursor.fetchall():
+        user_data = {
+            "id": row["id"],
+            "username": row["username"],
+            "password": row["password"],
+            "designation": row["designation"],
+            "userlevel": row["userlevel"],
+            "fullname": row["fullname"],
+            "date_created": row["date_created"],
+            "last_login_at": row["last_login_at"],
+        }
+        profile_data = {
+            "user_id": row["id"],
+            "display_name": row["display_name"],
+            "department": row["department"],
+            "phone": row["phone"],
+            "email": row["email"],
+            "address": row["address"],
+            "birthday": row["birthday"],
+            "bio": row["bio"],
+            "avatar_path": row["avatar_path"],
+            "private_fields_json": row["private_fields_json"],
+            "theme_preference": row["theme_preference"],
+            "created_at": row["profile_created_at"],
+            "updated_at": row["profile_updated_at"],
+        }
+        if not profile_data["created_at"] or not profile_data["updated_at"] or not (profile_data["display_name"] or "").strip():
+            profile_row = ensure_user_profile(connection, user_data)
+            profile_data = dict(profile_row)
+        mapping[row["username"].casefold()] = build_profile_identity(connection, user_data, profile_data, viewer_username=viewer_username)
+    return mapping
+
+
+def log_profile_audit(connection, user_id, actor_username, event_type, payload=None):
+    connection.execute(
+        """
+        INSERT INTO profile_audit_log (
+            user_id,
+            actor_username,
+            event_type,
+            payload_json,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            int(user_id),
+            (actor_username or "").strip() or None,
+            event_type,
+            json_dumps(payload or {}),
+            timestamp_now(),
+        ),
+    )
+
+
+def _get_profile_audit_field_label(field_key):
+    clean_key = str(field_key or "").strip().lower()
+    if clean_key == "display_name":
+        return "Display Name"
+    if clean_key == "avatar":
+        return "Avatar"
+    if clean_key in PROFILE_FIELD_LABELS:
+        return PROFILE_FIELD_LABELS[clean_key]
+    return clean_key.replace("_", " ").title() if clean_key else "Field"
+
+
+def _format_profile_audit_event_label(event_type):
+    clean_event = str(event_type or "").strip()
+    if not clean_event:
+        return "Audit Event"
+    if clean_event in PROFILE_AUDIT_EVENT_LABELS:
+        return PROFILE_AUDIT_EVENT_LABELS[clean_event]
+    return clean_event.replace(".", " ").replace("-", " ").title()
+
+
+def _format_profile_audit_value(value):
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if value is None:
+        return "Blank"
+    if isinstance(value, list):
+        items = [_format_profile_audit_value(item) for item in value if item not in (None, "")]
+        return ", ".join(items) if items else "None"
+    text = str(value).strip()
+    return text or "Blank"
+
+
+def _build_profile_audit_payload_lines(event_type, payload):
+    if not payload:
+        return []
+    if not isinstance(payload, dict):
+        return [_format_profile_audit_value(payload)]
+
+    if event_type == "profile.preferences-updated":
+        theme_value = str(payload.get("theme_preference") or "").strip().lower()
+        return [f"Theme preference: {theme_value.title()}"] if theme_value in THEME_CHOICES else []
+
+    if event_type == "profile.privacy-updated":
+        private_fields = [
+            _get_profile_audit_field_label(field_key)
+            for field_key in (payload.get("private_fields") or [])
+        ]
+        return [f"Private fields: {', '.join(private_fields)}" if private_fields else "Private fields: None"]
+
+    if event_type in {"profile.password-request-approved", "profile.password-request-rejected"}:
+        request_id = payload.get("request_id")
+        return [f"Request ID: {request_id}"] if request_id is not None else []
+
+    lines = []
+    for field_key, change in payload.items():
+        label = _get_profile_audit_field_label(field_key)
+        if field_key == "avatar":
+            lines.append("Avatar updated")
+            continue
+        if isinstance(change, dict) and ("from" in change or "to" in change):
+            previous_value = _format_profile_audit_value(change.get("from"))
+            next_value = _format_profile_audit_value(change.get("to"))
+            lines.append(f"{label}: {next_value}" if previous_value == next_value else f"{label}: {previous_value} -> {next_value}")
+            continue
+        if field_key == "theme_preference":
+            theme_value = str(change or "").strip().lower()
+            lines.append(f"{label}: {theme_value.title()}" if theme_value in THEME_CHOICES else f"{label}: {_format_profile_audit_value(change)}")
+            continue
+        lines.append(f"{label}: {_format_profile_audit_value(change)}")
+    return lines
+
+
+def get_role_members(connection, role_name):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT u.id, u.username
+        FROM users u
+        INNER JOIN user_roles ur ON ur.user_id = u.id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE lower(r.name) = lower(?)
+        ORDER BY u.username COLLATE NOCASE
+        """,
+        (role_name,),
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def build_editable_profile(user_row, profile_row):
+    profile_data = dict(profile_row or {})
+    full_name = (user_row["fullname"] or "").strip()
+    display_name = (profile_data.get("display_name") or "").strip() or full_name or user_row["username"]
+    private_fields = set(build_profile_private_fields(profile_data.get("private_fields_json")))
+    avatar = build_profile_avatar(profile_data.get("avatar_path"), display_name)
+    return {
+        "user_id": user_row["id"],
+        "username": user_row["username"],
+        "full_name": full_name,
+        "display_name": display_name,
+        "designation": (user_row["designation"] or "").strip(),
+        "department": (profile_data.get("department") or "").strip(),
+        "phone": (profile_data.get("phone") or "").strip(),
+        "email": (profile_data.get("email") or "").strip(),
+        "address": (profile_data.get("address") or "").strip(),
+        "birthday": (profile_data.get("birthday") or "").strip(),
+        "bio": (profile_data.get("bio") or "").strip(),
+        "theme_preference": normalize_theme(profile_data.get("theme_preference")),
+        "private_fields": sorted(private_fields),
+        "avatar_path": avatar["path"],
+        "avatar_url": avatar["url"],
+        "avatar_initials": avatar["initials"],
+        "profile_url": f"/users/{user_row['username']}",
+    }
+
+
+def save_profile_avatar(connection, user_row, upload):
+    if not upload or not upload.filename:
+        return True, "", None
+
+    ensure_profile_image_folder()
+    filename = secure_filename(upload.filename)
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_PROFILE_IMAGE_EXTENSIONS:
+        return False, "Use PNG, JPG, JPEG, GIF, or WEBP for profile photos.", None
+
+    try:
+        upload.stream.seek(0, os.SEEK_END)
+        file_size = upload.stream.tell()
+        upload.stream.seek(0)
+    except (AttributeError, OSError):
+        file_size = None
+
+    if file_size is not None and file_size > MAX_PROFILE_IMAGE_SIZE_BYTES:
+        max_size_mb = MAX_PROFILE_IMAGE_SIZE_BYTES // (1024 * 1024)
+        return False, f"Profile photos must be {max_size_mb} MB or smaller.", None
+
+    existing_profile = ensure_user_profile(connection, user_row)
+    existing_path = (existing_profile["avatar_path"] or "").strip() if existing_profile else ""
+    candidate = f"user-{user_row['id']}{ext}"
+    target_path = os.path.join(PROFILE_IMAGE_DIR, candidate)
+    upload.save(target_path)
+    relative_path = f"{PROFILE_IMAGE_WEB_PATH}/{candidate}"
+
+    if existing_path and existing_path != relative_path:
+        previous_file = os.path.join(os.path.dirname(__file__), "static", existing_path)
+        if os.path.exists(previous_file):
+            os.remove(previous_file)
+
+    return True, "", relative_path
+
+
+def remove_profile_avatar(connection, user_row):
+    profile_row = ensure_user_profile(connection, user_row)
+    existing_path = (profile_row["avatar_path"] or "").strip() if profile_row else ""
+    if not existing_path:
+        return False, "No profile photo is set."
+
+    absolute_path = os.path.join(os.path.dirname(__file__), "static", existing_path)
+    if os.path.exists(absolute_path):
+        os.remove(absolute_path)
+
+    connection.execute(
+        """
+        UPDATE user_profiles
+        SET avatar_path = NULL, updated_at = ?
+        WHERE user_id = ?
+        """,
+        (timestamp_now(), user_row["id"]),
+    )
+    log_profile_audit(connection, user_row["id"], user_row["username"], "profile.avatar-removed")
+    connection.commit()
+    return True, "Profile photo removed."
 
 
 def fetch_role_by_name(connection, role_name):
@@ -356,10 +887,91 @@ def init_db():
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            user_id INTEGER PRIMARY KEY,
+            display_name TEXT,
+            department TEXT,
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            birthday TEXT,
+            bio TEXT,
+            avatar_path TEXT,
+            private_fields_json TEXT NOT NULL DEFAULT '[]',
+            theme_preference TEXT NOT NULL DEFAULT 'dark',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS profile_audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            actor_username TEXT,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS profile_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            link_url TEXT,
+            style_key TEXT NOT NULL DEFAULT 'info',
+            sender_name TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS profile_notification_states (
+            user_id INTEGER NOT NULL,
+            notification_key TEXT NOT NULL,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            is_hidden INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, notification_key)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS password_change_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requester_user_id INTEGER NOT NULL,
+            password_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by_username TEXT,
+            rejection_note TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            reviewed_at TEXT
+        )
+        """
+    )
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_threads_type ON chat_threads(thread_type)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread_created ON chat_messages(thread_id, created_at)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_members_username ON chat_thread_members(username)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_profiles_theme ON user_profiles(theme_preference)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_profile_audit_user ON profile_audit_log(user_id, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_profile_notifications_user ON profile_notifications(user_id, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_password_requests_user ON password_change_requests(requester_user_id, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_password_requests_status ON password_change_requests(status, created_at)")
     connection.commit()
+
+    from forms_workflow import ensure_form_workflow_schema
+
+    ensure_form_workflow_schema(connection)
 
     cursor.execute("PRAGMA table_info(users)")
     user_columns = {row["name"] for row in cursor.fetchall()}
@@ -408,6 +1020,42 @@ def init_db():
     if "updated_by_username" not in chat_thread_columns:
         cursor.execute("ALTER TABLE chat_threads ADD COLUMN updated_by_username TEXT")
 
+    cursor.execute("PRAGMA table_info(user_profiles)")
+    user_profile_columns = {row["name"] for row in cursor.fetchall()}
+    if "display_name" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN display_name TEXT")
+    if "department" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN department TEXT")
+    if "phone" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN phone TEXT")
+    if "email" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN email TEXT")
+    if "address" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN address TEXT")
+    if "birthday" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN birthday TEXT")
+    if "bio" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN bio TEXT")
+    if "avatar_path" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN avatar_path TEXT")
+    if "private_fields_json" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN private_fields_json TEXT NOT NULL DEFAULT '[]'")
+    if "theme_preference" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN theme_preference TEXT NOT NULL DEFAULT 'dark'")
+    if "created_at" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN created_at TEXT")
+    if "updated_at" not in user_profile_columns:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN updated_at TEXT")
+
+    cursor.execute("PRAGMA table_info(password_change_requests)")
+    password_request_columns = {row["name"] for row in cursor.fetchall()}
+    if "reviewed_by_username" not in password_request_columns:
+        cursor.execute("ALTER TABLE password_change_requests ADD COLUMN reviewed_by_username TEXT")
+    if "rejection_note" not in password_request_columns:
+        cursor.execute("ALTER TABLE password_change_requests ADD COLUMN rejection_note TEXT")
+    if "reviewed_at" not in password_request_columns:
+        cursor.execute("ALTER TABLE password_change_requests ADD COLUMN reviewed_at TEXT")
+
     cursor.execute("SELECT id FROM users WHERE username = ?", ("RO_Admin",))
     if not cursor.fetchone():
         cursor.execute(
@@ -415,7 +1063,7 @@ def init_db():
             INSERT INTO users (username, password, designation, userlevel, fullname, date_created)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("RO_Admin", "1234", "admin", "SuperAdmin", "Regional Admin", timestamp_now()),
+            ("RO_Admin", hash_password("1234"), "admin", "SuperAdmin", "Regional Admin", timestamp_now()),
         )
         connection.commit()
 
@@ -483,6 +1131,9 @@ def init_db():
             )
         """
     )
+
+    seed_default_user_profiles(connection)
+    migrate_plaintext_passwords(connection)
 
     connection.commit()
     connection.close()
@@ -727,13 +1378,13 @@ def ensure_direct_thread(connection, username, other_username):
     cursor = connection.cursor()
     cursor.execute(
         """
-        SELECT username, fullname, designation, last_login_at
+        SELECT id, username, password, designation, userlevel, fullname, date_created, last_login_at
         FROM users
         WHERE lower(username) IN (lower(?), lower(?))
         """,
         (clean_username, clean_other_username),
     )
-    users = {row["username"].casefold(): dict(row) for row in cursor.fetchall()}
+    users = {row["username"].casefold(): row for row in cursor.fetchall()}
     current_user = users.get(clean_username.casefold())
     other_user = users.get(clean_other_username.casefold())
     if not current_user or not other_user:
@@ -795,7 +1446,8 @@ def ensure_direct_thread(connection, username, other_username):
             ],
         )
 
-    return dict(thread), other_user, ""
+    other_identity = build_profile_identity(connection, other_user, viewer_username=clean_username)
+    return dict(thread), other_identity, ""
 
 
 def resolve_chat_thread(connection, username, role_names, thread_type, target):
@@ -982,10 +1634,22 @@ def get_chat_overview(username, role_names):
     thread_ids = [row["id"] for row in all_thread_rows]
     unread_map = {}
     last_message_map = {}
+    member_count_map = {}
     direct_partner_map = {}
 
     if thread_ids:
         placeholders = ", ".join("?" for _ in thread_ids)
+        cursor.execute(
+            f"""
+            SELECT thread_id, COUNT(*) AS member_count
+            FROM chat_thread_members
+            WHERE thread_id IN ({placeholders})
+            GROUP BY thread_id
+            """,
+            tuple(thread_ids),
+        )
+        member_count_map = {row["thread_id"]: int(row["member_count"] or 0) for row in cursor.fetchall()}
+
         cursor.execute(
             f"""
             SELECT m.thread_id, COUNT(*) AS unread_count
@@ -1021,7 +1685,7 @@ def get_chat_overview(username, role_names):
             direct_placeholders = ", ".join("?" for _ in direct_thread_ids)
             cursor.execute(
                 f"""
-                SELECT tm.thread_id, u.username, u.fullname, u.designation, u.last_login_at
+                SELECT tm.thread_id, u.username, u.last_login_at
                 FROM chat_thread_members tm
                 INNER JOIN users u ON lower(u.username) = lower(tm.username)
                 WHERE tm.thread_id IN ({direct_placeholders})
@@ -1032,35 +1696,73 @@ def get_chat_overview(username, role_names):
             direct_partner_map = {row["thread_id"]: dict(row) for row in cursor.fetchall()}
 
     presence_map = get_presence_snapshot_map(connection)
+    cursor.execute(
+        """
+        SELECT u.id, u.username, u.password, u.designation, u.userlevel, u.fullname, u.date_created, u.last_login_at
+        FROM users u
+        WHERE lower(u.username) <> lower(?)
+        ORDER BY u.fullname COLLATE NOCASE, u.username COLLATE NOCASE
+        """,
+        (clean_username,),
+    )
+    online_user_rows = [dict(row) for row in cursor.fetchall()]
+    identity_lookup_usernames = {clean_username}
+    for partner in direct_partner_map.values():
+        identity_lookup_usernames.add(partner["username"])
+    for row in online_user_rows:
+        identity_lookup_usernames.add(row["username"])
+    for message_row in last_message_map.values():
+        identity_lookup_usernames.add(message_row["sender_username"])
+    identity_map = get_profile_identity_map(connection, sorted(identity_lookup_usernames), viewer_username=clean_username)
 
     def enrich_thread(row, *, direct_partner=None):
         last_message = last_message_map.get(row["id"])
+        sender_identity = identity_map.get((last_message.get("sender_username") or "").casefold()) if last_message else None
         item = {
             "room_key": row["room_key"],
             "thread_type": row["thread_type"],
             "title": row["title"],
             "description": row["description"] or "",
+            "member_count": int(member_count_map.get(row["id"], 0) or 0),
             "unread_count": int(unread_map.get(row["id"], 0) or 0),
             "last_message_preview": build_chat_message_preview(
                 last_message.get("body") if last_message else "",
                 last_message.get("attachment_name") if last_message else "",
             ),
             "last_message_at": last_message.get("created_at") if last_message else row["updated_at"],
+            "last_message_sender_name": (
+                (
+                    (sender_identity.get("display_name") if sender_identity else "")
+                    or (last_message.get("sender_fullname") or "").strip()
+                    or last_message.get("sender_username", "")
+                )
+                if last_message else ""
+            ),
+            "last_message_sender_username": last_message.get("sender_username") if last_message else "",
+            "last_message_is_self": bool(
+                last_message and (last_message.get("sender_username") or "").casefold() == clean_username.casefold()
+            ),
+            "last_message_has_attachment": bool(last_message and last_message.get("attachment_name")),
+            "last_message_attachment_kind": last_message.get("attachment_kind") if last_message else "",
             "editable": row["thread_type"] == "channel",
         }
         if row["thread_type"] == "role":
             item["role_name"] = row["role_name"]
         if direct_partner:
+            partner_identity = identity_map.get(direct_partner["username"].casefold())
             partner_state = presence_map.get(direct_partner["username"].casefold(), build_presence_state("", direct_partner.get("last_login_at")))
             item.update(
                 {
                     "target_username": direct_partner["username"],
-                    "title": (direct_partner.get("fullname") or "").strip() or direct_partner["username"],
-                    "description": direct_partner.get("designation") or "",
+                    "title": (partner_identity.get("display_name") if partner_identity else "") or direct_partner["username"],
+                    "description": (partner_identity.get("designation") if partner_identity else "") or "",
                     "presence": partner_state["status"],
                     "presence_label": partner_state["status_label"],
                     "last_seen_at": partner_state["last_seen_at"],
                     "last_login_at": partner_state["last_login_at"],
+                    "avatar_url": (partner_identity.get("avatar_url") if partner_identity else "") or "",
+                    "avatar_initials": (partner_identity.get("avatar_initials") if partner_identity else get_initials(direct_partner["username"], "U")),
+                    "profile_url": (partner_identity.get("profile_url") if partner_identity else f"/users/{direct_partner['username']}"),
                 }
             )
         return item
@@ -1069,29 +1771,25 @@ def get_chat_overview(username, role_names):
     role_groups = [enrich_thread(row) for row in role_rows]
     direct_threads = [enrich_thread(row, direct_partner=direct_partner_map.get(row["id"])) for row in direct_rows]
 
-    cursor.execute(
-        """
-        SELECT u.username, u.fullname, u.designation, u.last_login_at
-        FROM users u
-        WHERE lower(u.username) <> lower(?)
-        ORDER BY u.fullname COLLATE NOCASE, u.username COLLATE NOCASE
-        """,
-        (clean_username,),
-    )
     users = []
-    for row in cursor.fetchall():
+    for row in online_user_rows:
+        identity = identity_map.get(row["username"].casefold())
         state = presence_map.get(row["username"].casefold(), build_presence_state("", row["last_login_at"]))
         users.append(
             {
                 "username": row["username"],
-                "fullname": (row["fullname"] or "").strip() or row["username"],
-                "designation": row["designation"] or "",
+                "fullname": (identity.get("display_name") if identity else "") or row["username"],
+                "display_name": (identity.get("display_name") if identity else "") or row["username"],
+                "designation": (identity.get("designation") if identity else "") or "",
                 "room_key": build_direct_room_key(clean_username, row["username"]),
                 "presence": state["status"],
                 "presence_label": state["status_label"],
                 "last_seen_at": state["last_seen_at"],
                 "last_login_at": state["last_login_at"],
                 "last_seen_label": state["last_seen_label"],
+                "avatar_url": (identity.get("avatar_url") if identity else "") or "",
+                "avatar_initials": (identity.get("avatar_initials") if identity else get_initials(row["username"], "U")),
+                "profile_url": (identity.get("profile_url") if identity else f"/users/{row['username']}"),
             }
         )
 
@@ -1117,13 +1815,21 @@ def build_chat_attachment_payload(attachment_path, attachment_name, attachment_k
     }
 
 
-def build_chat_message_payload(row, username):
+def build_chat_message_payload(row, username, sender_identity=None):
     clean_username = (username or "").strip()
     attachment = build_chat_attachment_payload(row.get("attachment_path"), row.get("attachment_name"), row.get("attachment_kind"))
+    display_name = (
+        (sender_identity.get("display_name") if sender_identity else "")
+        or (row.get("sender_fullname") or "").strip()
+        or row["sender_username"]
+    )
     return {
         "id": row["id"],
         "sender_username": row["sender_username"],
-        "sender_fullname": (row.get("sender_fullname") or "").strip() or row["sender_username"],
+        "sender_fullname": display_name,
+        "sender_avatar_url": (sender_identity.get("avatar_url") if sender_identity else "") or "",
+        "sender_avatar_initials": (sender_identity.get("avatar_initials") if sender_identity else get_initials(display_name, "U")),
+        "sender_profile_url": (sender_identity.get("profile_url") if sender_identity else f"/users/{row['sender_username']}"),
         "created_at": row["created_at"],
         "is_self": row["sender_username"].casefold() == clean_username.casefold(),
         "body": row.get("body") or "",
@@ -1197,7 +1903,29 @@ def get_chat_thread_messages(username, fullname, role_names, thread_type, target
         (thread["id"],),
     )
     thread_stats = dict(cursor.fetchone() or {})
-    messages = [build_chat_message_payload(row, clean_username) for row in rows]
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS member_count
+        FROM chat_thread_members
+        WHERE thread_id = ?
+        """,
+        (thread["id"],),
+    )
+    member_row = cursor.fetchone()
+    member_count = int(member_row["member_count"] or 0) if member_row else 0
+    sender_identities = get_profile_identity_map(
+        connection,
+        [row["sender_username"] for row in rows],
+        viewer_username=clean_username,
+    )
+    messages = [
+        build_chat_message_payload(
+            row,
+            clean_username,
+            sender_identities.get((row.get("sender_username") or "").casefold()),
+        )
+        for row in rows
+    ]
     window_oldest_id = messages[0]["id"] if messages else None
     window_newest_id = messages[-1]["id"] if messages else None
     thread_oldest_id = thread_stats.get("oldest_id")
@@ -1211,13 +1939,17 @@ def get_chat_thread_messages(username, fullname, role_names, thread_type, target
         "thread_type": thread["thread_type"],
         "title": thread["title"],
         "description": thread["description"] or "",
+        "member_count": member_count,
         "editable": thread["thread_type"] == "channel",
     }
     if thread["thread_type"] == "direct" and direct_partner:
         presence_map = get_presence_snapshot_map(connection)
-        thread_payload["title"] = (direct_partner.get("fullname") or "").strip() or direct_partner["username"]
+        thread_payload["title"] = (direct_partner.get("display_name") or "").strip() or direct_partner["username"]
         thread_payload["description"] = direct_partner.get("designation") or ""
         thread_payload["target_username"] = direct_partner["username"]
+        thread_payload["avatar_url"] = direct_partner.get("avatar_url") or ""
+        thread_payload["avatar_initials"] = direct_partner.get("avatar_initials") or get_initials(direct_partner["username"], "U")
+        thread_payload["profile_url"] = direct_partner.get("profile_url") or f"/users/{direct_partner['username']}"
         thread_payload["presence"] = presence_map.get(
             direct_partner["username"].casefold(),
             build_presence_state("", direct_partner.get("last_login_at")),
@@ -1681,6 +2413,159 @@ def set_notification_state(username, notification_key, *, is_read=None, is_hidde
             updated_at = excluded.updated_at
         """,
         (username, notification_key, next_read, next_hidden, timestamp_now()),
+    )
+    connection.commit()
+    connection.close()
+    return True
+
+
+def create_profile_notifications(connection, user_ids, title, message, link_url="", style_key="info", sender_name="System"):
+    seen = set()
+    for user_id in user_ids or []:
+        try:
+            clean_user_id = int(user_id)
+        except (TypeError, ValueError):
+            continue
+        if clean_user_id in seen:
+            continue
+        seen.add(clean_user_id)
+        connection.execute(
+            """
+            INSERT INTO profile_notifications (
+                user_id,
+                title,
+                message,
+                link_url,
+                style_key,
+                sender_name,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                clean_user_id,
+                " ".join((title or "").split()),
+                (message or "").strip(),
+                (link_url or "").strip() or None,
+                (style_key or "").strip() or "info",
+                (sender_name or "").strip() or "System",
+                timestamp_now(),
+            ),
+        )
+
+
+def get_profile_notifications_for_user(username):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return []
+
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, title, message, link_url, style_key, sender_name, created_at
+        FROM profile_notifications
+        WHERE user_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        """,
+        (user_row["id"],),
+    )
+    items = [dict(row) for row in cursor.fetchall()]
+    if not items:
+        connection.close()
+        return []
+
+    notification_keys = [f"profile:{item['id']}" for item in items]
+    placeholders = ", ".join("?" for _ in notification_keys)
+    cursor.execute(
+        f"""
+        SELECT notification_key, is_read, is_hidden
+        FROM profile_notification_states
+        WHERE user_id = ? AND notification_key IN ({placeholders})
+        """,
+        (user_row["id"], *notification_keys),
+    )
+    state_map = {row["notification_key"]: dict(row) for row in cursor.fetchall()}
+    connection.close()
+
+    visible_items = []
+    for item in items:
+        notification_key = f"profile:{item['id']}"
+        state = state_map.get(notification_key, {})
+        item["notification_key"] = notification_key
+        item["sender_name"] = (item.get("sender_name") or "").strip() or "System"
+        item["message_preview"] = build_notification_preview(item.get("message"))
+        item["message_html"] = render_notification_markup(item.get("message"))
+        item["is_read"] = bool(state.get("is_read"))
+        item["is_hidden"] = bool(state.get("is_hidden"))
+        if item["is_hidden"]:
+            continue
+        visible_items.append(item)
+    return visible_items
+
+
+def set_profile_notification_state(username, notification_key, *, is_read=None, is_hidden=None):
+    key = (notification_key or "").strip()
+    if not key.startswith("profile:"):
+        return False
+
+    try:
+        notification_id = int(key.split(":", 1)[1])
+    except (TypeError, ValueError):
+        return False
+
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return False
+
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT is_read, is_hidden
+        FROM profile_notification_states
+        WHERE user_id = ? AND notification_key = ?
+        """,
+        (user_row["id"], key),
+    )
+    existing = cursor.fetchone()
+    next_read = int(existing["is_read"]) if existing else 0
+    next_hidden = int(existing["is_hidden"]) if existing else 0
+    if is_read is not None:
+        next_read = 1 if is_read else 0
+    if is_hidden is not None:
+        next_hidden = 1 if is_hidden else 0
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM profile_notifications
+        WHERE id = ? AND user_id = ?
+        """,
+        (notification_id, user_row["id"]),
+    )
+    if not cursor.fetchone():
+        connection.close()
+        return False
+
+    cursor.execute(
+        """
+        INSERT INTO profile_notification_states (
+            user_id,
+            notification_key,
+            is_read,
+            is_hidden,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, notification_key) DO UPDATE SET
+            is_read = excluded.is_read,
+            is_hidden = excluded.is_hidden,
+            updated_at = excluded.updated_at
+        """,
+        (user_row["id"], key, next_read, next_hidden, timestamp_now()),
     )
     connection.commit()
     connection.close()
@@ -2334,31 +3219,77 @@ def validate_user(username, password):
     cursor = connection.cursor()
     cursor.execute(
         """
-        SELECT username, fullname
+        SELECT id, username, password, designation, userlevel, fullname, date_created, last_login_at
         FROM users
-        WHERE username = ? AND password = ?
-        """,
-        (username, password),
-    )
-    user = cursor.fetchone()
-    connection.close()
-    return user
-
-
-def get_user_identity(username):
-    connection = connect_db()
-    cursor = connection.cursor()
-    cursor.execute(
-        """
-        SELECT username, fullname
-        FROM users
-        WHERE username = ?
+        WHERE lower(username) = lower(?)
         """,
         ((username or "").strip(),),
     )
     user = cursor.fetchone()
+    if not user:
+        connection.close()
+        return None
+
+    stored_password = (user["password"] or "").strip()
+    candidate_password = (password or "").strip()
+    password_is_valid = False
+
+    if stored_password and is_password_hash(stored_password):
+        try:
+            password_is_valid = check_password_hash(stored_password, candidate_password)
+        except ValueError:
+            password_is_valid = False
+    else:
+        password_is_valid = stored_password == candidate_password
+        if password_is_valid and stored_password:
+            cursor.execute(
+                """
+                UPDATE users
+                SET password = ?
+                WHERE id = ?
+                """,
+                (hash_password(candidate_password), user["id"]),
+            )
+            connection.commit()
+
+    if not password_is_valid:
+        connection.close()
+        return None
+
+    profile = ensure_user_profile(connection, user)
+    identity = build_profile_identity(connection, user, profile, viewer_username=user["username"])
     connection.close()
-    return user
+    return {
+        "username": identity["username"],
+        "fullname": identity["display_name"],
+        "full_name": identity["full_name"],
+        "display_name": identity["display_name"],
+        "designation": identity["designation_raw"],
+        "avatar_url": identity["avatar_url"],
+        "avatar_initials": identity["avatar_initials"],
+        "theme_preference": identity["theme_preference"],
+    }
+
+
+def get_user_identity(username):
+    connection = connect_db()
+    user = get_user_row_by_username(connection, username)
+    if not user:
+        connection.close()
+        return None
+    profile = ensure_user_profile(connection, user)
+    identity = build_profile_identity(connection, user, profile, viewer_username=username)
+    connection.close()
+    return {
+        "username": identity["username"],
+        "fullname": identity["display_name"],
+        "full_name": identity["full_name"],
+        "display_name": identity["display_name"],
+        "designation": identity["designation_raw"],
+        "avatar_url": identity["avatar_url"],
+        "avatar_initials": identity["avatar_initials"],
+        "theme_preference": identity["theme_preference"],
+    }
 
 
 def get_user_roles_by_username(username):
@@ -2636,7 +3567,7 @@ def create_user_account(username, password, designation, role_names, fullname, a
             INSERT INTO users (username, password, designation, userlevel, fullname, date_created)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (username, password, designation, ",".join(normalized_roles), fullname, timestamp_now()),
+            (username, hash_password(password), designation, ",".join(normalized_roles), fullname, timestamp_now()),
         )
         user_id = cursor.lastrowid
 
@@ -2648,6 +3579,21 @@ def create_user_account(username, password, designation, role_names, fullname, a
                 """,
                 (user_id, role_map[role_name.casefold()]["id"]),
             )
+
+        cursor.execute(
+            """
+            INSERT INTO user_profiles (
+                user_id,
+                display_name,
+                private_fields_json,
+                theme_preference,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, '[]', 'dark', ?, ?)
+            """,
+            (user_id, fullname or username, timestamp_now(), timestamp_now()),
+        )
 
         log_account_modification(
             connection,
@@ -2711,6 +3657,8 @@ def update_user_account(user_id, username, designation, role_names, fullname, pa
             return False, "At least one SuperAdmin account must remain."
 
     change_log = []
+    profile_row = ensure_user_profile(connection, existing_user)
+    profile_display_name = (profile_row["display_name"] or "").strip() if profile_row else ""
 
     if existing_user["username"] != username:
         change_log.append(f"Username: {existing_user['username']} -> {username}")
@@ -2742,7 +3690,7 @@ def update_user_account(user_id, username, designation, role_names, fullname, pa
                 SET username = ?, password = ?, designation = ?, userlevel = ?, fullname = ?
                 WHERE id = ?
                 """,
-                (username, password, designation, ",".join(normalized_roles), fullname, user_id),
+                (username, hash_password(password), designation, ",".join(normalized_roles), fullname, user_id),
             )
         else:
             cursor.execute(
@@ -2752,6 +3700,16 @@ def update_user_account(user_id, username, designation, role_names, fullname, pa
                 WHERE id = ?
                 """,
                 (username, designation, ",".join(normalized_roles), fullname, user_id),
+            )
+
+        if profile_row and (not profile_display_name or profile_display_name == (existing_user["fullname"] or "").strip()):
+            cursor.execute(
+                """
+                UPDATE user_profiles
+                SET display_name = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (fullname or username, timestamp_now(), user_id),
             )
 
         cursor.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
@@ -2808,6 +3766,13 @@ def delete_user_account(user_id, active_username=None, actor_username=None):
         connection.close()
         return False, "At least one SuperAdmin account must remain."
 
+    profile_row = ensure_user_profile(connection, existing_user)
+    avatar_path = (profile_row["avatar_path"] or "").strip() if profile_row else ""
+    if avatar_path:
+        absolute_avatar_path = os.path.join(os.path.dirname(__file__), "static", avatar_path)
+        if os.path.exists(absolute_avatar_path):
+            os.remove(absolute_avatar_path)
+
     log_account_modification(
         connection,
         user_id,
@@ -2817,11 +3782,574 @@ def delete_user_account(user_id, active_username=None, actor_username=None):
         "Deleted",
         "Account deleted. Previous roles: " + (", ".join(existing_roles) if existing_roles else "None"),
     )
+    cursor.execute("DELETE FROM profile_notification_states WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM profile_notifications WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM profile_audit_log WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM password_change_requests WHERE requester_user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM user_profiles WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
     connection.commit()
     connection.close()
     return True, "Account deleted successfully."
+
+
+def build_profile_visibility_rows(profile_data, *, viewer_is_owner=False, include_empty=False):
+    private_fields = set(profile_data.get("private_fields") or [])
+    rows = []
+    for field_key, label in PROFILE_FIELD_LABELS.items():
+        value = (profile_data.get(field_key) or "").strip()
+        if not viewer_is_owner and field_key in private_fields:
+            continue
+        if not include_empty and not value:
+            continue
+        rows.append(
+            {
+                "key": field_key,
+                "label": label,
+                "value": value,
+                "is_private": field_key in private_fields,
+            }
+        )
+    return rows
+
+
+def get_profile_audit_entries(target_user_id):
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, actor_username, event_type, payload_json, created_at
+        FROM profile_audit_log
+        WHERE user_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT 40
+        """,
+        (target_user_id,),
+    )
+    entries = [dict(row) for row in cursor.fetchall()]
+    actor_map = get_profile_identity_map(
+        connection,
+        [entry["actor_username"] for entry in entries if entry.get("actor_username")],
+        viewer_username="",
+    )
+    connection.close()
+    for entry in entries:
+        actor_identity = actor_map.get((entry.get("actor_username") or "").casefold())
+        entry["actor_display_name"] = (
+            (actor_identity.get("display_name") if actor_identity else "")
+            or (entry.get("actor_username") or "System")
+        )
+        entry["event_label"] = _format_profile_audit_event_label(entry.get("event_type"))
+        entry["payload_summary_lines"] = []
+        payload_json = str(entry.get("payload_json") or "").strip()
+        if payload_json and payload_json != "{}":
+            try:
+                payload = json.loads(payload_json)
+            except (TypeError, ValueError):
+                entry["payload_summary_lines"] = [payload_json]
+            else:
+                entry["payload_summary_lines"] = _build_profile_audit_payload_lines(entry.get("event_type"), payload) or [payload_json]
+    return entries
+
+
+def get_profile_context(username):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return None
+    profile_row = ensure_user_profile(connection, user_row)
+    profile = build_editable_profile(user_row, profile_row)
+    connection.close()
+    return {
+        "profile": profile,
+        "privacy_options": [
+            {
+                "key": field_key,
+                "label": PROFILE_FIELD_LABELS[field_key],
+                "checked": field_key in set(profile["private_fields"]),
+            }
+            for field_key in PROFILE_PRIVATE_FIELDS
+        ],
+        "password_requests": get_password_change_requests_for_user(username),
+    }
+
+
+def get_public_profile_context(target_username, viewer_username, viewer_roles):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, target_username)
+    if not user_row:
+        connection.close()
+        return False, "User not found.", None
+
+    profile_row = ensure_user_profile(connection, user_row)
+    editable_profile = build_editable_profile(user_row, profile_row)
+    identity = build_profile_identity(connection, user_row, profile_row, viewer_username=viewer_username)
+    connection.close()
+
+    can_view_audit = any((role or "").casefold() == "developer" for role in (viewer_roles or []))
+    context = {
+        "profile": {
+            **editable_profile,
+            "display_name": identity["display_name"],
+            "designation": identity["designation"],
+        },
+        "field_rows": build_profile_visibility_rows(
+            {
+                **editable_profile,
+                "designation": identity["designation"],
+            },
+            viewer_is_owner=identity["is_self"],
+            include_empty=identity["is_self"],
+        ),
+        "is_self": identity["is_self"],
+        "can_view_audit": can_view_audit,
+        "audit_entries": get_profile_audit_entries(user_row["id"]) if can_view_audit else [],
+    }
+    return True, "", context
+
+
+def save_profile_basic(username, form_data, avatar_upload=None):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return False, "User not found.", None
+
+    profile_row = ensure_user_profile(connection, user_row)
+    current_profile = build_editable_profile(user_row, profile_row)
+    next_full_name = " ".join((form_data.get("full_name") or "").split()).strip() or current_profile["full_name"]
+    next_display_name = " ".join((form_data.get("display_name") or "").split()).strip()
+    next_department = " ".join((form_data.get("department") or "").split()).strip()
+    next_phone = (form_data.get("phone") or "").strip()
+    next_email = (form_data.get("email") or "").strip()
+    next_address = (form_data.get("address") or "").strip()
+    next_birthday = (form_data.get("birthday") or "").strip()
+    next_bio = (form_data.get("bio") or "").strip()
+
+    if next_birthday and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", next_birthday):
+        connection.close()
+        return False, "Birthday must use YYYY-MM-DD.", None
+
+    changes = {}
+    if next_full_name != current_profile["full_name"]:
+        changes["full_name"] = {"from": current_profile["full_name"], "to": next_full_name}
+    if next_display_name != (profile_row["display_name"] or "").strip():
+        changes["display_name"] = {"from": (profile_row["display_name"] or "").strip(), "to": next_display_name}
+    if next_department != current_profile["department"]:
+        changes["department"] = {"from": current_profile["department"], "to": next_department}
+    if next_phone != current_profile["phone"]:
+        changes["phone"] = {"from": current_profile["phone"], "to": next_phone}
+    if next_email != current_profile["email"]:
+        changes["email"] = {"from": current_profile["email"], "to": next_email}
+    if next_address != current_profile["address"]:
+        changes["address"] = {"from": current_profile["address"], "to": next_address}
+    if next_birthday != current_profile["birthday"]:
+        changes["birthday"] = {"from": current_profile["birthday"], "to": next_birthday}
+    if next_bio != current_profile["bio"]:
+        changes["bio"] = {"from": current_profile["bio"], "to": next_bio}
+
+    next_avatar_path = None
+    if avatar_upload and avatar_upload.filename:
+        ok, message, saved_path = save_profile_avatar(connection, user_row, avatar_upload)
+        if not ok:
+            connection.close()
+            return False, message, None
+        next_avatar_path = saved_path
+        changes["avatar"] = {"from": current_profile["avatar_path"], "to": saved_path}
+
+    if not changes:
+        updated_profile = get_profile_context(username)
+        connection.close()
+        return True, "No changes were made.", updated_profile["profile"] if updated_profile else None
+
+    connection.execute(
+        """
+        UPDATE users
+        SET fullname = ?
+        WHERE id = ?
+        """,
+        (next_full_name, user_row["id"]),
+    )
+    connection.execute(
+        """
+        UPDATE user_profiles
+        SET
+            display_name = ?,
+            department = ?,
+            phone = ?,
+            email = ?,
+            address = ?,
+            birthday = ?,
+            bio = ?,
+            avatar_path = COALESCE(?, avatar_path),
+            updated_at = ?
+        WHERE user_id = ?
+        """,
+        (
+            next_display_name,
+            next_department,
+            next_phone,
+            next_email,
+            next_address,
+            next_birthday,
+            next_bio,
+            next_avatar_path,
+            timestamp_now(),
+            user_row["id"],
+        ),
+    )
+    log_profile_audit(connection, user_row["id"], username, "profile.basic-updated", payload=changes)
+    connection.commit()
+    connection.close()
+    updated_profile = get_profile_context(username)
+    return True, "Profile updated.", updated_profile["profile"] if updated_profile else None
+
+
+def save_profile_privacy(username, private_fields):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return False, "User not found.", None
+
+    profile_row = ensure_user_profile(connection, user_row)
+    next_private_fields = []
+    seen = set()
+    for field_key in private_fields or []:
+        clean_key = str(field_key or "").strip().lower()
+        if clean_key not in PROFILE_FIELD_LABELS or clean_key in seen:
+            continue
+        seen.add(clean_key)
+        next_private_fields.append(clean_key)
+
+    previous_private_fields = build_profile_private_fields(profile_row["private_fields_json"])
+    if previous_private_fields == next_private_fields:
+        profile_context = get_profile_context(username)
+        connection.close()
+        return True, "No privacy changes were made.", profile_context["profile"] if profile_context else None
+
+    connection.execute(
+        """
+        UPDATE user_profiles
+        SET private_fields_json = ?, updated_at = ?
+        WHERE user_id = ?
+        """,
+        (json_dumps(next_private_fields), timestamp_now(), user_row["id"]),
+    )
+    log_profile_audit(
+        connection,
+        user_row["id"],
+        username,
+        "profile.privacy-updated",
+        payload={"private_fields": next_private_fields},
+    )
+    connection.commit()
+    connection.close()
+    profile_context = get_profile_context(username)
+    return True, "Privacy settings updated.", profile_context["profile"] if profile_context else None
+
+
+def save_profile_preferences(username, theme, *, audit_event="profile.preferences-updated"):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return False, "User not found.", None
+
+    profile_row = ensure_user_profile(connection, user_row)
+    next_theme = normalize_theme(theme)
+    previous_theme = normalize_theme(profile_row["theme_preference"])
+    if previous_theme == next_theme:
+        profile_context = get_profile_context(username)
+        connection.close()
+        return True, "Theme preference already applied.", profile_context["profile"] if profile_context else None
+
+    connection.execute(
+        """
+        UPDATE user_profiles
+        SET theme_preference = ?, updated_at = ?
+        WHERE user_id = ?
+        """,
+        (next_theme, timestamp_now(), user_row["id"]),
+    )
+    if audit_event:
+        log_profile_audit(
+            connection,
+            user_row["id"],
+            username,
+            audit_event,
+            payload={"theme_preference": next_theme},
+        )
+    connection.commit()
+    connection.close()
+    profile_context = get_profile_context(username)
+    return True, "Theme preference saved.", profile_context["profile"] if profile_context else None
+
+
+def get_profile_request_counts(username, role_names):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return {"my_requests": 0, "review_queue": 0}
+
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS total
+        FROM password_change_requests
+        WHERE requester_user_id = ? AND status != 'archived'
+        """,
+        (user_row["id"],),
+    )
+    my_requests = int(cursor.fetchone()["total"] or 0)
+    role_keys = {str(role or "").casefold() for role in (role_names or [])}
+    review_queue = 0
+    if role_keys & {"developer", "superadmin"}:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM password_change_requests
+            WHERE status = 'pending'
+            """,
+        )
+        review_queue = int(cursor.fetchone()["total"] or 0)
+
+    connection.close()
+    return {"my_requests": my_requests, "review_queue": review_queue}
+
+
+def get_password_change_requests_for_user(username):
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return []
+
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, status, reviewed_by_username, rejection_note, created_at, updated_at, reviewed_at
+        FROM password_change_requests
+        WHERE requester_user_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        """,
+        (user_row["id"],),
+    )
+    items = [dict(row) for row in cursor.fetchall()]
+    reviewer_map = get_profile_identity_map(
+        connection,
+        [item["reviewed_by_username"] for item in items if item.get("reviewed_by_username")],
+        viewer_username=username,
+    )
+    connection.close()
+
+    for item in items:
+        reviewer_identity = reviewer_map.get((item.get("reviewed_by_username") or "").casefold())
+        item["title"] = "Password Change Request"
+        item["request_type"] = "password_change"
+        item["reviewed_by_display_name"] = (
+            (reviewer_identity.get("display_name") if reviewer_identity else "")
+            or item.get("reviewed_by_username")
+            or ""
+        )
+        item["status_label"] = item["status"].replace("_", " ").title()
+    return items
+
+
+def get_password_change_review_queue(username, role_names):
+    role_keys = {str(role or "").casefold() for role in (role_names or [])}
+    if not (role_keys & {"developer", "superadmin"}):
+        return []
+
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT r.id, r.requester_user_id, r.created_at, r.updated_at, u.username, u.fullname, u.designation
+        FROM password_change_requests r
+        INNER JOIN users u ON u.id = r.requester_user_id
+        WHERE r.status = 'pending'
+        ORDER BY datetime(r.created_at) ASC, r.id ASC
+        """
+    )
+    items = [dict(row) for row in cursor.fetchall()]
+    identity_map = get_profile_identity_map(connection, [item["username"] for item in items], viewer_username=username)
+    connection.close()
+
+    for item in items:
+        identity = identity_map.get(item["username"].casefold())
+        item["title"] = "Password Change Request"
+        item["request_type"] = "password_change"
+        item["requester_display_name"] = (identity.get("display_name") if identity else "") or item["username"]
+        item["requester_designation"] = (identity.get("designation") if identity else "") or ""
+        item["requester_avatar_url"] = (identity.get("avatar_url") if identity else "") or ""
+        item["requester_avatar_initials"] = (identity.get("avatar_initials") if identity else get_initials(item["username"], "U"))
+        item["requester_profile_url"] = (identity.get("profile_url") if identity else f"/users/{item['username']}")
+    return items
+
+
+def submit_password_change_request(username, new_password, confirm_password):
+    clean_password = (new_password or "").strip()
+    clean_confirm = (confirm_password or "").strip()
+    if not clean_password:
+        return False, "Enter the new password you want to request."
+    if clean_password != clean_confirm:
+        return False, "The password confirmation does not match."
+
+    connection = connect_db()
+    user_row = get_user_row_by_username(connection, username)
+    if not user_row:
+        connection.close()
+        return False, "User not found."
+
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id
+        FROM password_change_requests
+        WHERE requester_user_id = ? AND status = 'pending'
+        """,
+        (user_row["id"],),
+    )
+    if cursor.fetchone():
+        connection.close()
+        return False, "You already have a pending password change request."
+
+    now = timestamp_now()
+    cursor.execute(
+        """
+        INSERT INTO password_change_requests (
+            requester_user_id,
+            password_hash,
+            status,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, 'pending', ?, ?)
+        """,
+        (user_row["id"], hash_password(clean_password), now, now),
+    )
+
+    reviewer_user_ids = []
+    for role_name in ("Developer", "SuperAdmin"):
+        reviewer_user_ids.extend([row["id"] for row in get_role_members(connection, role_name)])
+    create_profile_notifications(
+        connection,
+        reviewer_user_ids,
+        "Password change request pending",
+        f"{(user_row['fullname'] or '').strip() or user_row['username']} submitted a password change request.",
+        link_url="/forms/review-queue",
+        style_key="warning",
+        sender_name=(user_row["fullname"] or "").strip() or user_row["username"],
+    )
+    log_profile_audit(connection, user_row["id"], username, "profile.password-request-submitted")
+    connection.commit()
+    connection.close()
+    return True, "Password change request submitted."
+
+
+def review_password_change_request(request_id, reviewer_username, role_names, action, rejection_note=""):
+    role_keys = {str(role or "").casefold() for role in (role_names or [])}
+    if not (role_keys & {"developer", "superadmin"}):
+        return False, "You do not have access to review password change requests."
+
+    review_action = (action or "").strip().lower()
+    if review_action not in {"approve", "reject"}:
+        return False, "Unsupported review action."
+
+    rejection_note = (rejection_note or "").strip()
+    if review_action == "reject" and not rejection_note:
+        return False, "A rejection note is required."
+
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, requester_user_id, password_hash, status
+        FROM password_change_requests
+        WHERE id = ?
+        """,
+        (request_id,),
+    )
+    request_row = cursor.fetchone()
+    if not request_row:
+        connection.close()
+        return False, "Password change request not found."
+    if request_row["status"] != "pending":
+        connection.close()
+        return False, "This password change request has already been resolved."
+
+    requester_row = get_user_row_by_id(connection, request_row["requester_user_id"])
+    reviewer_identity = get_user_identity(reviewer_username) or {"fullname": reviewer_username}
+    acted_at = timestamp_now()
+    next_status = "approved" if review_action == "approve" else "rejected"
+
+    if review_action == "approve":
+        cursor.execute(
+            """
+            UPDATE users
+            SET password = ?
+            WHERE id = ?
+            """,
+            (request_row["password_hash"], request_row["requester_user_id"]),
+        )
+        if requester_row:
+            cursor.execute(
+                """
+                DELETE FROM remember_tokens
+                WHERE lower(username) = lower(?)
+                """,
+                (requester_row["username"],),
+            )
+
+    cursor.execute(
+        """
+        UPDATE password_change_requests
+        SET status = ?, reviewed_by_username = ?, rejection_note = ?, reviewed_at = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            next_status,
+            reviewer_username,
+            rejection_note if review_action == "reject" else None,
+            acted_at,
+            acted_at,
+            request_id,
+        ),
+    )
+
+    notification_title = "Password change approved" if review_action == "approve" else "Password change rejected"
+    notification_message = (
+        "Your password change request was approved and applied immediately."
+        if review_action == "approve"
+        else f"Your password change request was rejected. Reason: {rejection_note}"
+    )
+    create_profile_notifications(
+        connection,
+        [request_row["requester_user_id"]],
+        notification_title,
+        notification_message,
+        link_url="/profile?tab=security",
+        style_key="success" if review_action == "approve" else "danger",
+        sender_name=(reviewer_identity.get("fullname") or "").strip() or reviewer_username,
+    )
+    log_profile_audit(
+        connection,
+        request_row["requester_user_id"],
+        reviewer_username,
+        f"profile.password-request-{next_status}",
+        payload={"request_id": int(request_id)},
+    )
+    connection.commit()
+    connection.close()
+
+    requester_name = (requester_row["fullname"] or "").strip() if requester_row else ""
+    if review_action == "approve":
+        return True, f"Password updated for {(requester_name or 'the user')}."
+    return True, "Password change request rejected."
 
 
 def create_role(role_name):

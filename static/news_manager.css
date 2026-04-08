@@ -19,6 +19,18 @@
         0 10px 20px rgba(0, 0, 0, 0.18);
 }
 
+html[data-theme="light"] .news-manager-brand-icon {
+    border-color: rgba(43, 83, 64, 0.16);
+    background:
+        linear-gradient(135deg, rgba(23, 138, 88, 0.10), rgba(255, 209, 79, 0.08)),
+        rgba(255, 255, 255, 0.82);
+    color: #173623;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        0 8px 16px rgba(97, 108, 91, 0.10),
+        0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
 .news-manager-content {
     grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
 }
@@ -196,12 +208,61 @@ html[data-theme="light"] .notification-manager-message a {
     flex-wrap: wrap;
 }
 
+.news-editor-actions .account-card-actions {
+    flex: 1 1 420px;
+    gap: 12px;
+}
+
+.news-editor-actions .account-card-actions > * {
+    flex: 1 1 180px;
+}
+
+.news-editor-actions .btn-secondary,
+.news-editor-actions .btn-danger,
+.news-editor-actions .news-preview-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 14px;
+    text-align: center;
+}
+
+.news-editor-actions .news-preview-link {
+    flex: 0 1 180px;
+    white-space: nowrap;
+}
+
+.news-manager-content .account-form,
+.news-manager-content .notification-form {
+    display: grid;
+    gap: 12px;
+}
+
+.news-manager-content .form-actions {
+    gap: 8px;
+}
+
+.news-manager-content .btn-primary,
+.news-manager-content .btn-secondary,
+.news-manager-content .btn-danger {
+    min-height: 38px;
+    padding: 0 13px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.news-manager-content .btn-inline {
+    min-width: 96px;
+}
+
 .news-preview-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 44px;
-    padding: 0 16px;
+    min-height: 38px;
+    padding: 0 13px;
     border-radius: 14px;
 }
 
@@ -384,16 +445,16 @@ html[data-theme="light"] .marquee-edit-input {
 }
 
 .notification-submit-btn {
-    min-height: 40px;
-    padding: 0 14px;
+    min-height: 38px;
+    padding: 0 13px;
     border-radius: 12px;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .notification-delete-btn {
     min-width: 0;
-    min-height: 34px;
-    padding: 0 12px;
+    min-height: 32px;
+    padding: 0 10px;
     border-radius: 12px;
     font-size: 12px;
 }
@@ -735,11 +796,39 @@ html[data-theme="light"] .news-markup-grid code {
     .news-preview-link,
     .news-image-trigger,
     .btn-copy-token {
-        min-height: 46px;
+        min-height: 36px;
+        padding-left: 11px;
+        padding-right: 11px;
+        border-radius: 12px;
+        font-size: 11px;
+        line-height: 1.2;
     }
 
     .marquee-sort-btn {
-        font-size: 13px;
+        min-width: 38px;
+    }
+
+    .news-manager-content .btn-primary,
+    .news-manager-content .btn-secondary,
+    .news-manager-content .btn-danger {
+        min-height: 36px;
+        padding: 0 11px;
+        border-radius: 12px;
+        font-size: 11px;
+        line-height: 1.2;
+    }
+
+    .news-manager-content .form-actions {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .news-manager-content .form-actions > * {
+        width: auto;
+        max-width: 100%;
+        flex: 0 0 auto;
     }
 
     .marquee-item-actions {
@@ -752,14 +841,49 @@ html[data-theme="light"] .news-markup-grid code {
     }
 
     .marquee-item-actions form,
-    .marquee-item-actions .btn-inline,
     .news-image-actions > *,
     .news-editor-actions > * {
+        width: 100%;
+    }
+
+    .marquee-item-actions form {
+        width: auto;
+    }
+
+    .marquee-item-actions .btn-inline {
+        width: auto;
+        min-width: 0;
+        flex: 0 0 auto;
+    }
+
+    .marquee-sort-btn {
+        width: 38px;
+        min-width: 38px;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .news-editor-actions .account-card-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .news-editor-actions .account-card-actions > * {
+        flex: 1 1 0;
+        width: 100%;
+    }
+
+    .news-editor-actions .news-preview-link {
+        flex-basis: auto;
         width: 100%;
     }
 }
 
 @media (max-width: 560px) {
+    .form-actions .btn-primary,
+    .form-actions .btn-secondary,
+    .form-actions .btn-danger,
     .notification-submit-btn,
     .notification-delete-btn,
     .marquee-sort-btn,
@@ -770,15 +894,78 @@ html[data-theme="light"] .news-markup-grid code {
     .news-image-delete-form,
     .news-image-delete-form .btn-inline {
         width: 100%;
+        min-height: 34px;
+        padding-left: 10px;
+        padding-right: 10px;
+        font-size: 11px;
+        line-height: 1.2;
+    }
+
+    .news-manager-content .btn-primary,
+    .news-manager-content .btn-secondary,
+    .news-manager-content .btn-danger {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 11px;
+        line-height: 1.2;
+    }
+
+    .news-manager-content .account-form,
+    .news-manager-content .notification-form {
+        gap: 10px;
+    }
+
+    .news-manager-content .form-actions {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        margin-top: -2px;
+    }
+
+    .news-manager-content .form-actions > * {
+        width: auto;
+        max-width: 100%;
+        flex: 0 0 auto;
     }
 
     .news-image-actions,
     .news-editor-actions {
         display: grid;
         grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .news-editor-actions .account-card-actions {
+        width: 100%;
     }
 
     .marquee-item-actions {
-        grid-template-columns: 1fr;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .marquee-item-actions form {
+        width: auto;
+    }
+
+    .marquee-item-actions .btn-inline,
+    .marquee-sort-btn {
+        width: auto;
+        min-width: 0;
+        flex: 0 0 auto;
+    }
+
+    .marquee-sort-btn {
+        width: 34px;
+        min-width: 34px;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .marquee-item-actions {
+        grid-template-columns: none;
     }
 }

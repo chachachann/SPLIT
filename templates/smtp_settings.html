@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMTP Settings</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        {% set form_admin_sidebar_brand = 'SMTP Settings' %}
+        {% set form_admin_sidebar_active = 'smtp_settings' %}
+        {% include '_form_admin_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = 'SMTP Settings' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; Email delivery configuration scaffold{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">SMTP is stored now so email delivery can be enabled later without changing the form workflow model.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Current State</h2>
+                                <p>These values are stored in the workflow module and can be activated for outbound email later.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-card">
+                                <div class="workflow-field-stack">
+                                    <div class="workflow-meta-row">
+                                        <span>Host</span>
+                                        <strong>{{ smtp_settings.host or 'Not configured' }}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>Port</span>
+                                        <strong>{{ smtp_settings.port or 'Not configured' }}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>Username</span>
+                                        <strong>{{ smtp_settings.username or 'Not configured' }}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>From</span>
+                                        <strong>{{ smtp_settings.from_name or 'System' }}{% if smtp_settings.from_email %} &lt;{{ smtp_settings.from_email }}&gt;{% endif %}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>TLS</span>
+                                        <strong>{{ 'Enabled' if smtp_settings.use_tls else 'Disabled' }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Connection Settings</h2>
+                                <p>Leave the password blank to keep the existing stored value. Email sending is not enabled yet in this phase.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <form method="POST" class="account-form">
+                                <div class="field-grid">
+                                    <label class="field">
+                                        <span class="field-label">SMTP Host</span>
+                                        <input type="text" name="host" value="{{ smtp_settings.host or '' }}" placeholder="smtp.example.com">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Port</span>
+                                        <input type="number" name="port" value="{{ smtp_settings.port or 587 }}" min="1" max="65535">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Username</span>
+                                        <input type="text" name="username" value="{{ smtp_settings.username or '' }}">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Password</span>
+                                        <input type="password" name="password" placeholder="Leave blank to keep current password">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">From Email</span>
+                                        <input type="email" name="from_email" value="{{ smtp_settings.from_email or '' }}" placeholder="no-reply@example.com">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">From Name</span>
+                                        <input type="text" name="from_name" value="{{ smtp_settings.from_name or '' }}" placeholder="SPLIT Workflow">
+                                    </label>
+                                    <label class="field field-full">
+                                        <span class="field-label">Transport Security</span>
+                                        <span class="role-option-pill workflow-checkbox-row">
+                                            <input type="checkbox" name="use_tls" value="1" {% if smtp_settings.use_tls %}checked{% endif %}>
+                                            <span class="role-option-name">Use TLS for outbound SMTP connections</span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Save SMTP Settings</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

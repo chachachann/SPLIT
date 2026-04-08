@@ -29,6 +29,18 @@
         } catch (error) {
             return;
         }
+
+        fetch("/profile/theme", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Requested-With": "XMLHttpRequest"
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({ theme: normalizeTheme(theme) })
+        }).catch(function () {
+            return;
+        });
     }
 
     function updateThemeControls(theme) {

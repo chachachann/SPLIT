@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Requests</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    {% set counts = namespace(draft=0, pending=0, resolved=0) %}
+    {% for item in requests %}
+        {% if item.status == 'draft' %}
+            {% set counts.draft = counts.draft + 1 %}
+        {% elif item.status == 'pending' %}
+            {% set counts.pending = counts.pending + 1 %}
+        {% else %}
+            {% set counts.resolved = counts.resolved + 1 %}
+        {% endif %}
+    {% endfor %}
+    {% for item in password_requests %}
+        {% if item.status == 'pending' %}
+            {% set counts.pending = counts.pending + 1 %}
+        {% else %}
+            {% set counts.resolved = counts.resolved + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="app-shell">
+        {% set workflow_sidebar_active = 'my_requests' %}
+        {% set workflow_sidebar_my_requests_icon = '&#128221;' %}
+        {% include '_workflow_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = 'My Requests' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; Drafts, pending reviews, and resolved submissions{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Drafts keep autosave history and pending requests stay available here until they are resolved or archived.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Summary</h2>
+                                <p>Live counts across all visible requests assigned to you as requester or owner.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-metric-grid">
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.draft }}</strong>
+                                    <span>Drafts</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.pending }}</strong>
+                                    <span>Pending</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.resolved }}</strong>
+                                    <span>Resolved</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Requests</h2>
+                                <p>Use the filter to narrow the list by form key, then open the request to continue, review status, or resubmit.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <form method="GET" class="workflow-toolbar workflow-toolbar-form">
+                                <label class="field workflow-toolbar-field">
+                                    <span class="field-label">Form Key</span>
+                                    <input type="text" name="form" value="{{ request.args.get('form', '') }}" placeholder="Example: land-inspection-intake">
+                                </label>
+                                <div class="workflow-inline-actions">
+                                    <button type="submit" class="btn-secondary">Apply Filter</button>
+                                    <a href="{{ url_for('my_requests') }}" class="btn-secondary workflow-toolbar-reset-btn">Reset</a>
+                                </div>
+                            </form>
+
+                            {% if requests %}
+                                <div class="workflow-card-list">
+                                    {% for item in requests %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ item.form_title }}</h3>
+                                                    <div class="workflow-card-meta">
+                                                        {{ item.form_key }} &#8226;
+                                                        {{ item.tracking_number or ('Draft #' ~ item.id) }} &#8226;
+                                                        {{ item.owner_display_name }} &#8226;
+                                                        Updated {{ item.updated_at }}
+                                                    </div>
+                                                </div>
+                                                <span class="workflow-status-pill status-{{ item.status }}">{{ item.status|replace('_', ' ')|title }}</span>
+                                            </div>
+
+                                            <div class="workflow-meta-grid">
+                                                <div class="workflow-meta-row">
+                                                    <span>Created</span>
+                                                    <strong>{{ item.created_at }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Submitted</span>
+                                                    <strong>{{ item.submitted_at or 'Not yet submitted' }}</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="workflow-card-actions">
+                                                {% if item.is_editable %}
+                                                    <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
+                                                {% else %}
+                                                    <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
+                                                {% endif %}
+
+                                                {% if item.can_reopen %}
+                                                    <form method="POST" action="{{ url_for('form_submission_reopen', submission_id=item.id) }}">
+                                                        <button type="submit" class="workflow-action-btn">Reopen as Draft</button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No requests matched the current filter.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Security Requests</h2>
+                                <p>Built-in password change requests submitted from your profile settings.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            {% if password_requests %}
+                                <div class="workflow-card-list">
+                                    {% for item in password_requests %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ item.title }}</h3>
+                                                    <div class="workflow-card-meta">
+                                                        Profile Settings &#8226;
+                                                        Created {{ item.created_at }}
+                                                    </div>
+                                                </div>
+                                                <span class="workflow-status-pill status-{{ item.status }}">{{ item.status_label }}</span>
+                                            </div>
+
+                                            <div class="workflow-meta-grid">
+                                                <div class="workflow-meta-row">
+                                                    <span>Reviewed</span>
+                                                    <strong>{{ item.reviewed_at or 'Waiting for review' }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Reviewer</span>
+                                                    <strong>{{ item.reviewed_by_display_name or 'Unassigned yet' }}</strong>
+                                                </div>
+                                            </div>
+
+                                            {% if item.rejection_note %}
+                                                <div class="workflow-inline-note">{{ item.rejection_note }}</div>
+                                            {% endif %}
+
+                                            <div class="workflow-card-actions">
+                                                <a class="btn-secondary" href="{{ url_for('profile', tab='security') }}">Open Security Settings</a>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No password change requests have been submitted yet.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<header class="topbar">
+    <button class="mobile-menu-btn" type="button" aria-label="Open sidebar" onclick="openSidebar()">&#9776;</button>
+    {% include '_topbar_profile_chip.html' %}
+    <div class="user-meta">
+        <div class="page-title">{{ topbar_title }}</div>
+        {% if topbar_subtitle is defined and topbar_subtitle %}
+            <div class="page-subtitle">{{ topbar_subtitle|safe }}</div>
+        {% endif %}
+    </div>
+    <div class="topbar-actions">
+        {% if topbar_show_chat is not defined or topbar_show_chat %}
+            {% include '_chat_widget.html' %}
+        {% endif %}
+        {% if topbar_show_workflow_links is not defined or topbar_show_workflow_links %}
+            {% include '_workflow_topbar_links.html' %}
+        {% endif %}
+        {% if topbar_show_notifications is not defined or topbar_show_notifications %}
+            {% include '_topbar_notification_menu.html' %}
+        {% endif %}
+        {% if topbar_logout_class is defined and topbar_logout_class %}
+            <a href="{{ topbar_logout_href|default(url_for('logout')) }}" class="{{ topbar_logout_class }}">
+                {{ topbar_logout_label|default('Logout') }}
+            </a>
+        {% endif %}
+    </div>
+</header>

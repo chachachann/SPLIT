@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Manager</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        {% set form_admin_sidebar_brand = 'Form Manager' %}
+        {% set form_admin_sidebar_active = 'forms_manage' %}
+        {% include '_form_admin_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = 'Form Manager' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; Workflow builder and publishing controls{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Create workflow-ready forms, publish them to Quick Access, and manage review stages here.</span>
+                        <span class="marquee">Drafts and published forms keep separate versions so old submissions remain stable.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Create Form</h2>
+                                <p>Start a new dynamic request workflow and then open the builder to define fields, access, and reviewers.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <form method="POST" class="account-form">
+                                <input type="hidden" name="action" value="create-form">
+                                <label class="field">
+                                    <span class="field-label">Form Title</span>
+                                    <input type="text" name="title" placeholder="Example: Land Inspection Intake" required>
+                                </label>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Create Form</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Overview</h2>
+                                <p>Status counts across all configured form templates.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-metric-grid">
+                                <div class="workflow-metric">
+                                    <strong>{{ form_counts.published }}</strong>
+                                    <span>Published</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ form_counts.draft }}</strong>
+                                    <span>Draft</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ form_counts.archived }}</strong>
+                                    <span>Archived</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Forms</h2>
+                                <p>Open a form to edit its metadata, builder schema, access, and review workflow.</p>
+                            </div>
+
+                            <div class="panel-header-actions workflow-inline-actions">
+                                <a class="workflow-action-btn" href="{{ url_for('forms_manage') }}">All</a>
+                                <a class="workflow-action-btn" href="{{ url_for('forms_manage', status='published') }}">Published</a>
+                                <a class="workflow-action-btn" href="{{ url_for('forms_manage', status='draft') }}">Draft</a>
+                                <a class="workflow-action-btn" href="{{ url_for('forms_manage', status='archived') }}">Archived</a>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            {% if forms %}
+                                <div class="workflow-card-list">
+                                    {% for form in forms %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ form.title }}</h3>
+                                                    <div class="workflow-card-meta">{{ form.form_key }} &#8226; {{ form.tracking_prefix }} &#8226; {{ form.submission_count }} submissions</div>
+                                                </div>
+                                                <span class="workflow-status-pill status-{{ form.status }}">{{ form.status|replace('_', ' ')|title }}</span>
+                                            </div>
+
+                                            <div class="workflow-pill-list">
+                                                {% for role in form.access_roles %}
+                                                    <span class="workflow-pill">{{ role }}</span>
+                                                {% endfor %}
+                                            </div>
+
+                                            <div class="workflow-card-actions">
+                                                <a class="btn-secondary" href="{{ url_for('forms_builder', form_key=form.form_key) }}">Open Builder</a>
+                                                {% if form.status == 'published' %}
+                                                    <a class="workflow-action-btn" href="{{ url_for('form_home', form_key=form.form_key) }}">Open User View</a>
+                                                {% endif %}
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No forms matched this filter.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

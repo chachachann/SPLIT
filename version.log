@@ -1,7 +1,7 @@
 =========================================
 PROJECT: SPLIT (DAR NIR)
-VERSION: 0.02.0a
-DATE: 2026-04-07 18:45
+VERSION: 0.03.0a
+DATE: 2026-04-08 18:40
 =========================================
 
 ## VERSIONING SCHEME
@@ -17,6 +17,39 @@ Suffix:
   (Removed after stable release)
 
 # CHANGELOG
+
+## [0.03.0a] - 2026-04-08
+
+ADDED:
+
+* Form workflow module with builder, submission lifecycle, request pages, review queue, and SMTP settings scaffold
+* Profile management pages with privacy controls, theme preference persistence, password-change requests, and profile audit history
+* Shared topbar and sidebar partials for the app shell, workflow pages, and form-admin pages
+* Workflow-specific frontend assets: `forms.css`, `forms.js`, `profile.css`, and `profile.js`
+
+IMPROVED:
+
+* Mobile shell behavior across sidebar, topbar bundles, notifications, chat overlays, and online-users views
+* Manager page responsiveness for news, requests, review, and workflow action controls
+* Shared layout reuse by modularizing duplicated topbar and sidebar template blocks
+* Login, dashboard, account-manager, and news-manager visual consistency in light and dark themes
+
+FIXED:
+
+* Login button clipping through the rounded container
+* Raw JSON showing in profile audit history for theme and profile updates
+* Duplicate Profile shortcut in the Account Manager sidebar
+* Misstyled Reset action in `forms/my-requests`
+* Configuration link appearing in the News Manager sidebar
+* Light-mode shadow issues on sidebar title icons
+* Multiple mobile regressions affecting buttons, sidebar clipping, notification stacking, chat/online-user layout, and workflow controls
+
+MISSING / TODO:
+
+* Password hashing review and broader auth/security hardening
+* Client-side validation and richer workflow error handling
+* Browser-based regression pass across desktop and mobile breakpoints
+* Production deployment/config hardening and email delivery activation
 
 ## [0.02.0a] - 2026-04-07
 

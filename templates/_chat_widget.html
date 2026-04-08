@@ -5,7 +5,7 @@
     data-thread-url="{{ url_for('chat_thread') }}"
     data-send-url="{{ url_for('chat_send') }}"
     data-channel-update-url="{{ url_for('chat_channel_update') }}"
-    data-poll-ms="60000"
+    data-poll-ms="15000"
 >
     <div class="chat-toolbar">
         <button type="button" class="online-trigger" data-online-trigger aria-label="Open online users">
@@ -31,6 +31,13 @@
             <button type="button" class="chat-close-btn online-close-btn" data-online-close aria-label="Close online users">&times;</button>
         </div>
 
+        <div class="online-panel-tools">
+            <label class="chat-search-field chat-search-field-online">
+                <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
+                <input type="search" data-online-search placeholder="Search online users">
+            </label>
+        </div>
+
         <div class="online-panel-list" data-online-list>
             <div class="chat-empty-state chat-empty-state-compact">No online users right now.</div>
         </div>
@@ -45,6 +52,11 @@
             </div>
 
             <div class="chat-panel-header-actions">
+                <div class="chat-panel-mode-tabs" role="tablist" aria-label="Messaging views">
+                    <button type="button" class="chat-panel-mode-tab" data-chat-mode="chat" aria-selected="false">Chat</button>
+                    <button type="button" class="chat-panel-mode-tab is-active" data-chat-mode="messages" aria-selected="true">Messages</button>
+                    <button type="button" class="chat-panel-mode-tab" data-chat-mode="channels" aria-selected="false">Channels</button>
+                </div>
                 <button type="button" class="chat-panel-nav-btn" data-chat-mobile-browse hidden>Conversations</button>
                 <button type="button" class="chat-close-btn" data-chat-close aria-label="Close messages">&times;</button>
             </div>
@@ -55,7 +67,28 @@
                 <div class="chat-sidebar-header">
                     <div class="chat-sidebar-copy">
                         <strong>Browse Conversations</strong>
-                        <span>Channels, role groups, direct messages, and users.</span>
+                        <span>Channels, role groups, direct messages, and directory access.</span>
+                    </div>
+
+                    <div class="chat-sidebar-stats">
+                        <div class="chat-sidebar-stat">
+                            <strong data-chat-stat-unread>0</strong>
+                            <span>Unread</span>
+                        </div>
+                        <div class="chat-sidebar-stat">
+                            <strong data-chat-stat-online>0</strong>
+                            <span>Online</span>
+                        </div>
+                    </div>
+
+                    <label class="chat-search-field">
+                        <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
+                        <input type="search" data-chat-search placeholder="Search conversations or people">
+                    </label>
+
+                    <div class="chat-sidebar-filters" role="group" aria-label="Conversation filters">
+                        <button type="button" class="chat-sidebar-filter is-active" data-chat-filter="all">All</button>
+                        <button type="button" class="chat-sidebar-filter" data-chat-filter="unread">Unread</button>
                     </div>
 
                     <div class="chat-sidebar-tabs" role="tablist" aria-label="Chat sections">
@@ -122,6 +155,7 @@
 
                     <div class="chat-thread-identity">
                         <span class="chat-thread-avatar" data-chat-thread-avatar>
+                            <img data-chat-thread-avatar-image alt="" hidden>
                             <span data-chat-thread-avatar-text>?</span>
                             <span class="chat-thread-avatar-status" data-chat-thread-avatar-status hidden></span>
                         </span>
@@ -130,9 +164,18 @@
                             <div class="chat-thread-kicker" data-chat-thread-kicker>Conversation</div>
                             <div class="chat-thread-title" data-chat-thread-title>Select a conversation</div>
                             <div class="chat-thread-subtitle" data-chat-thread-subtitle>Open a channel, role room, or direct message.</div>
+                            <div class="chat-thread-facts" data-chat-thread-facts></div>
                         </div>
                     </div>
                     <div class="chat-thread-header-actions">
+                        <a href="{{ url_for('profile') }}" class="chat-thread-profile-link" data-chat-profile-link hidden>
+                            <span aria-hidden="true">&#128100;</span>
+                            <span>Profile</span>
+                        </a>
+                        <button type="button" class="chat-thread-refresh-btn" data-chat-refresh aria-label="Refresh conversation">
+                            <span aria-hidden="true">&#8635;</span>
+                            <span>Refresh</span>
+                        </button>
                         <button type="button" class="chat-thread-settings-btn" data-chat-edit-toggle hidden aria-label="Open channel settings">
                             <span aria-hidden="true">&#9881;</span>
                             <span>Settings</span>
@@ -169,6 +212,7 @@
                     </div>
 
                     <div class="chat-thread-tools-actions">
+                        <span class="chat-sync-pill" data-chat-sync-status>Waiting for sync</span>
                         <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-load-older hidden>Load Older</button>
                         <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-jump-latest hidden>Newest</button>
                     </div>
@@ -181,6 +225,18 @@
                 <form class="chat-compose" data-chat-compose enctype="multipart/form-data">
                     <input type="hidden" name="type" data-chat-compose-type>
                     <input type="hidden" name="target" data-chat-compose-target>
+
+                    <div class="chat-compose-head">
+                        <div class="chat-compose-copy">
+                            <strong data-chat-compose-title>Message composer</strong>
+                            <span data-chat-compose-hint>Select a conversation to start messaging.</span>
+                        </div>
+                    </div>
+
+                    <div class="chat-compose-attachment-preview" data-chat-file-preview hidden>
+                        <span class="chat-compose-attachment-chip" data-chat-file-chip>No file selected</span>
+                        <button type="button" class="chat-attachment-clear" data-chat-file-clear>Remove</button>
+                    </div>
 
                     <label class="chat-compose-field">
                         <textarea name="message" rows="3" placeholder="Write a message..." data-chat-compose-input></textarea>

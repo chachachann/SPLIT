@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{ current_theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,12 +9,15 @@
         (function () {
             try {
                 var savedTheme = localStorage.getItem("split-theme");
-                var resolvedTheme = savedTheme === "light" ? "light" : "dark";
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
                 document.documentElement.dataset.theme = resolvedTheme;
                 document.documentElement.style.colorScheme = resolvedTheme;
             } catch (error) {
-                document.documentElement.dataset.theme = "dark";
-                document.documentElement.style.colorScheme = "dark";
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
             }
         })();
     </script>

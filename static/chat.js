@@ -21,6 +21,22 @@
         return (words[0][0] + words[1][0]).toUpperCase();
     }
 
+    function applyAvatarFace(node, avatarUrl, fallbackText) {
+        var fallbackNode = createNode("span", "chat-avatar-fallback", fallbackText || "?");
+        if (avatarUrl) {
+            var imageNode = createNode("img", "chat-avatar-image");
+            imageNode.src = avatarUrl;
+            imageNode.alt = "";
+            imageNode.loading = "lazy";
+            node.appendChild(imageNode);
+            node.classList.add("has-image");
+        } else {
+            node.classList.remove("has-image");
+        }
+        node.appendChild(fallbackNode);
+        return fallbackNode;
+    }
+
     function getChannelBadge(target) {
         var match = String(target || "").match(/channel:(\d+)/);
         return match ? match[1] : "#";
@@ -35,12 +51,46 @@
         return values.filter(Boolean).join(" | ");
     }
 
+    function normalizeSearch(value) {
+        return String(value || "").trim().toLowerCase();
+    }
+
     function parseTimestamp(value) {
-        var match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+        var match = String(value || "").match(
+            /^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/
+        );
         if (!match) {
             return null;
         }
-        return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        return new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            Number(match[4] || 0),
+            Number(match[5] || 0),
+            Number(match[6] || 0)
+        );
+    }
+
+    function isSameCalendarDay(left, right) {
+        return !!(
+            left &&
+            right &&
+            left.getFullYear() === right.getFullYear() &&
+            left.getMonth() === right.getMonth() &&
+            left.getDate() === right.getDate()
+        );
+    }
+
+    function formatTimeOnly(value) {
+        var date = parseTimestamp(value);
+        if (!date) {
+            return value || "";
+        }
+        return date.toLocaleTimeString(undefined, {
+            hour: "numeric",
+            minute: "2-digit"
+        });
     }
 
     function getDateKey(value) {
@@ -73,6 +123,116 @@
         });
     }
 
+    function formatConversationTime(value) {
+        var date = parseTimestamp(value);
+        if (!date) {
+            return "";
+        }
+
+        var now = new Date();
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        var yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        var compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+        if (compareDate.getTime() === today.getTime()) {
+            return formatTimeOnly(value);
+        }
+        if (compareDate.getTime() === yesterday.getTime()) {
+            return "Yesterday";
+        }
+        if (date.getFullYear() === now.getFullYear()) {
+            return date.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric"
+            });
+        }
+
+        return date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric"
+        });
+    }
+
+    function formatLastActivity(value) {
+        var date = parseTimestamp(value);
+        if (!date) {
+            return "";
+        }
+
+        var now = new Date();
+        var diffMinutes = Math.max(0, Math.round((now.getTime() - date.getTime()) / 60000));
+
+        if (diffMinutes < 1) {
+            return "Just now";
+        }
+        if (diffMinutes < 60) {
+            return diffMinutes + "m ago";
+        }
+        if (diffMinutes < 24 * 60 && isSameCalendarDay(now, date)) {
+            return "Today at " + formatTimeOnly(value);
+        }
+
+        var yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (isSameCalendarDay(yesterday, date)) {
+            return "Yesterday at " + formatTimeOnly(value);
+        }
+
+        return date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric"
+        }) + " at " + formatTimeOnly(value);
+    }
+
+    function formatSyncLabel(syncState, lastSyncAt) {
+        if (syncState === "syncing") {
+            return "Syncing...";
+        }
+        if (syncState === "error") {
+            return "Sync issue";
+        }
+        if (!lastSyncAt) {
+            return "Waiting for sync";
+        }
+
+        var diffSeconds = Math.max(0, Math.round((Date.now() - lastSyncAt) / 1000));
+        if (diffSeconds < 8) {
+            return "Updated just now";
+        }
+        if (diffSeconds < 60) {
+            return "Updated " + diffSeconds + "s ago";
+        }
+
+        var diffMinutes = Math.round(diffSeconds / 60);
+        if (diffMinutes < 60) {
+            return "Updated " + diffMinutes + "m ago";
+        }
+
+        return "Updated at " + new Date(lastSyncAt).toLocaleTimeString(undefined, {
+            hour: "numeric",
+            minute: "2-digit"
+        });
+    }
+
+    function canGroupMessages(previousMessage, nextMessage) {
+        if (!previousMessage || !nextMessage) {
+            return false;
+        }
+        if (String(previousMessage.sender_username || "").toLowerCase() !== String(nextMessage.sender_username || "").toLowerCase()) {
+            return false;
+        }
+
+        var previousDate = parseTimestamp(previousMessage.created_at);
+        var nextDate = parseTimestamp(nextMessage.created_at);
+        if (!previousDate || !nextDate || !isSameCalendarDay(previousDate, nextDate)) {
+            return false;
+        }
+
+        return Math.abs(nextDate.getTime() - previousDate.getTime()) <= 5 * 60 * 1000;
+    }
+
     function mergeMessages(existingMessages, incomingMessages) {
         var map = {};
         (existingMessages || []).forEach(function (message) {
@@ -96,6 +256,7 @@
         root.dataset.bound = "true";
 
         var mobileQuery = window.matchMedia("(max-width: 860px)");
+        var maxAttachmentSizeBytes = 15 * 1024 * 1024;
         var state = {
             activeType: "",
             activeTarget: "",
@@ -105,11 +266,19 @@
             chatOpen: false,
             onlineOpen: false,
             activeTab: "channels",
+            panelMode: "messages",
             settingsOpen: false,
             mobileView: "browse",
             threadMessages: [],
             threadMeta: null,
-            loadingOlder: false
+            loadingOlder: false,
+            searchTerm: "",
+            onlineSearchTerm: "",
+            filterMode: "all",
+            drafts: {},
+            syncState: "idle",
+            lastSyncAt: 0,
+            sending: false
         };
 
         var refs = {
@@ -120,10 +289,16 @@
             onlineSummary: root.querySelector("[data-online-summary]"),
             onlineList: root.querySelector("[data-online-list]"),
             onlineClose: root.querySelector("[data-online-close]"),
+            onlineSearch: root.querySelector("[data-online-search]"),
             chatTrigger: root.querySelector("[data-chat-trigger]"),
             chatBadge: root.querySelector("[data-chat-badge]"),
             chatPanel: root.querySelector("[data-chat-panel]"),
             chatSummary: root.querySelector("[data-chat-summary]"),
+            chatStatUnread: root.querySelector("[data-chat-stat-unread]"),
+            chatStatOnline: root.querySelector("[data-chat-stat-online]"),
+            modeButtons: Array.prototype.slice.call(root.querySelectorAll("[data-chat-mode]")),
+            chatSearch: root.querySelector("[data-chat-search]"),
+            filterButtons: Array.prototype.slice.call(root.querySelectorAll("[data-chat-filter]")),
             mobileBrowse: root.querySelector("[data-chat-mobile-browse]"),
             close: root.querySelector("[data-chat-close]"),
             tabButtons: Array.prototype.slice.call(root.querySelectorAll("[data-chat-tab]")),
@@ -133,11 +308,15 @@
             directList: root.querySelector('[data-chat-list="directs"]'),
             userList: root.querySelector('[data-chat-list="users"]'),
             threadAvatar: root.querySelector("[data-chat-thread-avatar]"),
+            threadAvatarImage: root.querySelector("[data-chat-thread-avatar-image]"),
             threadAvatarText: root.querySelector("[data-chat-thread-avatar-text]"),
             threadAvatarStatus: root.querySelector("[data-chat-thread-avatar-status]"),
             kicker: root.querySelector("[data-chat-thread-kicker]"),
             title: root.querySelector("[data-chat-thread-title]"),
             subtitle: root.querySelector("[data-chat-thread-subtitle]"),
+            threadFacts: root.querySelector("[data-chat-thread-facts]"),
+            profileLink: root.querySelector("[data-chat-profile-link]"),
+            refresh: root.querySelector("[data-chat-refresh]"),
             editToggle: root.querySelector("[data-chat-edit-toggle]"),
             mobileBack: root.querySelector("[data-chat-mobile-back]"),
             channelForm: root.querySelector("[data-chat-channel-form]"),
@@ -147,6 +326,7 @@
             editCancel: root.querySelector("[data-chat-edit-cancel]"),
             messageSummary: root.querySelector("[data-chat-message-summary]"),
             messageStatus: root.querySelector("[data-chat-message-status]"),
+            syncStatus: root.querySelector("[data-chat-sync-status]"),
             loadOlder: root.querySelector("[data-chat-load-older]"),
             jumpLatest: root.querySelector("[data-chat-jump-latest]"),
             feed: root.querySelector("[data-chat-messages]"),
@@ -154,9 +334,15 @@
             composeType: root.querySelector("[data-chat-compose-type]"),
             composeTarget: root.querySelector("[data-chat-compose-target]"),
             composeInput: root.querySelector("[data-chat-compose-input]"),
+            composeTitle: root.querySelector("[data-chat-compose-title]"),
+            composeHint: root.querySelector("[data-chat-compose-hint]"),
             fileInput: root.querySelector("[data-chat-file-input]"),
             fileTrigger: root.querySelector("[data-chat-file-trigger]"),
             fileName: root.querySelector("[data-chat-file-name]"),
+            filePreview: root.querySelector("[data-chat-file-preview]"),
+            fileChip: root.querySelector("[data-chat-file-chip]"),
+            fileClear: root.querySelector("[data-chat-file-clear]"),
+            sendButton: root.querySelector(".chat-send-btn"),
             composeStatus: root.querySelector("[data-chat-compose-status]")
         };
 
@@ -184,6 +370,10 @@
             return mobileQuery.matches;
         }
 
+        function buildThreadKey(type, target) {
+            return type && target ? type + "::" + target : "";
+        }
+
         function getLoadedOldestId() {
             return state.threadMessages.length ? state.threadMessages[0].id : null;
         }
@@ -201,6 +391,60 @@
 
         function scrollFeedToBottom() {
             refs.feed.scrollTop = refs.feed.scrollHeight;
+        }
+
+        function autoResizeComposer() {
+            if (!refs.composeInput) {
+                return;
+            }
+            refs.composeInput.style.height = "auto";
+            refs.composeInput.style.overflowY = "hidden";
+            refs.composeInput.style.height = Math.min(refs.composeInput.scrollHeight, isMobileLayout() ? 180 : 220) + "px";
+            if (refs.composeInput.scrollHeight > parseInt(refs.composeInput.style.height, 10)) {
+                refs.composeInput.style.overflowY = "auto";
+            }
+        }
+
+        function saveCurrentDraft() {
+            var draftKey = buildThreadKey(state.activeType, state.activeTarget);
+            if (!draftKey) {
+                return;
+            }
+            state.drafts[draftKey] = refs.composeInput.value || "";
+        }
+
+        function restoreCurrentDraft() {
+            var draftKey = buildThreadKey(state.activeType, state.activeTarget);
+            refs.composeInput.value = draftKey && state.drafts[draftKey] ? state.drafts[draftKey] : "";
+            autoResizeComposer();
+        }
+
+        function clearCurrentDraft() {
+            var draftKey = buildThreadKey(state.activeType, state.activeTarget);
+            if (draftKey) {
+                delete state.drafts[draftKey];
+            }
+        }
+
+        function renderSyncStatus() {
+            if (!refs.syncStatus) {
+                return;
+            }
+            refs.syncStatus.textContent = formatSyncLabel(state.syncState, state.lastSyncAt);
+            refs.syncStatus.classList.remove("is-syncing", "is-error");
+            if (state.syncState === "syncing") {
+                refs.syncStatus.classList.add("is-syncing");
+            } else if (state.syncState === "error") {
+                refs.syncStatus.classList.add("is-error");
+            }
+        }
+
+        function setSyncState(nextState) {
+            state.syncState = nextState || "idle";
+            if (state.syncState === "synced") {
+                state.lastSyncAt = Date.now();
+            }
+            renderSyncStatus();
         }
 
         function syncScrim() {
@@ -234,6 +478,52 @@
             syncMobileControls();
         }
 
+        function setPanelMode(modeName) {
+            if (modeName === "chat" || modeName === "messages" || modeName === "channels") {
+                state.panelMode = modeName;
+            } else {
+                state.panelMode = "messages";
+            }
+            root.classList.toggle("is-panel-mode-chat", state.panelMode === "chat");
+            root.classList.toggle("is-panel-mode-messages", state.panelMode === "messages");
+            root.classList.toggle("is-panel-mode-channels", state.panelMode === "channels");
+            refs.modeButtons.forEach(function (button) {
+                var isActive = button.dataset.chatMode === state.panelMode;
+                button.classList.toggle("is-active", isActive);
+                button.setAttribute("aria-selected", isActive ? "true" : "false");
+            });
+        }
+
+        function isTabAllowedForMode(tabName, modeName) {
+            var mode = modeName || state.panelMode;
+            if (mode === "messages") {
+                return tabName === "directs" || tabName === "users";
+            }
+            if (mode === "channels") {
+                return tabName === "channels" || tabName === "roles";
+            }
+            return true;
+        }
+
+        function getDefaultTabForMode(modeName) {
+            if (modeName === "messages") {
+                return "directs";
+            }
+            if (modeName === "channels") {
+                return "channels";
+            }
+            return state.activeTab || "channels";
+        }
+
+        function ensureTabForCurrentMode() {
+            if (state.panelMode === "chat") {
+                return;
+            }
+            if (!isTabAllowedForMode(state.activeTab)) {
+                setActiveTab(getDefaultTabForMode(state.panelMode));
+            }
+        }
+
         function setActiveTab(tabName) {
             state.activeTab = tabName;
             refs.tabButtons.forEach(function (button) {
@@ -242,6 +532,29 @@
             refs.tabPanes.forEach(function (pane) {
                 pane.classList.toggle("is-active", pane.dataset.chatPane === tabName);
             });
+        }
+
+        function getListForTab(tabName) {
+            if (tabName === "channels") {
+                return refs.channelList;
+            }
+            if (tabName === "roles") {
+                return refs.roleList;
+            }
+            if (tabName === "directs") {
+                return refs.directList;
+            }
+            if (tabName === "users") {
+                return refs.userList;
+            }
+            return null;
+        }
+
+        function scrollTabListToTop(tabName) {
+            var list = getListForTab(tabName || state.activeTab);
+            if (list) {
+                list.scrollTop = 0;
+            }
         }
 
         function getTabForThread(type, preferredTab) {
@@ -313,6 +626,9 @@
                 } else {
                     syncMobileControls();
                 }
+                setPanelMode(state.activeType ? "chat" : "messages");
+                ensureTabForCurrentMode();
+                refreshOverview();
             } else {
                 syncMobileControls();
             }
@@ -342,6 +658,18 @@
                 refs.chatPanel.setAttribute("aria-hidden", "true");
                 setSettingsOpen(false);
             }
+            if (state.onlineOpen) {
+                if (refs.onlineList) {
+                    refs.onlineList.scrollTop = 0;
+                }
+                if (refs.onlinePanel) {
+                    refs.onlinePanel.scrollTop = 0;
+                }
+                refreshOverview();
+                if (refs.onlineSearch && !isMobileLayout()) {
+                    refs.onlineSearch.focus();
+                }
+            }
             syncMobileControls();
             syncScrim();
         }
@@ -364,14 +692,28 @@
             var unread = Number(total || 0);
             refs.chatBadge.hidden = unread <= 0;
             refs.chatBadge.textContent = unread > 99 ? "99+" : String(unread);
-            refs.chatSummary.textContent = unread === 1 ? "1 unread" : String(unread) + " unread";
+            refs.chatSummary.textContent = unread <= 0 ? "All caught up" : (unread === 1 ? "1 unread" : String(unread) + " unread");
         }
 
         function updateOnlineBadge(total) {
             var online = Number(total || 0);
             refs.onlineBadge.hidden = online <= 0;
             refs.onlineBadge.textContent = online > 99 ? "99+" : String(online);
-            refs.onlineSummary.textContent = online === 1 ? "1 online" : String(online) + " online";
+            refs.onlineSummary.textContent = online === 1 ? "1 online now" : String(online) + " online now";
+        }
+
+        function updateStatCards(overview) {
+            var unreadTotal = Number((overview && overview.unread_total) || 0);
+            var onlineTotal = (overview && overview.users ? overview.users.filter(function (item) {
+                return item.presence === "online";
+            }).length : 0);
+
+            if (refs.chatStatUnread) {
+                refs.chatStatUnread.textContent = unreadTotal > 99 ? "99+" : String(unreadTotal);
+            }
+            if (refs.chatStatOnline) {
+                refs.chatStatOnline.textContent = onlineTotal > 99 ? "99+" : String(onlineTotal);
+            }
         }
 
         function isItemActive(type, target) {
@@ -397,6 +739,45 @@
             });
         }
 
+        function getSearchText(item) {
+            return normalizeSearch([
+                item.title,
+                item.description,
+                item.role_name,
+                item.target_username,
+                item.username,
+                item.fullname,
+                item.designation,
+                item.last_message_preview,
+                item.last_message_sender_name
+            ].join(" "));
+        }
+
+        function filterItems(items, tabName) {
+            return (items || []).filter(function (item) {
+                if (state.searchTerm && getSearchText(item).indexOf(state.searchTerm) === -1) {
+                    return false;
+                }
+                if (state.filterMode === "unread" && tabName !== "users") {
+                    return Number(item.unread_count || 0) > 0;
+                }
+                return true;
+            });
+        }
+
+        function formatPreviewLine(item) {
+            var preview = item.last_message_preview || "No messages yet";
+            if (!item.last_message_sender_name) {
+                return preview;
+            }
+
+            if (item.thread_type === "direct") {
+                return item.last_message_is_self ? "You: " + preview : preview;
+            }
+
+            return (item.last_message_is_self ? "You" : item.last_message_sender_name) + ": " + preview;
+        }
+
         function buildListItem(config) {
             var button = createNode("button", "chat-list-item");
             button.type = "button";
@@ -407,17 +788,24 @@
             }
 
             var main = createNode("div", "chat-list-item-main");
-            var avatar = createNode("span", "chat-list-item-avatar" + (config.avatarTone ? " chat-list-item-avatar-" + config.avatarTone : ""), config.avatarText);
+            var avatar = createNode("span", "chat-list-item-avatar" + (config.avatarTone ? " chat-list-item-avatar-" + config.avatarTone : ""));
+            applyAvatarFace(avatar, config.avatarUrl, config.avatarText);
             if (config.status) {
                 avatar.appendChild(createNode("span", "chat-list-item-avatar-status" + (config.status === "online" ? " is-online" : "")));
             }
             main.appendChild(avatar);
 
             var copy = createNode("div", "chat-list-item-copy");
+            if (config.eyebrow) {
+                copy.appendChild(createNode("div", "chat-list-item-eyebrow", config.eyebrow));
+            }
             var titleRow = createNode("div", "chat-list-item-row");
             titleRow.appendChild(createNode("div", "chat-list-item-title", config.title));
 
             var tail = createNode("div", "chat-list-item-tail");
+            if (config.timestamp) {
+                tail.appendChild(createNode("span", "chat-list-item-time", config.timestamp));
+            }
             if (config.meta) {
                 tail.appendChild(createNode("span", "chat-list-item-status" + (config.metaTone ? " is-" + config.metaTone : ""), config.meta));
             }
@@ -433,13 +821,17 @@
                 copy.appendChild(createNode("div", "chat-list-item-subtitle", config.subtitle));
             }
             if (config.note) {
-                copy.appendChild(createNode("div", "chat-list-item-note", config.note));
+                copy.appendChild(createNode("div", "chat-list-item-note" + (config.unreadCount > 0 ? " is-unread" : ""), config.note));
             }
 
             main.appendChild(copy);
             button.appendChild(main);
             button.addEventListener("click", function () {
+                if (typeof button.blur === "function") {
+                    button.blur();
+                }
                 setChatOpen(true);
+                setPanelMode("chat");
                 setActiveTab(getTabForThread(config.type, config.tab));
                 loadThread(config.type, config.target, {
                     scrollToBottom: true,
@@ -468,29 +860,50 @@
             var onlineUsers = (overview.users || []).filter(function (item) {
                 return item.presence === "online";
             });
-            updateOnlineBadge(onlineUsers.length);
+            var totalOnline = onlineUsers.length;
+            if (state.onlineSearchTerm) {
+                onlineUsers = onlineUsers.filter(function (item) {
+                    return normalizeSearch([item.fullname, item.designation, item.username].join(" ")).indexOf(state.onlineSearchTerm) !== -1;
+                });
+            }
+            updateOnlineBadge(totalOnline);
+            if (state.onlineSearchTerm && refs.onlineSummary) {
+                refs.onlineSummary.textContent = totalOnline === onlineUsers.length
+                    ? (totalOnline === 1 ? "1 online now" : totalOnline + " online now")
+                    : onlineUsers.length + " match" + (onlineUsers.length === 1 ? "" : "es") + " from " + totalOnline + " online";
+            }
             refs.onlineList.innerHTML = "";
             if (!onlineUsers.length) {
-                refs.onlineList.appendChild(createNode("div", "chat-empty-state chat-empty-state-compact", "No online users right now."));
+                refs.onlineList.appendChild(createNode(
+                    "div",
+                    "chat-empty-state chat-empty-state-compact",
+                    state.onlineSearchTerm ? "No online users match your search." : "No online users right now."
+                ));
                 return;
             }
 
             onlineUsers.forEach(function (user) {
+                var card = createNode("article", "online-user-card");
                 var button = createNode("button", "online-user-item");
                 button.type = "button";
 
-                var avatar = createNode("span", "chat-list-item-avatar chat-list-item-avatar-person", getInitials(user.fullname, "U"));
+                var avatar = createNode("span", "chat-list-item-avatar chat-list-item-avatar-person");
+                applyAvatarFace(avatar, user.avatar_url, user.avatar_initials || getInitials(user.fullname, "U"));
                 avatar.appendChild(createNode("span", "chat-list-item-avatar-status is-online"));
 
                 var copy = createNode("div", "online-user-copy");
                 copy.appendChild(createNode("strong", "", user.fullname));
-                copy.appendChild(createNode("span", "", joinBits([user.designation, buildHandle(user.username)]) || "Currently online"));
+                copy.appendChild(createNode("span", "", buildHandle(user.username) || "Currently online"));
 
                 button.appendChild(avatar);
                 button.appendChild(copy);
                 button.addEventListener("click", function () {
+                    if (typeof button.blur === "function") {
+                        button.blur();
+                    }
                     setOnlineOpen(false);
                     setChatOpen(true);
+                    setPanelMode("chat");
                     setActiveTab("directs");
                     loadThread("direct", user.username, {
                         scrollToBottom: true,
@@ -501,8 +914,84 @@
                         return;
                     });
                 });
-                refs.onlineList.appendChild(button);
+                card.appendChild(button);
+                if (user.profile_url) {
+                    var profileLink = createNode("a", "online-user-action", "Profile");
+                    profileLink.href = user.profile_url;
+                    card.appendChild(profileLink);
+                }
+                refs.onlineList.appendChild(card);
             });
+        }
+
+        function getEmptyListLabel(tabName) {
+            if (state.searchTerm) {
+                return "No conversations match your search.";
+            }
+            if (state.filterMode === "unread" && tabName !== "users") {
+                return "No unread conversations in this section.";
+            }
+            if (tabName === "channels") {
+                return "No channels available.";
+            }
+            if (tabName === "roles") {
+                return "No role groups available.";
+            }
+            if (tabName === "directs") {
+                return "No direct conversations yet.";
+            }
+            return "No other users found.";
+        }
+
+        function findOverviewThread(type, target) {
+            if (!state.overview) {
+                return null;
+            }
+            if (type === "channel") {
+                return (state.overview.channels || []).find(function (item) {
+                    return item.room_key === target;
+                }) || null;
+            }
+            if (type === "role") {
+                return (state.overview.role_groups || []).find(function (item) {
+                    return item.room_key === target;
+                }) || null;
+            }
+            if (type === "direct") {
+                return (state.overview.direct_threads || []).find(function (item) {
+                    return item.target_username === target;
+                }) || null;
+            }
+            return null;
+        }
+
+        function syncActiveThreadFromOverview() {
+            if (!state.activeThread || !state.activeType || !state.activeTarget) {
+                return;
+            }
+
+            var match = findOverviewThread(state.activeType, state.activeTarget);
+            if (!match) {
+                return;
+            }
+
+            state.activeThread.member_count = match.member_count || state.activeThread.member_count || 0;
+            if (state.activeType === "direct") {
+                state.activeThread.title = match.title || state.activeThread.title;
+                state.activeThread.description = match.description || state.activeThread.description;
+                state.activeThread.target_username = match.target_username || state.activeThread.target_username;
+                state.activeThread.avatar_url = match.avatar_url || state.activeThread.avatar_url || "";
+                state.activeThread.profile_url = match.profile_url || state.activeThread.profile_url || "";
+                state.activeThread.presence = {
+                    status: match.presence,
+                    status_label: match.presence_label,
+                    is_online: match.presence === "online",
+                    last_seen_at: match.last_seen_at,
+                    last_login_at: match.last_login_at
+                };
+            }
+
+            applyThreadHeader(state.activeThread);
         }
 
         function syncOverview(overview) {
@@ -515,56 +1004,68 @@
             };
 
             updateUnreadBadge(state.overview.unread_total);
+            updateStatCards(state.overview);
             updateTabCounts(state.overview);
             renderOnlineUsers(state.overview);
 
-            renderList(refs.channelList, state.overview.channels, function (item) {
+            renderList(refs.channelList, filterItems(state.overview.channels, "channels"), function (item) {
                 return buildListItem({
                     type: "channel",
                     tab: "channels",
                     target: item.room_key,
                     title: item.title,
                     subtitle: item.description || "Public room",
-                    note: item.last_message_preview || "No messages yet",
+                    note: formatPreviewLine(item),
                     unreadCount: item.unread_count || 0,
+                    timestamp: formatConversationTime(item.last_message_at),
+                    eyebrow: joinBits(["Channel " + getChannelBadge(item.room_key), item.member_count ? item.member_count + " members" : "Public room"]),
                     avatarText: getChannelBadge(item.room_key),
                     avatarTone: "channel"
                 });
-            }, "No channels available.");
+            }, getEmptyListLabel("channels"));
 
-            renderList(refs.roleList, state.overview.role_groups, function (item) {
+            renderList(refs.roleList, filterItems(state.overview.role_groups, "roles"), function (item) {
                 return buildListItem({
                     type: "role",
                     tab: "roles",
                     target: item.room_key,
                     title: item.title,
                     subtitle: item.description || (item.role_name ? item.role_name + " group" : "Role-based room"),
-                    note: item.last_message_preview || "No messages yet",
+                    note: formatPreviewLine(item),
                     unreadCount: item.unread_count || 0,
+                    timestamp: formatConversationTime(item.last_message_at),
+                    eyebrow: joinBits([item.role_name || "Role room", item.member_count ? item.member_count + " members" : "Restricted"]),
                     avatarText: getInitials(item.role_name || item.title, "RG"),
                     avatarTone: "role"
                 });
-            }, "No role groups available.");
+            }, getEmptyListLabel("roles"));
 
-            renderList(refs.directList, state.overview.direct_threads, function (item) {
+            renderList(refs.directList, filterItems(state.overview.direct_threads, "directs"), function (item) {
                 return buildListItem({
                     type: "direct",
                     tab: "directs",
                     target: item.target_username,
                     title: item.title,
                     subtitle: joinBits([item.description, buildHandle(item.target_username)]),
-                    note: item.last_message_preview || "No messages yet",
+                    note: formatPreviewLine(item),
                     unreadCount: item.unread_count || 0,
-                    meta: item.presence_label || "Offline",
+                    timestamp: formatConversationTime(item.last_message_at),
+                    meta: item.presence === "online" ? "Online" : "Offline",
                     metaTone: item.presence || "offline",
                     status: item.presence,
+                    eyebrow: item.presence === "online"
+                        ? "Online now"
+                        : "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "Not available"),
                     avatarText: getInitials(item.title, "DM"),
+                    avatarUrl: item.avatar_url,
                     avatarTone: "direct"
                 });
-            }, "No direct conversations yet.");
+            }, getEmptyListLabel("directs"));
 
-            renderList(refs.userList, state.overview.users, function (item) {
-                var presenceNote = item.presence === "online" ? "Currently online" : "Last active " + (item.last_seen_label || item.last_login_at || "Not available");
+            renderList(refs.userList, filterItems(state.overview.users, "users"), function (item) {
+                var presenceNote = item.presence === "online"
+                    ? "Currently online"
+                    : "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "Not available");
                 return buildListItem({
                     type: "direct",
                     tab: "users",
@@ -576,10 +1077,14 @@
                     meta: item.presence_label || "Offline",
                     metaTone: item.presence || "offline",
                     status: item.presence,
+                    eyebrow: "Start a direct chat",
                     avatarText: getInitials(item.fullname, "U"),
+                    avatarUrl: item.avatar_url,
                     avatarTone: "person"
                 });
-            }, "No other users found.");
+            }, getEmptyListLabel("users"));
+
+            syncActiveThreadFromOverview();
         }
 
         function updateThreadTools() {
@@ -620,6 +1125,65 @@
             refs.jumpLatest.hidden = !state.activeThread || !state.threadMessages.length || isFeedNearBottom();
         }
 
+        function buildFactNode(label, tone) {
+            return createNode("span", "chat-thread-fact" + (tone ? " is-" + tone : ""), label);
+        }
+
+        function renderThreadFacts(thread) {
+            if (!refs.threadFacts) {
+                return;
+            }
+            refs.threadFacts.innerHTML = "";
+            if (!thread) {
+                return;
+            }
+
+            if (thread.thread_type === "direct") {
+                if (thread.target_username) {
+                    refs.threadFacts.appendChild(buildFactNode(buildHandle(thread.target_username), "soft"));
+                }
+                if (thread.presence && thread.presence.status_label) {
+                    refs.threadFacts.appendChild(
+                        buildFactNode(
+                            thread.presence.status_label,
+                            thread.presence.status === "online" ? "online" : "offline"
+                        )
+                    );
+                }
+                refs.threadFacts.appendChild(buildFactNode("2 participants", "soft"));
+                return;
+            }
+
+            if (thread.member_count) {
+                refs.threadFacts.appendChild(
+                    buildFactNode(
+                        thread.member_count + (thread.member_count === 1 ? " member" : " members"),
+                        "soft"
+                    )
+                );
+            }
+            if (thread.thread_type === "channel") {
+                refs.threadFacts.appendChild(buildFactNode("Channel " + getChannelBadge(thread.room_key), "channel"));
+            } else if (thread.thread_type === "role") {
+                refs.threadFacts.appendChild(buildFactNode("Role room", "role"));
+            }
+        }
+
+        function updateComposerAvailability() {
+            var hasThread = !!state.activeThread;
+            refs.compose.classList.toggle("is-disabled", !hasThread);
+            refs.composeInput.disabled = !hasThread || state.sending;
+            refs.fileInput.disabled = !hasThread || state.sending;
+            if (refs.sendButton) {
+                refs.sendButton.disabled = !hasThread || state.sending;
+                refs.sendButton.textContent = state.sending ? "Sending..." : "Send";
+            }
+            if (refs.fileTrigger) {
+                refs.fileTrigger.classList.toggle("is-disabled", !hasThread || state.sending);
+            }
+            refs.composeInput.placeholder = hasThread ? "Write a message..." : "Select a conversation first.";
+        }
+
         function applyThreadHeader(thread) {
             if (!thread) {
                 refs.kicker.textContent = "Conversation";
@@ -627,10 +1191,24 @@
                 refs.subtitle.textContent = "Open a channel, role room, or direct message.";
                 refs.threadAvatar.className = "chat-thread-avatar";
                 refs.threadAvatarText.textContent = "?";
+                if (refs.threadAvatarImage) {
+                    refs.threadAvatarImage.hidden = true;
+                    refs.threadAvatarImage.removeAttribute("src");
+                }
                 refs.threadAvatarStatus.hidden = true;
+                if (refs.profileLink) {
+                    refs.profileLink.hidden = true;
+                    refs.profileLink.removeAttribute("href");
+                }
+                renderThreadFacts(null);
                 refs.composeType.value = "";
                 refs.composeTarget.value = "";
+                refs.composeTitle.textContent = "Message composer";
+                refs.composeHint.textContent = "Select a conversation to start messaging.";
+                refs.composeInput.value = "";
+                autoResizeComposer();
                 setSettingsOpen(false);
+                updateComposerAvailability();
                 updateThreadTools();
                 return;
             }
@@ -640,6 +1218,7 @@
             var kicker = "Conversation";
             var subtitle = thread.description || "";
             var avatarText = "?";
+            var avatarUrl = "";
             var avatarTone = "direct";
             var directStatus = "";
 
@@ -658,51 +1237,144 @@
                 subtitle = joinBits([
                     thread.description,
                     buildHandle(thread.target_username),
-                    thread.presence ? thread.presence.status_label : ""
+                    thread.presence && thread.presence.is_online
+                        ? "Online now"
+                        : (thread.presence && (thread.presence.last_seen_at || thread.presence.last_login_at)
+                            ? "Last active " + formatLastActivity(thread.presence.last_seen_at || thread.presence.last_login_at)
+                            : "")
                 ]);
                 avatarText = getInitials(thread.title, "DM");
+                avatarUrl = thread.avatar_url || "";
                 avatarTone = "direct";
                 directStatus = thread.presence ? thread.presence.status : "";
-                if (thread.presence && !thread.presence.is_online) {
-                    subtitle = joinBits([
-                        subtitle,
-                        thread.presence.last_seen_at ? "Last active " + thread.presence.last_seen_at : "",
-                        !thread.presence.last_seen_at && thread.presence.last_login_at ? "Last login " + thread.presence.last_login_at : ""
-                    ]);
-                }
             }
 
             refs.kicker.textContent = kicker;
             refs.subtitle.textContent = subtitle || "Conversation ready.";
             refs.threadAvatar.className = "chat-thread-avatar chat-thread-avatar-" + avatarTone;
             refs.threadAvatarText.textContent = avatarText;
+            if (refs.threadAvatarImage) {
+                if (avatarUrl) {
+                    refs.threadAvatarImage.src = avatarUrl;
+                    refs.threadAvatarImage.hidden = false;
+                    refs.threadAvatar.classList.add("has-image");
+                } else {
+                    refs.threadAvatarImage.hidden = true;
+                    refs.threadAvatarImage.removeAttribute("src");
+                    refs.threadAvatar.classList.remove("has-image");
+                }
+            }
             refs.threadAvatarStatus.hidden = !directStatus;
             refs.threadAvatarStatus.classList.toggle("is-online", directStatus === "online");
+            if (refs.profileLink) {
+                refs.profileLink.hidden = thread.thread_type !== "direct" || !thread.profile_url;
+                if (thread.thread_type === "direct" && thread.profile_url) {
+                    refs.profileLink.href = thread.profile_url;
+                } else {
+                    refs.profileLink.removeAttribute("href");
+                }
+            }
             refs.channelRoomKey.value = thread.editable ? thread.room_key : "";
             refs.channelTitleInput.value = thread.editable ? (thread.title || "") : "";
             refs.channelDescriptionInput.value = thread.editable ? (thread.description || "") : "";
             refs.composeType.value = thread.thread_type;
             refs.composeTarget.value = thread.thread_type === "direct" ? thread.target_username : thread.room_key;
+            refs.composeTitle.textContent = "Message " + (thread.title || "conversation");
+            refs.composeHint.textContent = isMobileLayout()
+                ? "Tap send to reply. Attachments up to 15 MB."
+                : "Enter to send. Shift+Enter for a line break. Attachments up to 15 MB.";
 
+            renderThreadFacts(thread);
             setSettingsOpen(false);
+            restoreCurrentDraft();
+            updateComposerAvailability();
             syncMobileControls();
             updateThreadTools();
         }
 
-        function buildMessageNode(thread, message) {
-            var showAuthor = thread.thread_type !== "direct" && !message.is_self;
-            var shell = createNode("div", "chat-message-shell" + (message.is_self ? " is-self" : ""));
+        function buildAttachmentNode(attachment) {
+            var attachmentNode = createNode("div", "chat-attachment");
+            var attachmentLink = createNode("a", "chat-attachment-link");
+            attachmentLink.href = attachment.url;
+            attachmentLink.target = "_blank";
+            attachmentLink.rel = "noopener noreferrer";
+
+            var attachmentCopy = createNode("span", "chat-attachment-link-copy");
+            attachmentCopy.appendChild(createNode(
+                "span",
+                "chat-attachment-kind",
+                attachment.kind === "image" ? "Image" : "File"
+            ));
+            attachmentCopy.appendChild(createNode("span", "chat-attachment-name", attachment.name));
+            attachmentLink.appendChild(attachmentCopy);
+            attachmentNode.appendChild(attachmentLink);
+
+            if (attachment.kind === "image") {
+                var imageLink = createNode("a", "chat-attachment-preview");
+                imageLink.href = attachment.url;
+                imageLink.target = "_blank";
+                imageLink.rel = "noopener noreferrer";
+                var image = createNode("img");
+                image.src = attachment.url;
+                image.alt = attachment.name;
+                image.loading = "lazy";
+                imageLink.appendChild(image);
+                attachmentNode.appendChild(imageLink);
+            }
+
+            return attachmentNode;
+        }
+
+        function buildMessageNode(thread, message, options) {
+            var layout = options || {};
+            var showAuthor = thread.thread_type !== "direct" && !message.is_self && !layout.continuesFromPrevious;
+            var shell = createNode(
+                "div",
+                "chat-message-shell" +
+                    (message.is_self ? " is-self" : "") +
+                    (layout.continuesFromPrevious ? " is-continued" : "")
+            );
 
             if (!message.is_self) {
-                shell.appendChild(createNode("span", "chat-message-avatar", getInitials(message.sender_fullname, "U")));
+                var avatarNode;
+                shell.appendChild(
+                    layout.showAvatar
+                        ? (function () {
+                            avatarNode = createNode(message.sender_profile_url ? "a" : "span", "chat-message-avatar");
+                            if (message.sender_profile_url) {
+                                avatarNode.href = message.sender_profile_url;
+                            }
+                            applyAvatarFace(
+                                avatarNode,
+                                message.sender_avatar_url,
+                                message.sender_avatar_initials || getInitials(message.sender_fullname, "U")
+                            );
+                            return avatarNode;
+                        })()
+                        : createNode("span", "chat-message-avatar-spacer")
+                );
             }
 
             var stack = createNode("div", "chat-message-stack");
             if (showAuthor) {
-                stack.appendChild(createNode("div", "chat-message-author-line", message.sender_fullname));
+                if (message.sender_profile_url) {
+                    var authorLink = createNode("a", "chat-message-author-line chat-message-author-link", message.sender_fullname);
+                    authorLink.href = message.sender_profile_url;
+                    stack.appendChild(authorLink);
+                } else {
+                    stack.appendChild(createNode("div", "chat-message-author-line", message.sender_fullname));
+                }
             }
 
-            var bubble = createNode("article", "chat-message" + (message.is_self ? " is-self" : ""));
+            var bubble = createNode(
+                "article",
+                "chat-message" +
+                    (message.is_self ? " is-self" : "") +
+                    (layout.continuesFromPrevious ? " is-continued-top" : "") +
+                    (layout.continuesToNext ? " is-continued-bottom" : "") +
+                    (!message.body_html && message.attachment ? " is-attachment-only" : "")
+            );
+            bubble.title = formatLastActivity(message.created_at) || message.created_at;
 
             if (message.body_html) {
                 var body = createNode("div", "chat-message-body");
@@ -711,30 +1383,17 @@
             }
 
             if (message.attachment) {
-                var attachment = createNode("div", "chat-attachment");
-                var attachmentLink = createNode("a", "chat-attachment-link", message.attachment.name);
-                attachmentLink.href = message.attachment.url;
-                attachmentLink.target = "_blank";
-                attachmentLink.rel = "noopener noreferrer";
-                attachment.appendChild(attachmentLink);
-
-                if (message.attachment.kind === "image") {
-                    var imageLink = createNode("a", "chat-attachment-preview");
-                    imageLink.href = message.attachment.url;
-                    imageLink.target = "_blank";
-                    imageLink.rel = "noopener noreferrer";
-                    var image = createNode("img");
-                    image.src = message.attachment.url;
-                    image.alt = message.attachment.name;
-                    imageLink.appendChild(image);
-                    attachment.appendChild(imageLink);
-                }
-
-                bubble.appendChild(attachment);
+                bubble.appendChild(buildAttachmentNode(message.attachment));
             }
 
             stack.appendChild(bubble);
-            stack.appendChild(createNode("div", "chat-message-stamp" + (message.is_self ? " is-self" : ""), message.created_at));
+            if (!layout.continuesToNext) {
+                stack.appendChild(createNode(
+                    "div",
+                    "chat-message-stamp" + (message.is_self ? " is-self" : ""),
+                    formatTimeOnly(message.created_at)
+                ));
+            }
             shell.appendChild(stack);
             return shell;
         }
@@ -755,7 +1414,11 @@
             }
 
             var lastDateKey = "";
-            state.threadMessages.forEach(function (message) {
+            state.threadMessages.forEach(function (message, index) {
+                var previousMessage = index > 0 ? state.threadMessages[index - 1] : null;
+                var nextMessage = index < state.threadMessages.length - 1 ? state.threadMessages[index + 1] : null;
+                var continuesFromPrevious = canGroupMessages(previousMessage, message);
+                var continuesToNext = canGroupMessages(message, nextMessage);
                 var currentDateKey = getDateKey(message.created_at);
                 if (currentDateKey && currentDateKey !== lastDateKey) {
                     var divider = createNode("div", "chat-date-divider");
@@ -764,15 +1427,21 @@
                     lastDateKey = currentDateKey;
                 }
 
-                refs.feed.appendChild(buildMessageNode(state.activeThread, message));
+                refs.feed.appendChild(buildMessageNode(state.activeThread, message, {
+                    continuesFromPrevious: continuesFromPrevious,
+                    continuesToNext: continuesToNext,
+                    showAvatar: !message.is_self && !continuesToNext
+                }));
             });
 
             syncJumpLatestVisibility();
         }
 
         function renderThreadError(message) {
+            state.activeThread = null;
             state.threadMessages = [];
             state.threadMeta = null;
+            applyThreadHeader(null);
             refs.feed.innerHTML = "";
             refs.feed.appendChild(createNode("div", "chat-empty-state", message || "Unable to load this conversation."));
             refs.messageSummary.textContent = "Conversation unavailable";
@@ -813,9 +1482,17 @@
         }
 
         function clearComposer() {
+            clearCurrentDraft();
             refs.composeInput.value = "";
+            autoResizeComposer();
             refs.fileInput.value = "";
             refs.fileName.textContent = "No file selected";
+            if (refs.filePreview) {
+                refs.filePreview.hidden = true;
+            }
+            if (refs.fileChip) {
+                refs.fileChip.textContent = "No file selected";
+            }
             setComposeStatus("");
         }
 
@@ -830,6 +1507,24 @@
             }
         }
 
+        function updateFilePreview() {
+            var fileName = refs.fileInput.files && refs.fileInput.files.length ? refs.fileInput.files[0].name : "";
+            refs.fileName.textContent = fileName || "No file selected";
+            refs.fileName.hidden = !fileName;
+            if (refs.fileChip) {
+                refs.fileChip.textContent = fileName || "No file selected";
+            }
+            if (refs.filePreview) {
+                refs.filePreview.hidden = !fileName;
+            }
+        }
+
+        function setSending(isSending) {
+            state.sending = !!isSending;
+            refs.compose.classList.toggle("is-sending", state.sending);
+            updateComposerAvailability();
+        }
+
         function loadThread(type, target, options) {
             if (!type || !target) {
                 return Promise.resolve();
@@ -841,6 +1536,13 @@
             var shouldStickToBottom = !!config.scrollToBottom;
             var previousMetrics = null;
 
+            if (!sameThread) {
+                saveCurrentDraft();
+                refs.fileInput.value = "";
+                updateFilePreview();
+                setComposeStatus("");
+            }
+
             if (sameThread && refs.feed) {
                 previousMetrics = {
                     top: refs.feed.scrollTop,
@@ -851,6 +1553,7 @@
             state.activeType = type;
             state.activeTarget = target;
             setActiveTab(getTabForThread(type, config.tab));
+            setSyncState("syncing");
 
             var url = new URL(root.dataset.threadUrl, window.location.origin);
             url.searchParams.set("type", type);
@@ -873,10 +1576,12 @@
                     applyThreadHeader(state.activeThread);
                     updateThreadTools();
                     syncJumpLatestVisibility();
+                    setSyncState("synced");
                     return payload;
                 }
 
                 applyThreadPayload(payload, mode);
+                setPanelMode("chat");
 
                 if (config.switchMobileView && isMobileLayout()) {
                     setMobileView("thread");
@@ -890,11 +1595,13 @@
                     refs.feed.scrollTop = previousMetrics.top;
                 }
 
+                setSyncState("synced");
                 return payload;
             }).catch(function (error) {
                 setSettingsOpen(false);
                 renderThreadError(error.message);
                 setComposeStatus(error.message || "Unable to load this conversation.", "error");
+                setSyncState("error");
                 throw error;
             });
         }
@@ -944,26 +1651,108 @@
         }
 
         function refreshOverview() {
+            if (document.hidden) {
+                return;
+            }
+
             if (state.chatOpen && state.activeType && state.activeTarget) {
                 refreshActiveThread();
                 return;
             }
 
+            setSyncState("syncing");
             fetchJson(root.dataset.bootstrapUrl).then(function (payload) {
                 syncOverview(payload.overview);
+                if (state.chatOpen && !isMobileLayout() && !state.activeType) {
+                    var firstItem = pickDefaultThread(payload.overview || {});
+                    if (firstItem) {
+                        setActiveTab(getTabForThread(firstItem.type, firstItem.tab));
+                        loadThread(firstItem.type, firstItem.target, {
+                            scrollToBottom: true,
+                            tab: firstItem.tab,
+                            switchMobileView: false,
+                            mode: "replace"
+                        }).catch(function () {
+                            return;
+                        });
+                        return;
+                    }
+                }
+                setSyncState("synced");
             }).catch(function () {
+                setSyncState("error");
                 return;
             });
         }
 
         refs.tabButtons.forEach(function (button) {
             button.addEventListener("click", function () {
+                if (button.dataset.chatTab === "channels" || button.dataset.chatTab === "roles") {
+                    setPanelMode("channels");
+                } else if (button.dataset.chatTab === "directs" || button.dataset.chatTab === "users") {
+                    setPanelMode("messages");
+                }
                 setActiveTab(button.dataset.chatTab);
                 if (isMobileLayout()) {
                     setMobileView("browse");
+                    scrollTabListToTop(button.dataset.chatTab);
+                }
+                if (typeof button.blur === "function") {
+                    button.blur();
                 }
             });
         });
+
+        refs.modeButtons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                var mode = button.dataset.chatMode === "channels"
+                    ? "channels"
+                    : (button.dataset.chatMode === "messages" ? "messages" : "chat");
+                setPanelMode(mode);
+                ensureTabForCurrentMode();
+                if (mode !== "chat" && isMobileLayout()) {
+                    setMobileView("browse");
+                }
+                if (mode === "chat" && !state.activeType && state.overview) {
+                    var firstItem = pickDefaultThread(state.overview);
+                    if (firstItem) {
+                        setActiveTab(getTabForThread(firstItem.type, firstItem.tab));
+                        loadThread(firstItem.type, firstItem.target, {
+                            scrollToBottom: true,
+                            tab: firstItem.tab,
+                            switchMobileView: false,
+                            mode: "replace"
+                        }).catch(function () {
+                            return;
+                        });
+                    }
+                }
+            });
+        });
+
+        refs.filterButtons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                state.filterMode = button.dataset.chatFilter || "all";
+                refs.filterButtons.forEach(function (item) {
+                    item.classList.toggle("is-active", item === button);
+                });
+                syncOverview(state.overview || {});
+            });
+        });
+
+        if (refs.chatSearch) {
+            refs.chatSearch.addEventListener("input", function () {
+                state.searchTerm = normalizeSearch(refs.chatSearch.value);
+                syncOverview(state.overview || {});
+            });
+        }
+
+        if (refs.onlineSearch) {
+            refs.onlineSearch.addEventListener("input", function () {
+                state.onlineSearchTerm = normalizeSearch(refs.onlineSearch.value);
+                renderOnlineUsers(state.overview || { users: [] });
+            });
+        }
 
         refs.onlineTrigger.addEventListener("click", function (event) {
             event.stopPropagation();
@@ -985,15 +1774,50 @@
             setChatOpen(false);
         });
 
+        if (refs.refresh) {
+            refs.refresh.addEventListener("click", function () {
+                if (state.chatOpen && state.activeType && state.activeTarget) {
+                    loadThread(state.activeType, state.activeTarget, {
+                        scrollToBottom: false,
+                        tab: state.activeTab,
+                        switchMobileView: false,
+                        mode: "replace"
+                    }).catch(function () {
+                        return;
+                    });
+                    return;
+                }
+                refreshOverview();
+            });
+        }
+
         if (refs.mobileBrowse) {
             refs.mobileBrowse.addEventListener("click", function () {
+                if (state.activeType === "channel" || state.activeType === "role") {
+                    setPanelMode("channels");
+                } else {
+                    setPanelMode("messages");
+                }
+                ensureTabForCurrentMode();
                 setMobileView("browse");
+                if (isMobileLayout() && state.activeTab === "users") {
+                    scrollTabListToTop("users");
+                }
             });
         }
 
         if (refs.mobileBack) {
             refs.mobileBack.addEventListener("click", function () {
+                if (state.activeType === "channel" || state.activeType === "role") {
+                    setPanelMode("channels");
+                } else {
+                    setPanelMode("messages");
+                }
+                ensureTabForCurrentMode();
                 setMobileView("browse");
+                if (isMobileLayout() && state.activeTab === "users") {
+                    scrollTabListToTop("users");
+                }
             });
         }
 
@@ -1026,6 +1850,7 @@
         refs.channelForm.addEventListener("submit", function (event) {
             event.preventDefault();
             var formData = new FormData(refs.channelForm);
+            setSyncState("syncing");
             fetchJson(root.dataset.channelUpdateUrl, {
                 method: "POST",
                 body: formData
@@ -1041,22 +1866,69 @@
                     }).catch(function () {
                         return;
                     });
+                } else {
+                    setSyncState("synced");
                 }
             }).catch(function () {
+                setSyncState("error");
                 return;
             });
         });
 
         refs.fileTrigger.addEventListener("click", function () {
+            if (refs.fileInput.disabled) {
+                return;
+            }
             if (refs.fileTrigger.tagName === "BUTTON") {
                 refs.fileInput.click();
             }
         });
 
         refs.fileInput.addEventListener("change", function () {
-            var fileName = refs.fileInput.files && refs.fileInput.files.length ? refs.fileInput.files[0].name : "";
-            refs.fileName.textContent = fileName || "No file selected";
-            setComposeStatus(fileName ? "Attachment ready to send." : "");
+            var file = refs.fileInput.files && refs.fileInput.files.length ? refs.fileInput.files[0] : null;
+            if (file && file.size > maxAttachmentSizeBytes) {
+                refs.fileInput.value = "";
+                updateFilePreview();
+                setComposeStatus("Attachments must be 15 MB or smaller.", "error");
+                return;
+            }
+            updateFilePreview();
+            setComposeStatus(file ? "Attachment ready to send." : "");
+        });
+
+        if (refs.fileClear) {
+            refs.fileClear.addEventListener("click", function () {
+                refs.fileInput.value = "";
+                updateFilePreview();
+                if (!String(refs.composeInput.value || "").trim()) {
+                    setComposeStatus("");
+                }
+            });
+        }
+
+        refs.composeInput.addEventListener("input", function () {
+            saveCurrentDraft();
+            autoResizeComposer();
+            if (refs.composeStatus.classList.contains("is-error")) {
+                setComposeStatus("");
+            }
+        });
+
+        refs.composeInput.addEventListener("keydown", function (event) {
+            if (isMobileLayout()) {
+                return;
+            }
+            if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                event.preventDefault();
+                if (typeof refs.compose.requestSubmit === "function") {
+                    refs.compose.requestSubmit();
+                } else {
+                    refs.compose.dispatchEvent(new Event("submit", {
+                        bubbles: true,
+                        cancelable: true
+                    }));
+                }
+            }
         });
 
         refs.compose.addEventListener("submit", function (event) {
@@ -1066,8 +1938,21 @@
                 return;
             }
 
+            if (state.sending) {
+                return;
+            }
+
+            var hasMessage = !!String(refs.composeInput.value || "").trim();
+            var hasFile = !!(refs.fileInput.files && refs.fileInput.files.length);
+            if (!hasMessage && !hasFile) {
+                setComposeStatus("Enter a message or attach a file.", "error");
+                return;
+            }
+
             var formData = new FormData(refs.compose);
+            setSending(true);
             setComposeStatus("Sending...", "success");
+            setSyncState("syncing");
             fetchJson(root.dataset.sendUrl, {
                 method: "POST",
                 body: formData
@@ -1082,8 +1967,14 @@
                 }
                 scrollFeedToBottom();
                 setComposeStatus("Message sent.", "success");
+                setSyncState("synced");
             }).catch(function (error) {
                 setComposeStatus((error && error.message) || "Unable to send message or attachment.", "error");
+                setSyncState("error");
+            }).then(function () {
+                setSending(false);
+            }, function () {
+                setSending(false);
             });
         });
 
@@ -1102,6 +1993,7 @@
 
         function handleLayoutChange() {
             syncMobileControls();
+            autoResizeComposer();
             if (!isMobileLayout() && state.chatOpen && !state.activeType && state.overview) {
                 var firstItem = pickDefaultThread(state.overview);
                 if (firstItem) {
@@ -1116,13 +2008,29 @@
                     });
                 }
             }
+            if (state.activeThread) {
+                applyThreadHeader(state.activeThread);
+            }
         }
+
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) {
+                refreshOverview();
+            }
+        });
 
         fetchJson(root.dataset.bootstrapUrl).then(function (payload) {
             syncOverview(payload.overview);
             applyThreadHeader(null);
             syncMobileControls();
+            setPanelMode("messages");
+            ensureTabForCurrentMode();
+            autoResizeComposer();
+            setSyncState("synced");
         }).catch(function () {
+            setPanelMode("messages");
+            ensureTabForCurrentMode();
+            setSyncState("error");
             return;
         });
 
@@ -1133,7 +2041,11 @@
         }
 
         syncMobileControls();
-        state.pollHandle = window.setInterval(refreshOverview, Number(root.dataset.pollMs || 60000));
+        setPanelMode("messages");
+        ensureTabForCurrentMode();
+        autoResizeComposer();
+        renderSyncStatus();
+        state.pollHandle = window.setInterval(refreshOverview, Number(root.dataset.pollMs || 15000));
     }
 
     function init() {

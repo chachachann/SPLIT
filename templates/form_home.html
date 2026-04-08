@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ form.title }}</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        {% set workflow_sidebar_active = 'form_home' %}
+        {% set workflow_sidebar_show_form_home = true %}
+        {% set workflow_sidebar_form_key = form.form_key %}
+        {% include '_workflow_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = form.title %}
+            {% set topbar_subtitle %}{{ form.form_key }} &#8226; {{ fullname }}{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Published form changes go live for future submissions, while your existing requests keep their original version snapshot.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Form Rules</h2>
+                                <p>Quick summary of this workflow before you create a draft.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-card quick-card-form quick-card-tone-{{ form.quick_card_style.tone or 'mint' }}" style="--quick-accent: {{ form.quick_card_style.accent or '#43e493' }}">
+                                <div class="workflow-form-hero">
+                                    <span class="quick-icon quick-icon-form">
+                                        {% if form.quick_icon_type == 'image' and form.quick_icon_value %}
+                                            <img src="{{ url_for('static', filename=form.quick_icon_value) }}" alt="">
+                                        {% else %}
+                                            {{ form.quick_icon_value or form.quick_label[:2] }}
+                                        {% endif %}
+                                    </span>
+                                    <div>
+                                        <strong>{{ form.quick_label }}</strong>
+                                        <div class="workflow-card-meta">{{ form.description or 'No description provided.' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="workflow-field-stack">
+                                <div class="workflow-meta-row">
+                                    <span>Tracking Prefix</span>
+                                    <strong>{{ form.tracking_prefix }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Review Stages</span>
+                                    <strong>{{ form.review_stages|length }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Cancel Allowed</span>
+                                    <strong>{{ 'Yes' if form.allow_cancel else 'No' }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Multiple Active</span>
+                                    <strong>{{ 'Allowed' if form.allow_multiple_active else 'One open request at a time' }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Start New Request</h2>
+                                <p>Create a new draft for this form. If multiple active submissions are disabled, your latest open request will be reopened instead.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <form method="POST" class="workflow-inline-actions">
+                                <button type="submit" class="btn-primary">Create Draft</button>
+                                <a href="{{ url_for('my_requests') }}" class="workflow-action-btn">View All Requests</a>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Your Requests for This Form</h2>
+                                <p>Open a request to continue editing a draft or inspect the latest workflow state.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            {% if submissions %}
+                                <div class="workflow-card-list">
+                                    {% for item in submissions %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ item.tracking_number or ('Draft #' ~ item.id) }}</h3>
+                                                    <div class="workflow-card-meta">Created {{ item.created_at }} &#8226; Updated {{ item.updated_at }}</div>
+                                                </div>
+                                                <span class="workflow-status-pill status-{{ item.status }}">{{ item.status|replace('_', ' ')|title }}</span>
+                                            </div>
+
+                                            <div class="workflow-card-actions">
+                                                {% if item.status == 'draft' %}
+                                                    <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
+                                                {% else %}
+                                                    <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
+                                                {% endif %}
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">You do not have any requests for this form yet.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

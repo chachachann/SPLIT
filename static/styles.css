@@ -433,6 +433,9 @@ html[data-theme="light"] .input-group input:focus {
     width: 100%;
     min-height: 52px;
     margin-top: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid rgba(67, 228, 147, 0.32);
     border-radius: 16px;
     background: linear-gradient(135deg, #43e493, #19ba73);
@@ -441,6 +444,11 @@ html[data-theme="light"] .input-group input:focus {
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+}
+
+.login-btn::before,
+.login-btn::after {
+    content: none;
 }
 
 .login-btn:hover {

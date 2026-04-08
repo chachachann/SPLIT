@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ submission.tracking_number or ('Submission #' ~ submission.id) }}</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        {% set workflow_sidebar_brand = 'Submission' %}
+        {% set workflow_sidebar_show_form_home = true %}
+        {% set workflow_sidebar_form_key = form.form_key %}
+        {% include '_workflow_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = submission.tracking_number or ('Draft #' ~ submission.id) %}
+            {% set topbar_subtitle %}{{ form.title }} &#8226; {{ submission.status|replace('_', ' ')|title }}{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">This page combines submission values, attachments, review steps, comments, and audit history for a single workflow record.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-main-column manager-full-span">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Submission Summary</h2>
+                                <p>Current lifecycle state and available actions for this submission.</p>
+                            </div>
+                            <div class="workflow-card-actions">
+                                {% if can_edit %}
+                                    <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=submission.id) }}">Continue Draft</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-summary-grid">
+                                <div class="workflow-metric">
+                                    <strong>{{ submission.status|replace('_', ' ')|title }}</strong>
+                                    <span>Status</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ submission.current_stage_index + 1 if submission.status == 'pending' else '-' }}</strong>
+                                    <span>Current Stage</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ form.review_stages|length }}</strong>
+                                    <span>Total Stages</span>
+                                </div>
+                            </div>
+
+                            <div class="workflow-meta-grid">
+                                <div class="workflow-meta-row">
+                                    <span>Tracking Number</span>
+                                    <strong>{{ submission.tracking_number or 'Generated on submit' }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Owner</span>
+                                    <strong><a href="{{ submission.owner_profile_url }}">{{ submission.owner_display_name }}</a></strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Submitted</span>
+                                    <strong>{{ submission.submitted_at or 'Not yet submitted' }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Updated</span>
+                                    <strong>{{ submission.updated_at }}</strong>
+                                </div>
+                            </div>
+
+                            {% if submission.reject_reason %}
+                                <div class="workflow-note-box workflow-note-danger">
+                                    <strong>Rejection Reason</strong>
+                                    <p>{{ submission.reject_reason }}</p>
+                                </div>
+                            {% endif %}
+                            {% if submission.cancel_reason %}
+                                <div class="workflow-note-box workflow-note-warning">
+                                    <strong>Cancellation Reason</strong>
+                                    <p>{{ submission.cancel_reason }}</p>
+                                </div>
+                            {% endif %}
+                            {% if submission.acceptance_note %}
+                                <div class="workflow-note-box">
+                                    <strong>Acceptance Note</strong>
+                                    <p>{{ submission.acceptance_note }}</p>
+                                </div>
+                            {% endif %}
+
+                            <div class="workflow-card-actions">
+                                {% if can_cancel %}
+                                    <form method="POST" action="{{ url_for('form_submission_cancel', submission_id=submission.id) }}" class="workflow-inline-form">
+                                        <textarea class="workflow-textarea workflow-textarea-compact" name="reason" placeholder="Cancellation reason" required></textarea>
+                                        <button type="submit" class="workflow-danger-btn">Cancel Submission</button>
+                                    </form>
+                                {% endif %}
+
+                                {% if can_reopen %}
+                                    <form method="POST" action="{{ url_for('form_submission_reopen', submission_id=submission.id) }}">
+                                        <button type="submit" class="workflow-action-btn">Reopen as Draft</button>
+                                    </form>
+                                {% endif %}
+
+                                {% if can_delete_draft %}
+                                    <form method="POST" action="{{ url_for('form_submission_delete_draft', submission_id=submission.id) }}">
+                                        <button type="submit" class="workflow-danger-btn" onclick="return confirm('Delete this draft permanently?');">Delete Draft</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="workflow-detail-grid">
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Field Values</h2>
+                                    <p>Snapshot of the submission data tied to this form version.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="workflow-field-stack">
+                                    {% for field in visible_fields %}
+                                        <div class="workflow-field-block">
+                                            <div class="workflow-field-label">
+                                                <span>{{ field.label }}</span>
+                                                {% if field.required %}
+                                                    <span class="workflow-field-required">*</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if field.type in ['image_upload', 'file_upload'] %}
+                                                <div class="workflow-field-value workflow-field-muted">See attachments below.</div>
+                                            {% elif field.type == 'checkbox' %}
+                                                <div class="workflow-field-value">{{ 'Yes' if submission.data.get(field.key) else 'No' }}</div>
+                                            {% else %}
+                                                <div class="workflow-field-value">{{ submission.data.get(field.key) or 'Not provided' }}</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside class="workflow-sidebar-stack">
+                            <section class="panel">
+                                <div class="panel-header">
+                                    <div class="workflow-panel-copy">
+                                        <h2>Review Stages</h2>
+                                        <p>Active tasks can be acted on here. Future stages remain visible but locked until activated.</p>
+                                    </div>
+                                </div>
+                                <div class="panel-body">
+                                    {% if submission.tasks %}
+                                        <div class="workflow-task-list">
+                                            {% for task in submission.tasks %}
+                                                {% set stage = form.review_stages[task.stage_index] if form.review_stages and task.stage_index < (form.review_stages|length) else none %}
+                                                <div class="workflow-task-item">
+                                                    <strong>{{ stage.name if stage else ('Stage ' ~ (task.stage_index + 1)) }}</strong>
+                                                    <p>{{ stage.mode|title if stage else 'Sequential' }} &#8226; {{ task.reviewer_type|title }}: {{ task.reviewer_value }}</p>
+                                                    <p>Status: {{ task.task_status|title }}{% if task.is_active and task.task_status == 'pending' %} &#8226; Active{% endif %}</p>
+                                                    {% if task.id in actionable_task_ids %}
+                                                        <form method="POST" action="{{ url_for('form_submission_review', submission_id=submission.id) }}" class="workflow-review-form">
+                                                            <input type="hidden" name="task_id" value="{{ task.id }}">
+                                                            <textarea class="workflow-textarea workflow-textarea-compact" name="note" placeholder="Optional approval note. Required if rejecting."></textarea>
+                                                            <div class="workflow-card-actions">
+                                                                <button type="submit" class="btn-primary" name="review_action" value="approve">Approve</button>
+                                                                <button type="submit" class="workflow-danger-btn" name="review_action" value="reject">Reject</button>
+                                                            </div>
+                                                        </form>
+                                                    {% elif task.id in active_task_ids %}
+                                                        <div class="workflow-inline-note">This task is active but not assignable to your current user or role.</div>
+                                                    {% elif task.task_status == 'pending' %}
+                                                        <div class="workflow-inline-note">Read-only until earlier workflow steps finish.</div>
+                                                    {% endif %}
+                                                    {% if task.acted_by_username %}
+                                                        <p>Acted by {{ task.acted_by_display_name or task.acted_by_username }}{% if task.acted_at %} on {{ task.acted_at }}{% endif %}</p>
+                                                    {% endif %}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="workflow-empty">No review tasks have been created yet.</div>
+                                    {% endif %}
+                                </div>
+                            </section>
+                        </aside>
+                    </div>
+
+                    <div class="workflow-detail-grid">
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Comments</h2>
+                                    <p>Shared discussion thread visible to everyone who can see this submission.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                {% if can_comment %}
+                                    <form method="POST" action="{{ url_for('form_submission_comment', submission_id=submission.id) }}" class="workflow-comment-form">
+                                        <textarea class="workflow-textarea" name="comment" placeholder="Add a workflow comment" required></textarea>
+                                        <div class="form-actions">
+                                            <button type="submit" class="btn-secondary">Post Comment</button>
+                                        </div>
+                                    </form>
+                                {% else %}
+                                    <div class="workflow-inline-note">Comments are read-only until your assigned stage becomes active.</div>
+                                {% endif %}
+
+                                {% if submission.comments %}
+                                    <div class="workflow-comment-list">
+                                        {% for comment in submission.comments %}
+                                            <div class="workflow-comment-item">
+                                                <strong><a href="{{ comment.author_profile_url }}">{{ comment.author_display_name }}</a></strong>
+                                                <p>{{ comment.created_at }}</p>
+                                                <p>{{ comment.body }}</p>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="workflow-empty">No comments have been posted yet.</div>
+                                {% endif %}
+                            </div>
+                        </section>
+
+                        <aside class="workflow-sidebar-stack">
+                            <section class="panel">
+                                <div class="panel-header">
+                                    <div class="workflow-panel-copy">
+                                        <h2>Attachments</h2>
+                                        <p>Uploaded files are grouped by field key.</p>
+                                    </div>
+                                </div>
+                                <div class="panel-body">
+                                    {% if file_groups %}
+                                        <div class="workflow-file-list">
+                                            {% for field_key, files in file_groups.items() %}
+                                                <div class="workflow-file-item">
+                                                    <strong>{{ field_key }}</strong>
+                                                    <div class="workflow-field-stack">
+                                                        {% for file in files %}
+                                                            <div class="workflow-file-row">
+                                                                <a href="{{ url_for('static', filename='uploads/forms/submissions/' ~ file.stored_name) }}" target="_blank" rel="noopener noreferrer">{{ file.original_name }}</a>
+                                                                <span>{{ (file.file_size_bytes / 1048576)|round(2) }} MB</span>
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="workflow-empty">No attachments were uploaded for this submission.</div>
+                                    {% endif %}
+                                </div>
+                            </section>
+
+                            <section class="panel">
+                                <div class="panel-header">
+                                    <div class="workflow-panel-copy">
+                                        <h2>Audit Trail</h2>
+                                        <p>Immutable workflow events captured for this submission.</p>
+                                    </div>
+                                </div>
+                                <div class="panel-body">
+                                    {% if submission.audit_entries %}
+                                        <div class="workflow-audit-list">
+                                            {% for item in submission.audit_entries %}
+                                                <div class="workflow-audit-item">
+                                                    <strong>{{ item.event_type }}</strong>
+                                                    <p>{{ item.created_at }} &#8226; {{ item.actor_display_name }}</p>
+                                                    {% if item.payload_json and item.payload_json != '{}' %}
+                                                        <p><code>{{ item.payload_json }}</code></p>
+                                                    {% endif %}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="workflow-empty">No audit events were recorded yet.</div>
+                                    {% endif %}
+                                </div>
+                            </section>
+                        </aside>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

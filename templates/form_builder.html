@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ form.title }} Builder</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    <div class="app-shell">
+        {% set form_admin_sidebar_brand = 'Form Builder' %}
+        {% set form_admin_sidebar_nav_label = 'Builder sections' %}
+        {% set form_admin_sidebar_active = 'forms_manage' %}
+        {% set form_admin_sidebar_back_href = url_for('forms_manage') %}
+        {% set form_admin_sidebar_back_label = 'Back to Form Manager' %}
+        {% include '_form_admin_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = form.title %}
+            {% set topbar_subtitle %}{{ form.form_key }} &#8226; Builder and publishing settings{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Builder edits go live for future submissions while existing submissions stay bound to their current version snapshot.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-main-column manager-full-span">
+                    <form method="POST" enctype="multipart/form-data" class="account-form" data-form-builder>
+                        <input type="hidden" name="schema_json" value="[]">
+                        <input type="hidden" name="review_stages_json" value="[]">
+                        <div class="workflow-builder-error" data-builder-error hidden></div>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Metadata</h2>
+                                    <p>Form identity, publishing state, icon, Quick Access card styling, and submitter rules.</p>
+                                </div>
+                                <div class="workflow-inline-actions">
+                                    <a class="workflow-action-btn" href="{{ url_for('form_home', form_key=form.form_key) if form.status == 'published' else url_for('forms_manage') }}">
+                                        {{ 'Open User View' if form.status == 'published' else 'Back to Manager' }}
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="field-grid">
+                                    <label class="field">
+                                        <span class="field-label">Title</span>
+                                        <input type="text" name="title" value="{{ form.title }}" required>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Quick Label</span>
+                                        <input type="text" name="quick_label" value="{{ form.quick_label }}" required>
+                                    </label>
+                                    <label class="field field-full">
+                                        <span class="field-label">Description</span>
+                                        <textarea class="workflow-textarea" name="description">{{ form.description or '' }}</textarea>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Tracking Prefix</span>
+                                        <input type="text" name="tracking_prefix" value="{{ form.tracking_prefix }}" required>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Status</span>
+                                        <select class="workflow-select" name="status">
+                                            <option value="draft" {% if form.status == 'draft' %}selected{% endif %}>Draft</option>
+                                            <option value="published" {% if form.status == 'published' %}selected{% endif %}>Published</option>
+                                            <option value="archived" {% if form.status == 'archived' %}selected{% endif %}>Archived</option>
+                                        </select>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Icon Type</span>
+                                        <select class="workflow-select" name="quick_icon_type">
+                                            <option value="emoji" {% if form.quick_icon_type == 'emoji' %}selected{% endif %}>Emoji</option>
+                                            <option value="text" {% if form.quick_icon_type == 'text' %}selected{% endif %}>Text</option>
+                                            <option value="image" {% if form.quick_icon_type == 'image' %}selected{% endif %}>Image Upload</option>
+                                        </select>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Icon Value</span>
+                                        <input type="text" name="quick_icon_value" value="{{ form.quick_icon_value or '' }}" placeholder="FM or emoji">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Icon Upload</span>
+                                        <input type="file" name="quick_icon_upload">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Card Accent</span>
+                                        <input type="text" name="card_accent" value="{{ form.quick_card_style.accent or '#43e493' }}">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Card Tone</span>
+                                        <input type="text" name="card_tone" value="{{ form.quick_card_style.tone or 'mint' }}">
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Allow Cancel</span>
+                                        <input type="checkbox" name="allow_cancel" value="1" {% if form.allow_cancel %}checked{% endif %}>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Allow Multiple Active</span>
+                                        <input type="checkbox" name="allow_multiple_active" value="1" {% if form.allow_multiple_active %}checked{% endif %}>
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Access Control</h2>
+                                    <p>Users must match at least one selected role. If specific users are selected, access becomes role AND specific user.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="field-grid">
+                                    <label class="field">
+                                        <span class="field-label">Roles</span>
+                                        <select class="workflow-select" name="access_roles" multiple size="8">
+                                            {% for role in form.available_roles %}
+                                                <option value="{{ role }}" {% if role in form.access_roles %}selected{% endif %}>{{ role }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <span class="workflow-help">Hold Ctrl or Cmd to choose multiple roles.</span>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Specific Users</span>
+                                        <select class="workflow-select" name="access_users" multiple size="8">
+                                            {% for user in form.available_users %}
+                                                <option value="{{ user.username }}" {% if user.username in form.access_users %}selected{% endif %}>{{ user.fullname }} ({{ user.username }})</option>
+                                            {% endfor %}
+                                        </select>
+                                        <span class="workflow-help">Optional restriction layer on top of role access.</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Fields</h2>
+                                    <p>Add fields, required rules, dropdown options, validation bounds, and conditional visibility JSON.</p>
+                                </div>
+                                <button type="button" class="workflow-action-btn" data-add-field>Add Field</button>
+                            </div>
+                            <div class="panel-body">
+                                <div class="workflow-repeater" data-field-list></div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Review Workflow</h2>
+                                    <p>Sequential stages advance reviewer by reviewer. Parallel stages require every reviewer in that stage to approve.</p>
+                                </div>
+                                <button type="button" class="workflow-action-btn" data-add-stage>Add Stage</button>
+                            </div>
+                            <div class="panel-body">
+                                <div class="workflow-repeater" data-stage-list></div>
+                            </div>
+                        </section>
+
+                        <div class="form-actions">
+                            <button type="submit" name="action" value="save-form" class="btn-primary">Save Form</button>
+                            <button type="submit" formaction="{{ url_for('forms_builder', form_key=form.form_key) }}" formmethod="post" name="action" value="delete-form" class="workflow-danger-btn" onclick="return confirm('Delete this form? This is only allowed while it has no submissions.');">Delete Form</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script id="initial-form-schema" type="application/json">{{ form.schema|tojson }}</script>
+    <script id="initial-review-stages" type="application/json">{{ form.review_stages|tojson }}</script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='forms.js') }}"></script>
+</body>
+</html>

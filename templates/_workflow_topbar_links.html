@@ -1,0 +1,16 @@
+<div class="workflow-topbar-links" aria-label="Workflow navigation">
+    <a class="workflow-topbar-link{% if request.endpoint == 'my_requests' %} is-active{% endif %}" href="{{ url_for('my_requests') }}">
+        <span class="workflow-topbar-label workflow-topbar-label-full">My Requests</span>
+        <span class="workflow-topbar-label workflow-topbar-label-compact">Req</span>
+        {% if workflow_counts and workflow_counts.my_requests %}
+            <span class="workflow-topbar-badge">{{ workflow_counts.my_requests }}</span>
+        {% endif %}
+    </a>
+    <a class="workflow-topbar-link{% if request.endpoint == 'review_queue' %} is-active{% endif %}" href="{{ url_for('review_queue') }}">
+        <span class="workflow-topbar-label workflow-topbar-label-full">Review Queue</span>
+        <span class="workflow-topbar-label workflow-topbar-label-compact">Rev</span>
+        {% if workflow_counts and workflow_counts.review_queue %}
+            <span class="workflow-topbar-badge workflow-topbar-badge-alert">{{ workflow_counts.review_queue }}</span>
+        {% endif %}
+    </a>
+</div>
