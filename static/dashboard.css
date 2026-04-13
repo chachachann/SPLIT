@@ -450,6 +450,14 @@ html[data-theme="light"] .logout-btn:hover {
     align-items: start;
 }
 
+.content.content-single-panel {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.content.content-single-panel > .panel:not(.is-hidden) {
+    grid-column: 1 / -1;
+}
+
 .panel-header-actions {
     display: flex;
     align-items: center;

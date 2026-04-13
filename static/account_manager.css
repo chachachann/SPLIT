@@ -156,6 +156,12 @@ html[data-theme="light"] .manager-link-btn:hover {
     align-items: start;
 }
 
+.manager-content:not(:has(> .manager-column)):has(> .manager-main-column),
+.manager-content:not(:has(> .manager-main-column)):has(> .manager-column),
+.manager-content.manager-content-single-column {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .manager-full-span {
     grid-column: 1 / -1;
 }

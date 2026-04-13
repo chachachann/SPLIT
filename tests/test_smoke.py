@@ -4,9 +4,11 @@ import forms_workflow
 import logic
 import main
 from split_app.services.chat_auth import is_chat_favorite
+from split_app.services import content as content_services
 from split_app.routes import auth as auth_routes
 from split_app.routes import chat as chat_routes
 from split_app.routes import workflow as workflow_routes
+from split_app.workflow import templates as workflow_templates
 import split_app.support as support
 
 
@@ -167,6 +169,21 @@ class SmokeTests(unittest.TestCase):
         payload = response.get_json()
         self.assertFalse(payload["ok"])
         self.assertIn("cannot favorite yourself", payload["message"].lower())
+
+    def test_create_marquee_item_rejects_duplicate_active_message(self):
+        unique_message = f"codex-marquee-{logic.timestamp_now()}"
+        ok, _ = content_services.create_marquee_item(unique_message)
+        self.assertTrue(ok)
+
+        duplicate_ok, duplicate_message = content_services.create_marquee_item(unique_message)
+        self.assertFalse(duplicate_ok)
+        self.assertIn("already exists", duplicate_message.lower())
+
+    def test_normalize_card_accent_accepts_short_and_long_hex(self):
+        self.assertEqual(workflow_templates._normalize_card_accent("#43E493"), "#43e493")
+        self.assertEqual(workflow_templates._normalize_card_accent("43E493"), "#43e493")
+        self.assertEqual(workflow_templates._normalize_card_accent("#4e9"), "#44ee99")
+        self.assertEqual(workflow_templates._normalize_card_accent("bad-value"), "#43e493")
 
 
 if __name__ == "__main__":

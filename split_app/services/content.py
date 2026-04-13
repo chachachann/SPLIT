@@ -20,6 +20,23 @@ def get_marquee_styles():
     return [{"key": key, "label": label} for key, label in MARQUEE_STYLE_CHOICES]
 
 
+def _find_active_marquee_item_by_message(cursor, message, exclude_item_id=None):
+    query = """
+        SELECT id
+        FROM marquee_items
+        WHERE is_archived = 0 AND lower(message) = lower(?)
+    """
+    params = [message]
+
+    if exclude_item_id is not None:
+        query += " AND id != ?"
+        params.append(exclude_item_id)
+
+    query += " LIMIT 1"
+    cursor.execute(query, tuple(params))
+    return cursor.fetchone()
+
+
 def get_marquee_settings():
     connection = connect_db()
     cursor = connection.cursor()
@@ -77,6 +94,9 @@ def create_marquee_item(message):
 
     connection = connect_db()
     cursor = connection.cursor()
+    if _find_active_marquee_item_by_message(cursor, message):
+        connection.close()
+        return False, "That marquee message already exists."
     cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM marquee_items")
     next_order = cursor.fetchone()["next_order"]
     cursor.execute(
@@ -98,6 +118,9 @@ def update_marquee_item(item_id, message):
 
     connection = connect_db()
     cursor = connection.cursor()
+    if _find_active_marquee_item_by_message(cursor, message, exclude_item_id=item_id):
+        connection.close()
+        return False, "That marquee message already exists."
     cursor.execute(
         """
         UPDATE marquee_items

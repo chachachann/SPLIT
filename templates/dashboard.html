@@ -41,6 +41,8 @@
                 </div>
             </div>
 
+            <div class="sidebar-header-separator" aria-hidden="true"></div>
+
             <nav class="menu" aria-label="Dashboard sections">
                 <button
                     type="button"
@@ -215,6 +217,15 @@
     <script src="{{ url_for('static', filename='chat.js') }}"></script>
     <script src="{{ url_for('static', filename='forms.js') }}"></script>
     <script>
+        function syncDashboardLayout() {
+            const content = document.querySelector(".content");
+            if (!content) return;
+
+            const visiblePanels = Array.from(content.querySelectorAll(":scope > .panel"))
+                .filter((panel) => !panel.classList.contains("is-hidden"));
+            content.classList.toggle("content-single-panel", visiblePanels.length <= 1);
+        }
+
         function setPanelState(panelId, visible) {
             const panel = document.getElementById(panelId);
             const button = document.querySelector(`.menu-btn[data-panel="${panelId}"]`);
@@ -227,6 +238,8 @@
                 button.classList.toggle("active", visible);
                 button.setAttribute("aria-pressed", visible ? "true" : "false");
             }
+
+            syncDashboardLayout();
         }
 
         function togglePanel(panelId) {
@@ -247,6 +260,7 @@
 
         window.addEventListener("DOMContentLoaded", function () {
             setPanelState("news-panel", true);
+            syncDashboardLayout();
 
             function syncNotificationVisualState(card, isRead) {
                 card.setAttribute("data-notification-read", isRead ? "true" : "false");

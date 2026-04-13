@@ -17,11 +17,11 @@
         item.innerHTML = [
             '<div class="workflow-repeater-head">',
             '<div class="workflow-repeater-title">Field</div>',
-            '<button type="button" class="workflow-danger-btn" data-remove-item>Remove</button>',
+            '<button type="button" class="workflow-danger-btn" data-remove-item title="Remove this field from the form schema.">Remove</button>',
             "</div>",
             '<div class="field-grid">',
             '<label class="field"><span class="field-label">Label</span><input type="text" data-field-prop="label"></label>',
-            '<label class="field"><span class="field-label">Key</span><input type="text" data-field-prop="key"></label>',
+            '<label class="field" title="Stable unique field identifier used in saved data, conditional logic, and future integrations."><span class="field-label">Key</span><input type="text" data-field-prop="key" placeholder="applicant_name" title="Stable unique field identifier used in saved data, conditional logic, and future integrations."></label>',
             '<label class="field"><span class="field-label">Type</span><select class="workflow-select" data-field-prop="type">',
             '<option value="short_text">Short Text</option>',
             '<option value="long_text">Long Text</option>',
@@ -37,9 +37,9 @@
             '<label class="field field-full"><span class="field-label">Dropdown Options</span><textarea class="workflow-textarea" data-field-prop="options_text" placeholder="One option per line"></textarea></label>',
             '<label class="field"><span class="field-label">Min Length / Value</span><input type="text" data-field-prop="min_value"></label>',
             '<label class="field"><span class="field-label">Max Length / Value</span><input type="text" data-field-prop="max_value"></label>',
-            '<label class="field field-full"><span class="field-label">Conditional Logic JSON</span><textarea class="workflow-json" data-field-prop="conditional_logic_text" placeholder=\'{"logic":"all","rules":[{"field":"sample","op":"equals","value":"yes"}]}\'></textarea></label>',
-            '<label class="field"><span class="field-label">Required</span><input type="checkbox" data-field-prop="required"></label>',
-            '<label class="field"><span class="field-label">Hide After Promotion</span><input type="checkbox" data-field-prop="hide_on_promotion"></label>',
+            '<label class="field field-full" title="JSON rules that control when this field is visible."><span class="field-label">Conditional Logic JSON</span><textarea class="workflow-json" data-field-prop="conditional_logic_text" placeholder=\'{"logic":"all","rules":[{"field":"sample","op":"equals","value":"yes"}]}\' title="JSON rules that control when this field is visible."></textarea></label>',
+            '<label class="field workflow-bool-field" title="Require this field before the form can be submitted."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="required"><span class="field-label">Required</span></span></label>',
+            '<label class="field workflow-bool-field" title="Hide this field after the submission is promoted to later workflow stages."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="hide_on_promotion"><span class="field-label">Hide After Promotion</span></span></label>',
             "</div>"
         ].join("");
 
@@ -63,7 +63,7 @@
         row.innerHTML = [
             '<div class="workflow-repeater-head">',
             '<div class="workflow-repeater-title">Reviewer</div>',
-            '<button type="button" class="workflow-danger-btn" data-remove-item>Remove</button>',
+            '<button type="button" class="workflow-danger-btn" data-remove-item title="Remove this reviewer from the current stage.">Remove</button>',
             "</div>",
             '<div class="field-grid">',
             '<label class="field"><span class="field-label">Type</span><select class="workflow-select" data-reviewer-prop="type"><option value="user">User</option><option value="role">Role</option></select></label>',
@@ -81,14 +81,14 @@
         item.innerHTML = [
             '<div class="workflow-repeater-head">',
             '<div class="workflow-repeater-title">Review Stage</div>',
-            '<button type="button" class="workflow-danger-btn" data-remove-item>Remove</button>',
+            '<button type="button" class="workflow-danger-btn" data-remove-item title="Remove this review stage and every reviewer inside it.">Remove</button>',
             "</div>",
             '<div class="field-grid">',
             '<label class="field"><span class="field-label">Stage Name</span><input type="text" data-stage-prop="name"></label>',
             '<label class="field"><span class="field-label">Mode</span><select class="workflow-select" data-stage-prop="mode"><option value="sequential">Sequential</option><option value="parallel">Parallel</option></select></label>',
             "</div>",
             '<div class="workflow-repeater" data-reviewer-list></div>',
-            '<button type="button" class="workflow-action-btn" data-add-reviewer>Add Reviewer</button>'
+            '<button type="button" class="workflow-action-btn" data-add-reviewer title="Add another reviewer to this stage.">Add Reviewer</button>'
         ].join("");
 
         item.querySelector('[data-stage-prop="name"]').value = stage.name || "";
@@ -169,6 +169,30 @@
         };
     }
 
+    function normalizeHexColor(value) {
+        var trimmed = String(value || "").trim();
+        if (!trimmed) {
+            return "";
+        }
+        if (/^#[0-9a-f]{6}$/i.test(trimmed)) {
+            return trimmed.toLowerCase();
+        }
+        if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
+            return "#" + trimmed.slice(1).split("").map(function (char) {
+                return char + char;
+            }).join("").toLowerCase();
+        }
+        if (/^[0-9a-f]{6}$/i.test(trimmed)) {
+            return ("#" + trimmed).toLowerCase();
+        }
+        if (/^[0-9a-f]{3}$/i.test(trimmed)) {
+            return "#" + trimmed.split("").map(function (char) {
+                return char + char;
+            }).join("").toLowerCase();
+        }
+        return "";
+    }
+
     function setupBuilder() {
         var root = document.querySelector("[data-form-builder]");
         if (!root) {
@@ -181,6 +205,118 @@
         var errorBox = root.querySelector("[data-builder-error]");
         var initialSchema = parseJsonScript("initial-form-schema") || [];
         var initialStages = parseJsonScript("initial-review-stages") || [];
+
+        function bindColorControls() {
+            Array.prototype.slice.call(root.querySelectorAll("[data-color-control]")).forEach(function (control) {
+                var picker = control.querySelector("[data-color-picker]");
+                var textInput = control.querySelector("[data-color-text]");
+                var swatch = control.querySelector("[data-color-swatch]");
+                if (!picker || !textInput) {
+                    return;
+                }
+
+                function syncSwatch(color) {
+                    if (swatch) {
+                        swatch.style.setProperty("--workflow-color-swatch", color);
+                    }
+                }
+
+                function syncFromPicker() {
+                    textInput.value = picker.value;
+                    syncSwatch(picker.value);
+                }
+
+                function syncFromText(commit) {
+                    var normalized = normalizeHexColor(textInput.value);
+                    if (normalized) {
+                        picker.value = normalized;
+                        syncSwatch(normalized);
+                        if (commit) {
+                            textInput.value = normalized;
+                        }
+                        return;
+                    }
+                    if (commit) {
+                        textInput.value = picker.value || "#43e493";
+                        syncSwatch(textInput.value);
+                    }
+                }
+
+                var initialColor = normalizeHexColor(textInput.value) || normalizeHexColor(picker.value) || "#43e493";
+                picker.value = initialColor;
+                textInput.value = initialColor;
+                syncSwatch(initialColor);
+
+                picker.addEventListener("input", syncFromPicker);
+                textInput.addEventListener("input", function () {
+                    syncFromText(false);
+                });
+                textInput.addEventListener("blur", function () {
+                    syncFromText(true);
+                });
+            });
+        }
+
+        function bindBulkSelectToggles() {
+            Array.prototype.slice.call(root.querySelectorAll("[data-select-toggle]")).forEach(function (button) {
+                var targetName = button.getAttribute("data-target-select");
+                var select = root.querySelector('[data-bulk-select="' + targetName + '"]');
+                if (!select) {
+                    return;
+                }
+
+                function refreshButton() {
+                    var options = Array.prototype.slice.call(select.options);
+                    var selectedCount = options.filter(function (option) {
+                        return option.selected;
+                    }).length;
+                    var allSelected = !!options.length && selectedCount === options.length;
+                    button.textContent = allSelected ? "Unselect All" : "Select All";
+                    button.setAttribute("aria-pressed", allSelected ? "true" : "false");
+                    button.disabled = !options.length;
+                }
+
+                button.addEventListener("click", function () {
+                    var options = Array.prototype.slice.call(select.options);
+                    var allSelected = !!options.length && options.every(function (option) {
+                        return option.selected;
+                    });
+                    options.forEach(function (option) {
+                        option.selected = !allSelected;
+                    });
+                    select.dispatchEvent(new Event("change", { bubbles: true }));
+                    select.focus();
+                    refreshButton();
+                });
+
+                select.addEventListener("change", refreshButton);
+                refreshButton();
+            });
+        }
+
+        function bindUploadTriggers() {
+            Array.prototype.slice.call(root.querySelectorAll("[data-upload-trigger]")).forEach(function (trigger) {
+                var key = trigger.getAttribute("data-upload-trigger");
+                var input = root.querySelector('[data-upload-input="' + key + '"]');
+                var selected = root.querySelector('[data-upload-selected="' + key + '"]');
+                if (!input) {
+                    return;
+                }
+
+                function syncSelectedText() {
+                    var fileName = input.files && input.files.length ? input.files[0].name : "";
+                    if (selected) {
+                        selected.textContent = fileName || "No file selected";
+                    }
+                }
+
+                trigger.addEventListener("click", function () {
+                    input.click();
+                });
+                input.addEventListener("change", syncSelectedText);
+                syncSelectedText();
+            });
+        }
 
         function syncHiddenFields() {
             var errors = [];
@@ -234,6 +370,9 @@
             stageList.appendChild(buildStageRow({ mode: "sequential", reviewers: [{ type: "role", value: "Admin" }] }));
         }
 
+        bindColorControls();
+        bindBulkSelectToggles();
+        bindUploadTriggers();
         bindRepeater(fieldList, false);
         bindRepeater(stageList, true);
 

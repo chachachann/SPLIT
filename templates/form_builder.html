@@ -78,7 +78,11 @@
                                     <p>Form identity, publishing state, icon, Quick Access card styling, and submitter rules.</p>
                                 </div>
                                 <div class="workflow-inline-actions">
-                                    <a class="workflow-action-btn" href="{{ url_for('form_home', form_key=form.form_key) if form.status == 'published' else url_for('forms_manage') }}">
+                                    <a
+                                        class="workflow-action-btn"
+                                        href="{{ url_for('form_home', form_key=form.form_key) if form.status == 'published' else url_for('forms_manage') }}"
+                                        title="{{ 'Open the published form as an end user.' if form.status == 'published' else 'Return to the form listing.' }}"
+                                    >
                                         {{ 'Open User View' if form.status == 'published' else 'Back to Manager' }}
                                     </a>
                                 </div>
@@ -119,27 +123,62 @@
                                     </label>
                                     <label class="field">
                                         <span class="field-label">Icon Value</span>
-                                        <input type="text" name="quick_icon_value" value="{{ form.quick_icon_value or '' }}" placeholder="FM or emoji">
+                                        <input type="text" name="quick_icon_value" value="{{ form.quick_icon_value or '' }}" placeholder="FM or emoji" title="For text or emoji icons, enter the exact characters shown on the Quick Access card.">
                                     </label>
-                                    <label class="field">
+                                    <div class="field">
                                         <span class="field-label">Icon Upload</span>
-                                        <input type="file" name="quick_icon_upload">
-                                    </label>
-                                    <label class="field">
+                                        <input
+                                            id="quick-icon-upload-input"
+                                            class="workflow-upload-input"
+                                            type="file"
+                                            name="quick_icon_upload"
+                                            title="Upload an image to use as the Quick Access card icon."
+                                            data-upload-input="quick_icon_upload"
+                                        >
+                                        <button type="button" class="workflow-action-btn workflow-upload-trigger" data-upload-trigger="quick_icon_upload" title="Upload an image to use as the Quick Access card icon.">Upload Image</button>
+                                        <span class="workflow-upload-selected" data-upload-selected="quick_icon_upload">No file selected</span>
+                                    </div>
+                                    <div class="field">
                                         <span class="field-label">Card Accent</span>
-                                        <input type="text" name="card_accent" value="{{ form.quick_card_style.accent or '#43e493' }}">
-                                    </label>
+                                        <div class="workflow-color-control" data-color-control>
+                                            <label class="workflow-color-trigger" title="Pick the highlight color used by this Quick Access card.">
+                                                <input
+                                                    type="color"
+                                                    class="workflow-color-picker-input"
+                                                    value="{{ form.quick_card_style.accent or '#43e493' }}"
+                                                    data-color-picker
+                                                    aria-label="Pick the quick card accent color"
+                                                    title="Pick the highlight color used by this Quick Access card."
+                                                >
+                                                <span class="workflow-color-swatch" data-color-swatch aria-hidden="true"></span>
+                                                <span class="workflow-color-trigger-icon" aria-hidden="true">&#127912;</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="card_accent"
+                                                value="{{ form.quick_card_style.accent or '#43e493' }}"
+                                                placeholder="#43e493"
+                                                data-color-text
+                                                title="Hex color used for the Quick Access card highlight."
+                                            >
+                                        </div>
+                                        <span class="workflow-help">Used as the dashboard card highlight color.</span>
+                                    </div>
                                     <label class="field">
                                         <span class="field-label">Card Tone</span>
-                                        <input type="text" name="card_tone" value="{{ form.quick_card_style.tone or 'mint' }}">
+                                        <input type="text" name="card_tone" value="{{ form.quick_card_style.tone or 'mint' }}" title="Short style label used for card theming variants.">
                                     </label>
-                                    <label class="field">
-                                        <span class="field-label">Allow Cancel</span>
-                                        <input type="checkbox" name="allow_cancel" value="1" {% if form.allow_cancel %}checked{% endif %}>
+                                    <label class="field workflow-bool-field" title="Allow users to cancel their own active submission when applicable.">
+                                        <span class="workflow-checkbox-inline">
+                                            <input type="checkbox" name="allow_cancel" value="1" {% if form.allow_cancel %}checked{% endif %}>
+                                            <span class="field-label">Allow Cancel</span>
+                                        </span>
                                     </label>
-                                    <label class="field">
-                                        <span class="field-label">Allow Multiple Active</span>
-                                        <input type="checkbox" name="allow_multiple_active" value="1" {% if form.allow_multiple_active %}checked{% endif %}>
+                                    <label class="field workflow-bool-field" title="Allow a user to keep more than one active submission for this form at the same time.">
+                                        <span class="workflow-checkbox-inline">
+                                            <input type="checkbox" name="allow_multiple_active" value="1" {% if form.allow_multiple_active %}checked{% endif %}>
+                                            <span class="field-label">Allow Multiple Active</span>
+                                        </span>
                                     </label>
                                 </div>
                             </div>
@@ -154,24 +193,37 @@
                             </div>
                             <div class="panel-body">
                                 <div class="field-grid">
-                                    <label class="field">
-                                        <span class="field-label">Roles</span>
-                                        <select class="workflow-select" name="access_roles" multiple size="8">
+                                    <div class="field">
+                                        <span class="workflow-field-head">
+                                            <span class="field-label">Roles</span>
+                                            <button
+                                                type="button"
+                                                class="workflow-muted-btn workflow-select-toggle"
+                                                data-select-toggle
+                                                data-target-select="access_roles"
+                                                title="Select every role, or clear the current role selection."
+                                            >
+                                                Select All
+                                            </button>
+                                        </span>
+                                        <select class="workflow-select" name="access_roles" multiple size="8" data-bulk-select="access_roles">
                                             {% for role in form.available_roles %}
                                                 <option value="{{ role }}" {% if role in form.access_roles %}selected{% endif %}>{{ role }}</option>
                                             {% endfor %}
                                         </select>
-                                        <span class="workflow-help">Hold Ctrl or Cmd to choose multiple roles.</span>
-                                    </label>
-                                    <label class="field">
-                                        <span class="field-label">Specific Users</span>
-                                        <select class="workflow-select" name="access_users" multiple size="8">
+                                        <span class="workflow-help">Use the toggle to select or clear all roles. Ctrl or Cmd still works for manual multi-select.</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="workflow-field-head">
+                                            <span class="field-label">Specific Users</span>
+                                        </span>
+                                        <select class="workflow-select" name="access_users" multiple size="8" data-bulk-select="access_users">
                                             {% for user in form.available_users %}
                                                 <option value="{{ user.username }}" {% if user.username in form.access_users %}selected{% endif %}>{{ user.fullname }} ({{ user.username }})</option>
                                             {% endfor %}
                                         </select>
                                         <span class="workflow-help">Optional restriction layer on top of role access.</span>
-                                    </label>
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -182,7 +234,7 @@
                                     <h2>Fields</h2>
                                     <p>Add fields, required rules, dropdown options, validation bounds, and conditional visibility JSON.</p>
                                 </div>
-                                <button type="button" class="workflow-action-btn" data-add-field>Add Field</button>
+                                <button type="button" class="workflow-action-btn" data-add-field title="Add a new form field definition.">Add Field</button>
                             </div>
                             <div class="panel-body">
                                 <div class="workflow-repeater" data-field-list></div>
@@ -195,7 +247,7 @@
                                     <h2>Review Workflow</h2>
                                     <p>Sequential stages advance reviewer by reviewer. Parallel stages require every reviewer in that stage to approve.</p>
                                 </div>
-                                <button type="button" class="workflow-action-btn" data-add-stage>Add Stage</button>
+                                <button type="button" class="workflow-action-btn" data-add-stage title="Add another review stage to the workflow.">Add Stage</button>
                             </div>
                             <div class="panel-body">
                                 <div class="workflow-repeater" data-stage-list></div>
@@ -203,8 +255,8 @@
                         </section>
 
                         <div class="form-actions">
-                            <button type="submit" name="action" value="save-form" class="btn-primary">Save Form</button>
-                            <button type="submit" formaction="{{ url_for('forms_builder', form_key=form.form_key) }}" formmethod="post" name="action" value="delete-form" class="workflow-danger-btn" onclick="return confirm('Delete this form? This is only allowed while it has no submissions.');">Delete Form</button>
+                            <button type="submit" name="action" value="save-form" class="btn-primary" title="Save metadata, access rules, fields, and review workflow changes.">Save Form</button>
+                            <button type="submit" formaction="{{ url_for('forms_builder', form_key=form.form_key) }}" formmethod="post" name="action" value="delete-form" class="workflow-danger-btn" title="Delete this form while it still has no submissions." onclick="return confirm('Delete this form? This is only allowed while it has no submissions.');">Delete Form</button>
                         </div>
                     </form>
                 </div>

@@ -94,6 +94,19 @@ def _parse_review_stages(stages_json):
     return parsed
 
 
+def _normalize_card_accent(value, fallback="#43e493"):
+    clean = str(value or "").strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", clean):
+        return clean.lower()
+    if re.fullmatch(r"#[0-9a-fA-F]{3}", clean):
+        return "#" + "".join(char * 2 for char in clean[1:]).lower()
+    if re.fullmatch(r"[0-9a-fA-F]{6}", clean):
+        return ("#" + clean).lower()
+    if re.fullmatch(r"[0-9a-fA-F]{3}", clean):
+        return "#" + "".join(char * 2 for char in clean).lower()
+    return fallback
+
+
 def _form_row_to_dict(connection, row, include_version=True):
     item = dict(row)
     item["access_roles"] = _json_loads(item.get("access_roles_json"), [])
@@ -360,7 +373,7 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
             icon_value = "FM"
 
     card_style = {
-        "accent": str(payload.get("card_accent") or "#43e493").strip() or "#43e493",
+        "accent": _normalize_card_accent(payload.get("card_accent")),
         "tone": str(payload.get("card_tone") or "mint").strip() or "mint",
     }
     allow_cancel = bool(payload.get("allow_cancel"))

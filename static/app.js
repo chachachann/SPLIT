@@ -93,6 +93,17 @@
         document.body.classList.toggle("sidebar-open", open);
     }
 
+    function setSidebarCollapsed(collapsed) {
+        const sidebar = document.getElementById("sidebar");
+
+        if (!sidebar || isMobile()) {
+            return;
+        }
+
+        sidebar.classList.toggle("collapsed", !!collapsed);
+        document.body.classList.toggle("sidebar-collapsed", !!collapsed);
+    }
+
     function toggleSidebar() {
         const sidebar = document.getElementById("sidebar");
 
@@ -105,8 +116,7 @@
             return;
         }
 
-        sidebar.classList.toggle("collapsed");
-        document.body.classList.toggle("sidebar-collapsed", sidebar.classList.contains("collapsed"));
+        setSidebarCollapsed(!sidebar.classList.contains("collapsed"));
     }
 
     function openSidebar() {
@@ -125,6 +135,7 @@
         const sidebar = document.getElementById("sidebar");
 
         if (!sidebar) {
+            syncManagerLayouts();
             return;
         }
 
@@ -134,6 +145,8 @@
         } else {
             setMobileSidebar(false);
         }
+
+        syncManagerLayouts();
     }
 
     function handleStorage(event) {
@@ -142,9 +155,30 @@
         }
     }
 
+    function hasVisibleChildren(element) {
+        return Array.from(element.children).some((child) => {
+            if (child.hidden) {
+                return false;
+            }
+
+            return window.getComputedStyle(child).display !== "none";
+        });
+    }
+
+    function syncManagerLayouts() {
+        document.querySelectorAll(".manager-content").forEach((container) => {
+            const contentColumns = Array.from(
+                container.querySelectorAll(":scope > .manager-column, :scope > .manager-main-column")
+            ).filter((column) => hasVisibleChildren(column));
+
+            container.classList.toggle("manager-content-single-column", contentColumns.length <= 1);
+        });
+    }
+
     function init() {
         applyTheme(document.documentElement.dataset.theme || readSavedTheme());
         bindThemeControls();
+        syncManagerLayouts();
         handleResize();
         window.addEventListener("resize", handleResize);
         window.addEventListener("storage", handleStorage);
@@ -156,6 +190,8 @@
         handleResize,
         isMobile,
         openSidebar,
+        syncManagerLayouts,
+        setSidebarCollapsed,
         toggleSidebar,
         toggleTheme
     };
