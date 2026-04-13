@@ -532,6 +532,28 @@ body.chat-overlay-open {
     text-decoration: none;
 }
 
+.online-user-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.online-user-action-button {
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    font: inherit;
+    padding: 7px 10px;
+}
+
+.online-user-action-button.is-active {
+    border-color: rgba(201, 151, 41, 0.28);
+    background: rgba(201, 151, 41, 0.12);
+    color: #f5d98c;
+}
+
 .online-panel-list {
     align-content: start;
 }
@@ -701,6 +723,11 @@ body.chat-overlay-open {
     overscroll-behavior: contain;
 }
 
+.chat-list-item-shell {
+    display: grid;
+    gap: 8px;
+}
+
 .chat-list-item {
     width: 100%;
     display: block;
@@ -715,6 +742,11 @@ body.chat-overlay-open {
         border-color 0.22s ease,
         background 0.22s ease,
         transform 0.22s ease;
+}
+
+.chat-list-item.is-favorite {
+    border-color: rgba(201, 151, 41, 0.22);
+    box-shadow: inset 0 0 0 1px rgba(201, 151, 41, 0.08);
 }
 
 .chat-list-item:hover {
@@ -820,6 +852,45 @@ body.chat-overlay-open {
     flex: 1 1 auto;
     display: grid;
     gap: 6px;
+}
+
+.chat-list-item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.chat-list-item-action {
+    min-width: 34px;
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    transition:
+        border-color 0.22s ease,
+        background 0.22s ease,
+        color 0.22s ease,
+        transform 0.22s ease;
+}
+
+.chat-list-item-action:hover {
+    transform: translateY(-1px);
+    color: var(--text);
+    border-color: rgba(67, 228, 147, 0.22);
+}
+
+.chat-list-item-action-favorite.is-active {
+    border-color: rgba(201, 151, 41, 0.28);
+    background: rgba(201, 151, 41, 0.12);
+    color: #f5d98c;
 }
 
 .chat-list-item-eyebrow {

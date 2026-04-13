@@ -111,6 +111,30 @@
                                         <span>{{ profile_context.profile.designation }}</span>
                                     {% endif %}
                                 </div>
+                                <div class="profile-public-actions">
+                                    <button
+                                        type="button"
+                                        class="chat-inline-btn"
+                                        data-chat-open-user="{{ profile_context.profile.username }}"
+                                    >
+                                        Message
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="chat-inline-btn chat-inline-btn-muted"
+                                        data-chat-favorite-toggle="{{ profile_context.profile.username }}"
+                                        data-chat-favorite-active="{{ 'true' if profile_is_favorite else 'false' }}"
+                                    >
+                                        {{ 'Remove Favorite' if profile_is_favorite else 'Add to Favorites' }}
+                                    </button>
+                                </div>
+                                <div class="profile-chat-search" data-profile-chat-search>
+                                    <label class="chat-search-field">
+                                        <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
+                                        <input type="search" data-profile-chat-search-input placeholder="Find another user to message">
+                                    </label>
+                                    <div class="profile-chat-search-results" data-profile-chat-search-results hidden></div>
+                                </div>
                             </div>
                         </div>
 

@@ -753,9 +753,68 @@
             ].join(" "));
         }
 
+        function getSearchRank(item, term) {
+            var searchTerm = normalizeSearch(term);
+            if (!searchTerm) {
+                return 0;
+            }
+
+            var username = normalizeSearch(item.target_username || item.username);
+            var primaryName = normalizeSearch(item.title || item.fullname || item.display_name);
+            var secondaryName = normalizeSearch(item.fullname || item.display_name || item.title);
+            var designation = normalizeSearch(item.description || item.designation || "");
+            var combined = getSearchText(item);
+            var compactTerm = searchTerm.replace(/\s+/g, "");
+            var compactCombined = combined.replace(/\s+/g, "");
+            var tokens = searchTerm.split(/\s+/).filter(Boolean);
+
+            if (username && username === searchTerm) {
+                return 0;
+            }
+            if (primaryName && primaryName === searchTerm) {
+                return 1;
+            }
+            if (secondaryName && secondaryName === searchTerm) {
+                return 2;
+            }
+            if (username && username.indexOf(searchTerm) !== -1) {
+                return 10 + username.indexOf(searchTerm);
+            }
+            if (primaryName && primaryName.indexOf(searchTerm) !== -1) {
+                return 30 + primaryName.indexOf(searchTerm);
+            }
+            if (secondaryName && secondaryName.indexOf(searchTerm) !== -1) {
+                return 40 + secondaryName.indexOf(searchTerm);
+            }
+            if (designation && designation.indexOf(searchTerm) !== -1) {
+                return 60 + designation.indexOf(searchTerm);
+            }
+            if (compactTerm && compactCombined.indexOf(compactTerm) !== -1) {
+                return 80 + compactCombined.indexOf(compactTerm);
+            }
+            if (tokens.length && tokens.every(function (token) { return combined.indexOf(token) !== -1; })) {
+                return 120 + combined.indexOf(tokens[0]);
+            }
+            return -1;
+        }
+
+        function sortSearchItems(items, term) {
+            return (items || []).slice().sort(function (left, right) {
+                var leftRank = getSearchRank(left, term);
+                var rightRank = getSearchRank(right, term);
+                if (leftRank !== rightRank) {
+                    return leftRank - rightRank;
+                }
+                if (!!left.is_favorite !== !!right.is_favorite) {
+                    return left.is_favorite ? -1 : 1;
+                }
+                return getSearchText(left).localeCompare(getSearchText(right));
+            });
+        }
+
         function filterItems(items, tabName) {
-            return (items || []).filter(function (item) {
-                if (state.searchTerm && getSearchText(item).indexOf(state.searchTerm) === -1) {
+            var filteredItems = (items || []).filter(function (item) {
+                if (state.searchTerm && getSearchRank(item, state.searchTerm) < 0) {
                     return false;
                 }
                 if (state.filterMode === "unread" && tabName !== "users") {
@@ -763,6 +822,12 @@
                 }
                 return true;
             });
+
+            if (state.searchTerm) {
+                return sortSearchItems(filteredItems, state.searchTerm);
+            }
+
+            return filteredItems;
         }
 
         function formatPreviewLine(item) {
@@ -779,12 +844,17 @@
         }
 
         function buildListItem(config) {
+            var shell = createNode("div", "chat-list-item-shell");
             var button = createNode("button", "chat-list-item");
+            var actions = null;
             button.type = "button";
             button.dataset.chatType = config.type;
             button.dataset.chatTarget = config.target;
             if (isItemActive(config.type, config.target)) {
                 button.classList.add("is-active");
+            }
+            if (config.isFavorite) {
+                button.classList.add("is-favorite");
             }
 
             var main = createNode("div", "chat-list-item-main");
@@ -826,6 +896,25 @@
 
             main.appendChild(copy);
             button.appendChild(main);
+            if (config.actions && config.actions.length) {
+                actions = createNode("div", "chat-list-item-actions");
+                config.actions.forEach(function (action) {
+                    var actionButton = createNode(
+                        "button",
+                        "chat-list-item-action" + (action.className ? " " + action.className : ""),
+                        action.label
+                    );
+                    actionButton.type = "button";
+                    actionButton.title = action.title || action.label;
+                    actionButton.setAttribute("aria-label", action.title || action.label);
+                    actionButton.addEventListener("click", function (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        action.onClick();
+                    });
+                    actions.appendChild(actionButton);
+                });
+            }
             button.addEventListener("click", function () {
                 if (typeof button.blur === "function") {
                     button.blur();
@@ -842,7 +931,155 @@
                     return;
                 });
             });
-            return button;
+            shell.appendChild(button);
+            if (actions) {
+                shell.appendChild(actions);
+            }
+            return shell;
+        }
+
+        function updateFavoriteButtonLabel(button, isActive) {
+            if (!button) {
+                return;
+            }
+            button.dataset.chatFavoriteActive = isActive ? "true" : "false";
+            if (button.classList.contains("online-user-action-button")) {
+                button.textContent = isActive ? "★ Favorite" : "☆ Favorite";
+                button.classList.toggle("is-active", isActive);
+                return;
+            }
+            if (button.classList.contains("chat-list-item-action-favorite")) {
+                button.textContent = isActive ? "★" : "☆";
+                button.classList.toggle("is-active", isActive);
+                return;
+            }
+            button.textContent = isActive ? "Remove Favorite" : "Add to Favorites";
+        }
+
+        function syncProfileFavoriteButtons() {
+            var favoriteUsernames = {};
+            ((state.overview && state.overview.favorites) || []).forEach(function (item) {
+                favoriteUsernames[String(item.username || "").toLowerCase()] = true;
+            });
+
+            Array.prototype.slice.call(document.querySelectorAll("[data-chat-favorite-toggle]")).forEach(function (button) {
+                var targetUsername = String(button.getAttribute("data-chat-favorite-toggle") || "").trim().toLowerCase();
+                updateFavoriteButtonLabel(button, !!favoriteUsernames[targetUsername]);
+            });
+        }
+
+        function sendFavoriteToggle(username, shouldFavorite) {
+            var favoriteToggleUrl = root.dataset.favoriteToggleUrl;
+            if (!favoriteToggleUrl) {
+                return Promise.reject(new Error("Favorite toggle is unavailable."));
+            }
+            var formData = new FormData();
+            formData.append("username", username);
+            formData.append("state", shouldFavorite ? "on" : "off");
+            return fetchJson(favoriteToggleUrl, {
+                method: "POST",
+                body: formData
+            }).then(function (payload) {
+                syncOverview(payload.overview || {});
+                return payload;
+            });
+        }
+
+        function sendFavoriteMove(username, direction) {
+            var favoriteMoveUrl = root.dataset.favoriteMoveUrl;
+            if (!favoriteMoveUrl) {
+                return Promise.reject(new Error("Favorite ordering is unavailable."));
+            }
+            var formData = new FormData();
+            formData.append("username", username);
+            formData.append("direction", direction);
+            return fetchJson(favoriteMoveUrl, {
+                method: "POST",
+                body: formData
+            }).then(function (payload) {
+                syncOverview(payload.overview || {});
+                return payload;
+            });
+        }
+
+        function toggleFavorite(username, shouldFavorite, triggerButton) {
+            if (!username) {
+                return Promise.resolve();
+            }
+            if (triggerButton) {
+                triggerButton.disabled = true;
+            }
+            return sendFavoriteToggle(username, shouldFavorite)
+                .then(function (payload) {
+                    updateFavoriteButtonLabel(triggerButton, shouldFavorite);
+                    setComposeStatus(payload.message || "", "success");
+                    return payload;
+                })
+                .catch(function (error) {
+                    setComposeStatus(error.message, "error");
+                    throw error;
+                })
+                .finally(function () {
+                    if (triggerButton) {
+                        triggerButton.disabled = false;
+                    }
+                });
+        }
+
+        function buildFavoriteActions(item, tabName) {
+            if (!item || !item.username && !item.target_username) {
+                return [];
+            }
+            var username = item.target_username || item.username;
+            var actions = [
+                {
+                    label: item.is_favorite ? "★" : "☆",
+                    title: item.is_favorite ? "Remove from favorites" : "Add to favorites",
+                    className: "chat-list-item-action-favorite" + (item.is_favorite ? " is-active" : ""),
+                    onClick: function () {
+                        toggleFavorite(username, !item.is_favorite).catch(function () {
+                            return;
+                        });
+                    }
+                }
+            ];
+            if (item.is_favorite && (tabName === "directs" || tabName === "users")) {
+                actions.push({
+                    label: "↑",
+                    title: "Move favorite up",
+                    onClick: function () {
+                        sendFavoriteMove(username, "up").catch(function (error) {
+                            setComposeStatus(error.message, "error");
+                        });
+                    }
+                });
+                actions.push({
+                    label: "↓",
+                    title: "Move favorite down",
+                    onClick: function () {
+                        sendFavoriteMove(username, "down").catch(function (error) {
+                            setComposeStatus(error.message, "error");
+                        });
+                    }
+                });
+            }
+            return actions;
+        }
+
+        function openDirectConversation(username, preferredTab) {
+            if (!username) {
+                return Promise.resolve();
+            }
+            setOnlineOpen(false);
+            setChatOpen(true);
+            setPanelMode("chat");
+            setActiveTab(preferredTab || "directs");
+            return loadThread("direct", username, {
+                scrollToBottom: true,
+                tab: preferredTab || "directs",
+                switchMobileView: true,
+                mode: "replace"
+            });
         }
 
         function renderList(container, items, builder, emptyLabel) {
@@ -857,27 +1094,33 @@
         }
 
         function renderOnlineUsers(overview) {
-            var onlineUsers = (overview.users || []).filter(function (item) {
+            var directoryUsers = overview.users || [];
+            var onlineUsers = directoryUsers.filter(function (item) {
                 return item.presence === "online";
             });
             var totalOnline = onlineUsers.length;
             if (state.onlineSearchTerm) {
-                onlineUsers = onlineUsers.filter(function (item) {
-                    return normalizeSearch([item.fullname, item.designation, item.username].join(" ")).indexOf(state.onlineSearchTerm) !== -1;
-                });
+                onlineUsers = sortSearchItems(
+                    directoryUsers.filter(function (item) {
+                        return getSearchRank(item, state.onlineSearchTerm) >= 0;
+                    }),
+                    state.onlineSearchTerm
+                );
             }
             updateOnlineBadge(totalOnline);
-            if (state.onlineSearchTerm && refs.onlineSummary) {
-                refs.onlineSummary.textContent = totalOnline === onlineUsers.length
-                    ? (totalOnline === 1 ? "1 online now" : totalOnline + " online now")
-                    : onlineUsers.length + " match" + (onlineUsers.length === 1 ? "" : "es") + " from " + totalOnline + " online";
+            if (refs.onlineSummary) {
+                if (state.onlineSearchTerm) {
+                    refs.onlineSummary.textContent = onlineUsers.length + " match" + (onlineUsers.length === 1 ? "" : "es") + " across all users";
+                } else {
+                    refs.onlineSummary.textContent = totalOnline === 1 ? "1 online" : totalOnline + " online";
+                }
             }
             refs.onlineList.innerHTML = "";
             if (!onlineUsers.length) {
                 refs.onlineList.appendChild(createNode(
                     "div",
                     "chat-empty-state chat-empty-state-compact",
-                    state.onlineSearchTerm ? "No online users match your search." : "No online users right now."
+                    state.onlineSearchTerm ? "No users match your search." : "No online users right now."
                 ));
                 return;
             }
@@ -889,11 +1132,20 @@
 
                 var avatar = createNode("span", "chat-list-item-avatar chat-list-item-avatar-person");
                 applyAvatarFace(avatar, user.avatar_url, user.avatar_initials || getInitials(user.fullname, "U"));
-                avatar.appendChild(createNode("span", "chat-list-item-avatar-status is-online"));
+                avatar.appendChild(createNode("span", "chat-list-item-avatar-status" + (user.presence === "online" ? " is-online" : "")));
 
                 var copy = createNode("div", "online-user-copy");
                 copy.appendChild(createNode("strong", "", user.fullname));
-                copy.appendChild(createNode("span", "", buildHandle(user.username) || "Currently online"));
+                copy.appendChild(createNode(
+                    "span",
+                    "",
+                    joinBits([
+                        buildHandle(user.username),
+                        user.presence === "online"
+                            ? "Online now"
+                            : "Last active " + (formatLastActivity(user.last_seen_at || user.last_login_at) || "Not available")
+                    ])
+                ));
 
                 button.appendChild(avatar);
                 button.appendChild(copy);
@@ -901,26 +1153,99 @@
                     if (typeof button.blur === "function") {
                         button.blur();
                     }
-                    setOnlineOpen(false);
-                    setChatOpen(true);
-                    setPanelMode("chat");
-                    setActiveTab("directs");
-                    loadThread("direct", user.username, {
-                        scrollToBottom: true,
-                        tab: "directs",
-                        switchMobileView: true,
-                        mode: "replace"
-                    }).catch(function () {
+                    openDirectConversation(user.username, "directs").catch(function () {
                         return;
                     });
                 });
                 card.appendChild(button);
+                var actions = createNode("div", "online-user-actions");
+                var favoriteButton = createNode(
+                    "button",
+                    "online-user-action online-user-action-button" + (user.is_favorite ? " is-active" : ""),
+                    user.is_favorite ? "★ Favorite" : "☆ Favorite"
+                );
+                favoriteButton.type = "button";
+                favoriteButton.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleFavorite(user.username, !user.is_favorite, favoriteButton).then(function () {
+                        favoriteButton.classList.toggle("is-active", !user.is_favorite);
+                    }).catch(function () {
+                        return;
+                    });
+                });
+                actions.appendChild(favoriteButton);
                 if (user.profile_url) {
                     var profileLink = createNode("a", "online-user-action", "Profile");
                     profileLink.href = user.profile_url;
-                    card.appendChild(profileLink);
+                    actions.appendChild(profileLink);
                 }
+                card.appendChild(actions);
                 refs.onlineList.appendChild(card);
+            });
+        }
+
+        function renderProfileSearchPanels() {
+            var searchPanels = Array.prototype.slice.call(document.querySelectorAll("[data-profile-chat-search]"));
+            if (!searchPanels.length) {
+                return;
+            }
+
+            searchPanels.forEach(function (panel) {
+                var input = panel.querySelector("[data-profile-chat-search-input]");
+                var results = panel.querySelector("[data-profile-chat-search-results]");
+                if (!input || !results) {
+                    return;
+                }
+
+                var term = normalizeSearch(input.value);
+                results.innerHTML = "";
+                if (!term) {
+                    results.hidden = true;
+                    return;
+                }
+
+                var matches = sortSearchItems(
+                    (state.overview && state.overview.users || []).filter(function (item) {
+                        return getSearchRank(item, term) >= 0;
+                    }),
+                    term
+                ).slice(0, 8);
+
+                results.hidden = !matches.length;
+                if (!matches.length) {
+                    results.appendChild(createNode("div", "chat-empty-state chat-empty-state-compact", "No users match your search."));
+                    results.hidden = false;
+                    return;
+                }
+
+                matches.forEach(function (item) {
+                    var row = createNode("div", "profile-chat-search-row");
+                    var identity = createNode("button", "profile-chat-search-user");
+                    identity.type = "button";
+                    identity.appendChild(createNode("strong", "", item.fullname));
+                    identity.appendChild(createNode("span", "", joinBits([buildHandle(item.username), item.designation])));
+                    identity.addEventListener("click", function () {
+                        openDirectConversation(item.username, "directs").catch(function (error) {
+                            setComposeStatus(error.message, "error");
+                        });
+                    });
+                    row.appendChild(identity);
+
+                    var favoriteButton = createNode(
+                        "button",
+                        "chat-list-item-action chat-list-item-action-favorite" + (item.is_favorite ? " is-active" : ""),
+                        item.is_favorite ? "★" : "☆"
+                    );
+                    favoriteButton.type = "button";
+                    favoriteButton.addEventListener("click", function () {
+                        toggleFavorite(item.username, !item.is_favorite, favoriteButton).catch(function () {
+                            return;
+                        });
+                    });
+                    row.appendChild(favoriteButton);
+                    results.appendChild(row);
+                });
             });
         }
 
@@ -1007,6 +1332,8 @@
             updateStatCards(state.overview);
             updateTabCounts(state.overview);
             renderOnlineUsers(state.overview);
+            syncProfileFavoriteButtons();
+            renderProfileSearchPanels();
 
             renderList(refs.channelList, filterItems(state.overview.channels, "channels"), function (item) {
                 return buildListItem({
@@ -1053,12 +1380,17 @@
                     meta: item.presence === "online" ? "Online" : "Offline",
                     metaTone: item.presence || "offline",
                     status: item.presence,
-                    eyebrow: item.presence === "online"
-                        ? "Online now"
-                        : "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "Not available"),
+                    eyebrow: joinBits([
+                        item.is_favorite ? "Pinned favorite" : "",
+                        item.presence === "online"
+                            ? "Online now"
+                            : "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "Not available")
+                    ]),
                     avatarText: getInitials(item.title, "DM"),
                     avatarUrl: item.avatar_url,
-                    avatarTone: "direct"
+                    avatarTone: "direct",
+                    isFavorite: item.is_favorite,
+                    actions: buildFavoriteActions(item, "directs")
                 });
             }, getEmptyListLabel("directs"));
 
@@ -1077,10 +1409,12 @@
                     meta: item.presence_label || "Offline",
                     metaTone: item.presence || "offline",
                     status: item.presence,
-                    eyebrow: "Start a direct chat",
+                    eyebrow: item.is_favorite ? "Pinned favorite" : "Start a direct chat",
                     avatarText: getInitials(item.fullname, "U"),
                     avatarUrl: item.avatar_url,
-                    avatarTone: "person"
+                    avatarTone: "person",
+                    isFavorite: item.is_favorite,
+                    actions: buildFavoriteActions(item, "users")
                 });
             }, getEmptyListLabel("users"));
 
@@ -1754,6 +2088,12 @@
             });
         }
 
+        Array.prototype.slice.call(document.querySelectorAll("[data-profile-chat-search-input]")).forEach(function (input) {
+            input.addEventListener("input", function () {
+                renderProfileSearchPanels();
+            });
+        });
+
         refs.onlineTrigger.addEventListener("click", function (event) {
             event.stopPropagation();
             setOnlineOpen(!state.onlineOpen);
@@ -2016,6 +2356,27 @@
         document.addEventListener("visibilitychange", function () {
             if (!document.hidden) {
                 refreshOverview();
+            }
+        });
+
+        document.addEventListener("click", function (event) {
+            var openTrigger = event.target.closest("[data-chat-open-user]");
+            if (openTrigger) {
+                event.preventDefault();
+                openDirectConversation(openTrigger.getAttribute("data-chat-open-user"), "directs").catch(function (error) {
+                    setComposeStatus(error.message, "error");
+                });
+                return;
+            }
+
+            var favoriteTrigger = event.target.closest("[data-chat-favorite-toggle]");
+            if (favoriteTrigger) {
+                event.preventDefault();
+                var targetUsername = favoriteTrigger.getAttribute("data-chat-favorite-toggle");
+                var shouldFavorite = favoriteTrigger.getAttribute("data-chat-favorite-active") !== "true";
+                toggleFavorite(targetUsername, shouldFavorite, favoriteTrigger).catch(function () {
+                    return;
+                });
             }
         });
 

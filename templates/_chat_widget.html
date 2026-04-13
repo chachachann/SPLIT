@@ -1,10 +1,13 @@
 <div
     class="chat-widget"
     data-chat-widget
+    data-current-username="{{ username }}"
     data-bootstrap-url="{{ url_for('chat_bootstrap') }}"
     data-thread-url="{{ url_for('chat_thread') }}"
     data-send-url="{{ url_for('chat_send') }}"
     data-channel-update-url="{{ url_for('chat_channel_update') }}"
+    data-favorite-toggle-url="{{ url_for('chat_favorite_toggle') }}"
+    data-favorite-move-url="{{ url_for('chat_favorite_move') }}"
     data-poll-ms="15000"
 >
     <div class="chat-toolbar">
@@ -24,17 +27,17 @@
     <section class="online-panel" data-online-panel aria-hidden="true">
         <div class="online-panel-header">
             <div class="online-panel-copy">
-                <strong>Online Users</strong>
+                <strong>People</strong>
                 <span data-online-summary>0 online</span>
             </div>
 
-            <button type="button" class="chat-close-btn online-close-btn" data-online-close aria-label="Close online users">&times;</button>
+            <button type="button" class="chat-close-btn online-close-btn" data-online-close aria-label="Close people panel">&times;</button>
         </div>
 
         <div class="online-panel-tools">
             <label class="chat-search-field chat-search-field-online">
                 <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
-                <input type="search" data-online-search placeholder="Search online users">
+                <input type="search" data-online-search placeholder="Search users by name, role, or @username">
             </label>
         </div>
 

@@ -663,3 +663,48 @@ html[data-theme="light"] .profile-status-pill.status-rejected {
         align-items: flex-start;
     }
 }
+
+.profile-public-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.profile-chat-search {
+    margin-top: 14px;
+    display: grid;
+    gap: 10px;
+}
+
+.profile-chat-search-results {
+    display: grid;
+    gap: 8px;
+}
+
+.profile-chat-search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-chat-search-user {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+
+.profile-chat-search-user span {
+    color: var(--muted);
+    font-size: 12px;
+}
