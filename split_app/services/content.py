@@ -14,6 +14,7 @@ from split_app.services.core import (
     normalize_role_names,
     timestamp_now,
 )
+from split_app.services.validation import validate_http_url
 
 
 def get_marquee_styles():
@@ -396,6 +397,9 @@ def create_notification(title, message, target_role, style_key, link_url="", act
 
     if not title or not message:
         return False, "Notification title and message are required."
+    ok, validation_message = validate_http_url(link_url, allow_blank=True)
+    if not ok:
+        return False, validation_message
 
     if not target_roles:
         target_roles = ["All"]

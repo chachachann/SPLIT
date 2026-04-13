@@ -1,4 +1,4 @@
-from flask import redirect, render_template, request, session, url_for
+from flask import current_app, redirect, render_template, request, session, url_for
 
 from split_app.services.chat_auth import (
     create_remember_me_token,
@@ -32,6 +32,7 @@ def login():
                     max_age=get_remember_me_days() * 24 * 60 * 60,
                     httponly=True,
                     samesite="Lax",
+                    secure=bool(current_app.config.get("SESSION_COOKIE_SECURE")),
                 )
             else:
                 existing_remember_cookie = request.cookies.get(get_remember_cookie_name())

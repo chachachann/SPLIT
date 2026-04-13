@@ -12,10 +12,12 @@ from logic import (
     save_profile_privacy,
     submit_password_change_request,
 )
+from split_app.services.chat_auth import delete_remember_me_token
 from split_app.services.chat_auth import is_chat_favorite
 from split_app.support import (
     get_combined_workflow_counts,
     get_current_roles,
+    get_remember_cookie_name,
     get_topbar_notifications,
     refresh_user_session_identity,
 )
@@ -118,6 +120,23 @@ def user_profile_view(username):
 
 
 def review_profile_password_request(request_id):
+    owner_username = ""
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT u.username
+        FROM password_change_requests r
+        INNER JOIN users u ON u.id = r.requester_user_id
+        WHERE r.id = ?
+        """,
+        (request_id,),
+    )
+    owner_row = cursor.fetchone()
+    connection.close()
+    if owner_row:
+        owner_username = (owner_row["username"] or "").strip()
+
     ok, message = review_password_change_request(
         request_id,
         session.get("user"),
@@ -126,4 +145,11 @@ def review_profile_password_request(request_id):
         request.form.get("rejection_note"),
     )
     flash(message, "success" if ok else "error")
-    return redirect(url_for("review_queue"))
+    response = redirect(url_for("review_queue"))
+    if ok and owner_username and owner_username.casefold() == (session.get("user") or "").casefold():
+        refresh_user_session_identity(owner_username)
+        remember_cookie = request.cookies.get(get_remember_cookie_name())
+        if remember_cookie:
+            delete_remember_me_token(remember_cookie)
+            response.delete_cookie(get_remember_cookie_name())
+    return response

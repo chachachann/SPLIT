@@ -233,7 +233,7 @@ button {
     padding: 18px 14px;
     background: linear-gradient(180deg, rgba(10, 18, 14, 0.98), rgba(13, 23, 18, 0.92));
     border-right: 1px solid var(--line);
-    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.25);
+    box-shadow: 3px 0 12px rgba(0, 0, 0, 0.16);
     transition:
         width 0.28s ease,
         flex-basis 0.28s ease,
@@ -246,7 +246,7 @@ button {
 
 html[data-theme="light"] .sidebar {
     background: linear-gradient(180deg, rgba(249, 246, 235, 0.97), rgba(237, 244, 237, 0.94));
-    box-shadow: 10px 0 34px rgba(90, 102, 88, 0.12);
+    box-shadow: 3px 0 12px rgba(90, 102, 88, 0.08);
 }
 
 .sidebar.collapsed {
@@ -260,7 +260,33 @@ html[data-theme="light"] .sidebar {
     align-items: center;
     gap: 12px;
     min-height: 44px;
-    margin-bottom: 18px;
+    margin-bottom: 10px;
+}
+
+.sidebar-header-separator {
+    position: relative;
+    height: 1px;
+    margin: 0 4px 14px;
+    background: linear-gradient(
+        90deg,
+        rgba(126, 179, 144, 0),
+        rgba(126, 179, 144, 0.22) 18%,
+        rgba(126, 179, 144, 0.28) 50%,
+        rgba(126, 179, 144, 0.22) 82%,
+        rgba(126, 179, 144, 0)
+    );
+}
+
+.sidebar-header-separator::after {
+    content: "";
+    position: absolute;
+    left: 18%;
+    right: 18%;
+    top: -6px;
+    height: 12px;
+    background: radial-gradient(circle, rgba(67, 228, 147, 0.12), transparent 68%);
+    opacity: 0.65;
+    pointer-events: none;
 }
 
 .burger {
@@ -303,6 +329,21 @@ html[data-theme="light"] .mobile-menu-btn:hover {
         0 0 16px rgba(23, 138, 88, 0.10);
 }
 
+html[data-theme="light"] .sidebar-header-separator {
+    background: linear-gradient(
+        90deg,
+        rgba(43, 83, 64, 0),
+        rgba(43, 83, 64, 0.12) 18%,
+        rgba(201, 151, 41, 0.18) 50%,
+        rgba(43, 83, 64, 0.12) 82%,
+        rgba(43, 83, 64, 0)
+    );
+}
+
+html[data-theme="light"] .sidebar-header-separator::after {
+    background: radial-gradient(circle, rgba(201, 151, 41, 0.12), transparent 68%);
+}
+
 .brand {
     display: flex;
     align-items: center;
@@ -321,6 +362,14 @@ html[data-theme="light"] .mobile-menu-btn:hover {
     display: none;
 }
 
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-header-separator {
+    margin: 2px 10px 14px;
+}
+
 .menu {
     flex: 1 1 auto;
     min-height: 0;
@@ -328,8 +377,8 @@ html[data-theme="light"] .mobile-menu-btn:hover {
     flex-direction: column;
     gap: 10px;
     overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 2px;
+    overflow-x: visible;
+    padding-right: 6px;
 }
 
 .menu-btn {
@@ -337,6 +386,7 @@ html[data-theme="light"] .mobile-menu-btn:hover {
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
     min-height: 48px;
     padding: 12px 16px;
     margin: 0;

@@ -46,6 +46,7 @@ def _parse_field_schema(schema_json):
                 "label": label,
                 "type": field_type,
                 "help_text": str(raw_field.get("help_text") or "").strip(),
+                "placeholder": str(raw_field.get("placeholder") or "").strip(),
                 "required": bool(raw_field.get("required")),
                 "default_value": raw_field.get("default_value"),
                 "validation": validation,

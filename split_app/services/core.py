@@ -7,12 +7,13 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash
 
 
-DB_PATH = r"C:\SPLIT\db\database.db"
-NEWS_IMAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads", "news")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+DB_PATH = os.environ.get("SPLIT_DB_PATH", r"C:\SPLIT\db\database.db")
+NEWS_IMAGE_DIR = os.path.join(BASE_DIR, "static", "uploads", "news")
 NEWS_IMAGE_WEB_PATH = "uploads/news"
-CHAT_ATTACHMENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads", "chat")
+CHAT_ATTACHMENT_DIR = os.path.join(BASE_DIR, "static", "uploads", "chat")
 CHAT_ATTACHMENT_WEB_PATH = "uploads/chat"
-PROFILE_IMAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads", "profiles")
+PROFILE_IMAGE_DIR = os.path.join(BASE_DIR, "static", "uploads", "profiles")
 PROFILE_IMAGE_WEB_PATH = "uploads/profiles"
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 ALLOWED_PROFILE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -36,11 +37,11 @@ ALLOWED_CHAT_ATTACHMENT_EXTENSIONS = {
     ".zip",
     ".rar",
 }
-REMEMBER_ME_DAYS = 7
+REMEMBER_ME_DAYS = int(os.environ.get("SPLIT_REMEMBER_DAYS", "7"))
 CHAT_PRESENCE_WINDOW_SECONDS = 150
 CHAT_CHANNEL_COUNT = 10
-MAX_CHAT_ATTACHMENT_SIZE_BYTES = 15 * 1024 * 1024
-MAX_PROFILE_IMAGE_SIZE_BYTES = 50 * 1024 * 1024
+MAX_CHAT_ATTACHMENT_SIZE_BYTES = int(os.environ.get("SPLIT_MAX_CHAT_ATTACHMENT_BYTES", str(15 * 1024 * 1024)))
+MAX_PROFILE_IMAGE_SIZE_BYTES = int(os.environ.get("SPLIT_MAX_PROFILE_IMAGE_BYTES", str(50 * 1024 * 1024)))
 DEFAULT_ROLES = (
     ("SuperAdmin", 1),
     ("Admin", 0),

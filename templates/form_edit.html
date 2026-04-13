@@ -98,16 +98,19 @@
                                             {% endif %}
 
                                             {% if field.type == 'short_text' %}
-                                                <input id="field__{{ field.key }}" type="text" name="field__{{ field.key }}" value="{{ current_value }}">
+                                                <input id="field__{{ field.key }}" type="text" name="field__{{ field.key }}" value="{{ current_value }}" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}>
                                             {% elif field.type == 'long_text' %}
-                                                <textarea id="field__{{ field.key }}" class="workflow-textarea" name="field__{{ field.key }}">{{ current_value }}</textarea>
+                                                <textarea id="field__{{ field.key }}" class="workflow-textarea" name="field__{{ field.key }}" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}>{{ current_value }}</textarea>
                                             {% elif field.type == 'number' %}
-                                                <input id="field__{{ field.key }}" type="number" name="field__{{ field.key }}" value="{{ current_value }}">
-                                            {% elif field.type == 'date' %}
-                                                <input id="field__{{ field.key }}" type="date" name="field__{{ field.key }}" value="{{ current_value }}">
+                                                <input id="field__{{ field.key }}" type="number" name="field__{{ field.key }}" value="{{ current_value }}" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}>
+                                            {% elif field.type in ['date', 'calendar'] %}
+                                                <div class="workflow-date-input">
+                                                    <input id="field__{{ field.key }}" type="date" name="field__{{ field.key }}" value="{{ current_value }}">
+                                                    <button type="button" class="workflow-action-btn workflow-calendar-trigger" data-calendar-trigger="field__{{ field.key }}">Open Calendar</button>
+                                                </div>
                                             {% elif field.type == 'dropdown' %}
                                                 <select id="field__{{ field.key }}" class="workflow-select" name="field__{{ field.key }}">
-                                                    <option value="">Select an option</option>
+                                                    <option value="">{{ field.placeholder or 'Select an option' }}</option>
                                                     {% for option in field.options %}
                                                         <option value="{{ option }}" {% if option == current_value %}selected{% endif %}>{{ option }}</option>
                                                     {% endfor %}
@@ -172,7 +175,7 @@
                                         </div>
                                         <div class="workflow-meta-row">
                                             <span>Version</span>
-                                            <strong>v{{ form.current_version.version_number if form.current_version else 1 }}</strong>
+                                            <strong>v{{ schema_version.version_number if schema_version else 1 }}</strong>
                                         </div>
                                         <div class="workflow-meta-row">
                                             <span>Updated</span>

@@ -9,6 +9,8 @@ from split_app.routes.chat import (
     chat_channel_update,
     chat_favorite_move,
     chat_favorite_toggle,
+    chat_message_delete,
+    chat_message_update,
     chat_send,
     chat_thread,
 )
@@ -20,6 +22,7 @@ from split_app.routes.workflow import (
     form_autosave_submission,
     form_edit_submission,
     form_home,
+    form_preview,
     form_submission_cancel,
     form_submission_comment,
     form_submission_delete_draft,
@@ -52,12 +55,15 @@ app.add_url_rule("/notifications/action", endpoint="notification_action", view_f
 app.add_url_rule("/chat/bootstrap", endpoint="chat_bootstrap", view_func=login_required(chat_bootstrap), methods=["GET"])
 app.add_url_rule("/chat/thread", endpoint="chat_thread", view_func=login_required(chat_thread), methods=["GET"])
 app.add_url_rule("/chat/send", endpoint="chat_send", view_func=login_required(chat_send), methods=["POST"])
-app.add_url_rule("/chat/channel/update", endpoint="chat_channel_update", view_func=login_required(chat_channel_update), methods=["POST"])
+app.add_url_rule("/chat/channel/update", endpoint="chat_channel_update", view_func=admin_or_developer_required(chat_channel_update), methods=["POST"])
+app.add_url_rule("/chat/message/update", endpoint="chat_message_update", view_func=login_required(chat_message_update), methods=["POST"])
+app.add_url_rule("/chat/message/delete", endpoint="chat_message_delete", view_func=login_required(chat_message_delete), methods=["POST"])
 app.add_url_rule("/chat/favorites/toggle", endpoint="chat_favorite_toggle", view_func=login_required(chat_favorite_toggle), methods=["POST"])
 app.add_url_rule("/chat/favorites/move", endpoint="chat_favorite_move", view_func=login_required(chat_favorite_move), methods=["POST"])
 app.add_url_rule("/settings", endpoint="settings", view_func=admin_or_developer_required(settings), methods=["GET", "POST"])
 app.add_url_rule("/forms/manage", endpoint="forms_manage", view_func=admin_or_developer_required(forms_manage), methods=["GET", "POST"])
 app.add_url_rule("/forms/manage/<form_key>", endpoint="forms_builder", view_func=admin_or_developer_required(forms_builder), methods=["GET", "POST"])
+app.add_url_rule("/forms/manage/<form_key>/preview", endpoint="form_preview", view_func=admin_or_developer_required(form_preview), methods=["GET"])
 app.add_url_rule("/smtp-settings", endpoint="smtp_settings", view_func=admin_or_developer_required(smtp_settings), methods=["GET", "POST"])
 app.add_url_rule("/profile", endpoint="profile", view_func=login_required(profile), methods=["GET", "POST"])
 app.add_url_rule("/profile/theme", endpoint="profile_theme_sync", view_func=login_required(profile_theme_sync), methods=["POST"])

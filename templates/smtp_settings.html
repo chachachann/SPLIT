@@ -46,7 +46,7 @@
             <section class="announcement-bar" aria-label="Announcements">
                 <div class="announcement-track">
                     <div class="announcement-marquee">
-                        <span class="marquee">SMTP is stored now so email delivery can be enabled later without changing the form workflow model.</span>
+                        <span class="marquee">SMTP can now be enabled for real delivery, including a built-in test email action.</span>
                     </div>
                 </div>
             </section>
@@ -93,6 +93,28 @@
                                         <span>TLS</span>
                                         <strong>{{ 'Enabled' if smtp_settings.use_tls else 'Disabled' }}</strong>
                                     </div>
+                                    <div class="workflow-meta-row">
+                                        <span>SSL</span>
+                                        <strong>{{ 'Enabled' if smtp_settings.use_ssl else 'Disabled' }}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>Status</span>
+                                        <strong>{{ 'Enabled' if smtp_settings.is_enabled else 'Disabled' }}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>Password</span>
+                                        <strong>{{ 'Configured' if smtp_settings.password_configured else 'Not configured' }}</strong>
+                                    </div>
+                                    <div class="workflow-meta-row">
+                                        <span>Last Test</span>
+                                        <strong>{{ smtp_settings.last_tested_at or 'Not tested' }}</strong>
+                                    </div>
+                                    {% if smtp_settings.last_error %}
+                                        <div class="workflow-meta-row">
+                                            <span>Last Error</span>
+                                            <strong>{{ smtp_settings.last_error }}</strong>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -109,6 +131,7 @@
                         </div>
                         <div class="panel-body">
                             <form method="POST" class="account-form">
+                                <input type="hidden" name="action" value="save-settings">
                                 <div class="field-grid">
                                     <label class="field">
                                         <span class="field-label">SMTP Host</span>
@@ -141,10 +164,37 @@
                                             <span class="role-option-name">Use TLS for outbound SMTP connections</span>
                                         </span>
                                     </label>
+                                    <label class="field field-full">
+                                        <span class="field-label">Transport Security</span>
+                                        <span class="role-option-pill workflow-checkbox-row">
+                                            <input type="checkbox" name="use_ssl" value="1" {% if smtp_settings.use_ssl %}checked{% endif %}>
+                                            <span class="role-option-name">Use implicit SSL instead of STARTTLS</span>
+                                        </span>
+                                    </label>
+                                    <label class="field field-full">
+                                        <span class="field-label">Enable Delivery</span>
+                                        <span class="role-option-pill workflow-checkbox-row">
+                                            <input type="checkbox" name="is_enabled" value="1" {% if smtp_settings.is_enabled %}checked{% endif %}>
+                                            <span class="role-option-name">Allow SPLIT to send email notifications</span>
+                                        </span>
+                                    </label>
                                 </div>
 
                                 <div class="form-actions">
                                     <button type="submit" class="btn-primary">Save SMTP Settings</button>
+                                </div>
+                            </form>
+
+                            <form method="POST" class="account-form" style="margin-top:18px;">
+                                <input type="hidden" name="action" value="send-test-email">
+                                <div class="field-grid">
+                                    <label class="field field-full">
+                                        <span class="field-label">Test Email Recipient</span>
+                                        <input type="email" name="test_email" value="{{ smtp_settings.from_email or '' }}" placeholder="admin@example.com" required>
+                                    </label>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-secondary">Send Test Email</button>
                                 </div>
                             </form>
                         </div>

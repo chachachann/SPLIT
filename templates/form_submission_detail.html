@@ -109,6 +109,10 @@
                                     <span>Updated</span>
                                     <strong>{{ submission.updated_at }}</strong>
                                 </div>
+                                <div class="workflow-meta-row">
+                                    <span>Schema Version</span>
+                                    <strong>{{ 'v' ~ schema_version.version_number if schema_version else 'Current' }}</strong>
+                                </div>
                             </div>
 
                             {% if submission.reject_reason %}

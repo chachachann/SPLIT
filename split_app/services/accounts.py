@@ -2,6 +2,7 @@ import os
 import sqlite3
 
 from split_app.services.core import DEFAULT_ROLES, connect_db, hash_password, normalize_role_names, timestamp_now
+from split_app.services.validation import validate_password_strength, validate_username
 
 
 def fetch_role_by_name(connection, role_name):
@@ -297,6 +298,12 @@ def create_user_account(username, password, designation, role_names, fullname, a
 
     if not username or not password or not fullname:
         return False, "Username, full name, and password are required."
+    ok, message = validate_username(username)
+    if not ok:
+        return False, message
+    ok, message = validate_password_strength(password)
+    if not ok:
+        return False, message
 
     if not normalized_roles:
         return False, "Select at least one account role."
@@ -371,6 +378,12 @@ def update_user_account(user_id, username, designation, role_names, fullname, pa
 
     if not username or not fullname:
         return False, "Username and full name are required."
+    ok, message = validate_username(username)
+    if not ok:
+        return False, message
+    ok, message = validate_password_strength(password, allow_blank=True)
+    if not ok:
+        return False, message
 
     if not normalized_roles:
         return False, "Select at least one account role."

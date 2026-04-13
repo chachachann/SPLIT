@@ -44,6 +44,12 @@ def build_presence_state(last_seen_at, last_login_at):
     }
 
 
+def can_manage_chat(role_names):
+    return "superadmin" in {str(role or "").casefold() for role in (role_names or [])} or "developer" in {
+        str(role or "").casefold() for role in (role_names or [])
+    }
+
+
 def record_user_login(username):
     clean_username = (username or "").strip()
     if not clean_username:
@@ -878,6 +884,9 @@ def build_chat_message_payload(row, username, sender_identity=None):
         or (row.get("sender_fullname") or "").strip()
         or row["sender_username"]
     )
+    is_deleted = bool(row.get("is_deleted"))
+    edited_at = row.get("edited_at") or ""
+    body_html = "<p><em>Message deleted.</em></p>" if is_deleted else render_chat_message_markup(row.get("body"))
     return {
         "id": row["id"],
         "sender_username": row["sender_username"],
@@ -887,9 +896,14 @@ def build_chat_message_payload(row, username, sender_identity=None):
         "sender_profile_url": (sender_identity.get("profile_url") if sender_identity else f"/users/{row['sender_username']}"),
         "created_at": row["created_at"],
         "is_self": row["sender_username"].casefold() == clean_username.casefold(),
-        "body": row.get("body") or "",
-        "body_html": render_chat_message_markup(row.get("body")),
-        "attachment": attachment,
+        "body": "" if is_deleted else (row.get("body") or ""),
+        "body_html": body_html,
+        "attachment": None if is_deleted else attachment,
+        "is_deleted": is_deleted,
+        "edited_at": edited_at,
+        "is_edited": bool(edited_at and not is_deleted),
+        "can_edit": row["sender_username"].casefold() == clean_username.casefold() and not is_deleted,
+        "can_delete": (row["sender_username"].casefold() == clean_username.casefold() or bool(row.get("viewer_can_moderate"))) and not is_deleted,
     }
 
 
@@ -913,41 +927,42 @@ def get_chat_thread_messages(username, fullname, role_names, thread_type, target
     ensure_member_record(connection, thread["id"], clean_username, initial_read_at=timestamp_now())
     cursor = connection.cursor()
     page_size = max(1, min(int(limit or 80), 200))
+    viewer_can_moderate = 1 if can_manage_chat(role_names) else 0
 
     if after_id is not None:
         cursor.execute(
             """
-            SELECT id, sender_username, sender_fullname, body, attachment_path, attachment_name, attachment_kind, created_at
+            SELECT id, sender_username, sender_fullname, body, attachment_path, attachment_name, attachment_kind, created_at, edited_at, is_deleted, ? AS viewer_can_moderate
             FROM chat_messages
             WHERE thread_id = ? AND id > ?
             ORDER BY id ASC
             LIMIT ?
             """,
-            (thread["id"], int(after_id), page_size),
+            (viewer_can_moderate, thread["id"], int(after_id), page_size),
         )
         rows = [dict(row) for row in cursor.fetchall()]
     elif before_id is not None:
         cursor.execute(
             """
-            SELECT id, sender_username, sender_fullname, body, attachment_path, attachment_name, attachment_kind, created_at
+            SELECT id, sender_username, sender_fullname, body, attachment_path, attachment_name, attachment_kind, created_at, edited_at, is_deleted, ? AS viewer_can_moderate
             FROM chat_messages
             WHERE thread_id = ? AND id < ?
             ORDER BY id DESC
             LIMIT ?
             """,
-            (thread["id"], int(before_id), page_size),
+            (viewer_can_moderate, thread["id"], int(before_id), page_size),
         )
         rows = list(reversed([dict(row) for row in cursor.fetchall()]))
     else:
         cursor.execute(
             """
-            SELECT id, sender_username, sender_fullname, body, attachment_path, attachment_name, attachment_kind, created_at
+            SELECT id, sender_username, sender_fullname, body, attachment_path, attachment_name, attachment_kind, created_at, edited_at, is_deleted, ? AS viewer_can_moderate
             FROM chat_messages
             WHERE thread_id = ?
             ORDER BY id DESC
             LIMIT ?
             """,
-            (thread["id"], page_size),
+            (viewer_can_moderate, thread["id"], page_size),
         )
         rows = list(reversed([dict(row) for row in cursor.fetchall()]))
 
@@ -997,7 +1012,7 @@ def get_chat_thread_messages(username, fullname, role_names, thread_type, target
         "title": thread["title"],
         "description": thread["description"] or "",
         "member_count": member_count,
-        "editable": thread["thread_type"] == "channel",
+        "editable": thread["thread_type"] == "channel" and can_manage_chat(role_names),
     }
     if thread["thread_type"] == "direct" and direct_partner:
         presence_map = get_presence_snapshot_map(connection)
@@ -1116,6 +1131,57 @@ def update_chat_channel(room_key, title, description, actor_username):
     return True, "Channel updated."
 
 
+def get_channel_settings():
+    from logic import ensure_chat_defaults
+
+    connection = connect_db()
+    ensure_chat_defaults(connection)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT room_key, title, description, is_enabled, updated_at
+        FROM chat_threads
+        WHERE thread_type = 'channel'
+        ORDER BY id
+        """
+    )
+    items = [dict(row) for row in cursor.fetchall()]
+    connection.commit()
+    connection.close()
+    return items
+
+
+def update_channel_settings(room_key, title, description, is_enabled, actor_username):
+    clean_title = " ".join((title or "").split())
+    clean_description = (description or "").strip()
+    if not clean_title:
+        return False, "Channel title is required."
+
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE chat_threads
+        SET title = ?, description = ?, is_enabled = ?, updated_by_username = ?, updated_at = ?
+        WHERE room_key = ? AND thread_type = 'channel'
+        """,
+        (
+            clean_title,
+            clean_description,
+            1 if is_enabled else 0,
+            (actor_username or "").strip() or "System",
+            timestamp_now(),
+            room_key,
+        ),
+    )
+    if cursor.rowcount == 0:
+        connection.close()
+        return False, "Channel not found."
+    connection.commit()
+    connection.close()
+    return True, "Channel updated."
+
+
 def get_role_group_settings():
     from logic import ensure_chat_defaults
 
@@ -1166,6 +1232,98 @@ def update_role_group(room_key, title, description, is_enabled, actor_username):
     connection.commit()
     connection.close()
     return True, "Role group updated."
+
+
+def update_chat_message(message_id, username, role_names, body):
+    clean_body = str(body or "").strip()
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, sender_username, attachment_path, is_deleted
+        FROM chat_messages
+        WHERE id = ?
+        """,
+        (message_id,),
+    )
+    message_row = cursor.fetchone()
+    if not message_row:
+        connection.close()
+        return False, "Message not found."
+    if message_row["sender_username"].casefold() != (username or "").casefold():
+        connection.close()
+        return False, "Only the sender can edit this message."
+    if message_row["is_deleted"]:
+        connection.close()
+        return False, "Deleted messages cannot be edited."
+    if not clean_body and not message_row["attachment_path"]:
+        connection.close()
+        return False, "Message body cannot be blank."
+
+    connection.execute(
+        """
+        UPDATE chat_messages
+        SET body = ?, edited_at = ?, edited_by_username = ?
+        WHERE id = ?
+        """,
+        (clean_body or None, timestamp_now(), username, message_id),
+    )
+    connection.commit()
+    connection.close()
+    return True, "Message updated."
+
+
+def delete_chat_message(message_id, username, role_names):
+    role_keys = {str(role or "").casefold() for role in (role_names or [])}
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id, sender_username, attachment_path, is_deleted
+        FROM chat_messages
+        WHERE id = ?
+        """,
+        (message_id,),
+    )
+    message_row = cursor.fetchone()
+    if not message_row:
+        connection.close()
+        return False, "Message not found."
+    if message_row["is_deleted"]:
+        connection.close()
+        return False, "Message already deleted."
+    can_delete = message_row["sender_username"].casefold() == (username or "").casefold() or bool(
+        {"superadmin", "developer"} & role_keys
+    )
+    if not can_delete:
+        connection.close()
+        return False, "You do not have permission to delete this message."
+
+    attachment_path = (message_row["attachment_path"] or "").strip()
+    if attachment_path:
+        absolute_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", attachment_path)
+        if os.path.exists(absolute_path):
+            os.remove(absolute_path)
+    connection.execute(
+        """
+        UPDATE chat_messages
+        SET
+            body = NULL,
+            attachment_path = NULL,
+            attachment_name = NULL,
+            attachment_kind = NULL,
+            is_deleted = 1,
+            deleted_at = ?,
+            deleted_by_username = ?,
+            edited_at = NULL,
+            edited_by_username = NULL
+        WHERE id = ?
+        """,
+        (timestamp_now(), username, message_id),
+    )
+    connection.commit()
+    connection.close()
+    return True, "Message deleted."
 
 
 def hash_remember_token(token):

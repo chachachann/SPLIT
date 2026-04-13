@@ -7,6 +7,7 @@ from split_app.workflow.runtime import (
     cancel_submission,
     delete_draft_submission,
     get_form_home_context,
+    get_manager_form_preview_context,
     get_my_requests,
     get_review_queue,
     get_submission_detail_context,
@@ -17,7 +18,7 @@ from split_app.workflow.runtime import (
     start_form_draft,
     submit_submission,
 )
-from split_app.workflow.smtp import get_smtp_settings, save_smtp_settings
+from split_app.workflow.smtp import get_smtp_settings, save_smtp_settings, send_test_email
 from split_app.workflow.templates import (
     create_form_template,
     delete_form_template,
@@ -102,9 +103,33 @@ def forms_builder(form_key):
     )
 
 
+def form_preview(form_key):
+    ok, message, payload = get_manager_form_preview_context(form_key)
+    if not ok:
+        flash(message, "error")
+        return redirect(url_for("forms_manage"))
+    topbar_notifications, unread_notifications = get_topbar_notifications()
+    return render_template(
+        "form_preview.html",
+        username=session.get("user"),
+        fullname=session.get("fullname"),
+        topbar_notifications=topbar_notifications,
+        unread_notifications=unread_notifications,
+        workflow_counts=get_combined_workflow_counts(get_current_roles()),
+        form=payload["form"],
+        preview_values=payload["preview_values"],
+        visible_preview_fields=payload["visible_preview_fields"],
+        submissions=payload["submissions"],
+    )
+
+
 def smtp_settings():
     if request.method == "POST":
-        ok, message = save_smtp_settings(request.form, session.get("user"))
+        action = (request.form.get("action") or "").strip()
+        if action == "send-test-email":
+            ok, message = send_test_email(request.form.get("test_email"), session.get("user"))
+        else:
+            ok, message = save_smtp_settings(request.form, session.get("user"))
         flash(message, "success" if ok else "error")
         return redirect(url_for("smtp_settings"))
 
@@ -223,6 +248,7 @@ def form_edit_submission(submission_id):
         form=payload["form"],
         submission=payload["submission"],
         schema=payload["schema"],
+        schema_version=payload["schema_version"],
         visible_fields=payload["visible_fields"],
         file_groups=payload["file_groups"],
     )
@@ -266,6 +292,7 @@ def form_submission_detail(submission_id):
         form=payload["form"],
         submission=payload["submission"],
         schema=payload["schema"],
+        schema_version=payload["schema_version"],
         visible_fields=payload["visible_fields"],
         file_groups=payload["file_groups"],
         active_task_ids=payload["active_task_ids"],

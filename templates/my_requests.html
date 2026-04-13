@@ -111,8 +111,8 @@
                     <section class="panel">
                         <div class="panel-header">
                             <div class="workflow-panel-copy">
-                                <h2>Requests</h2>
-                                <p>Use the filter to narrow the list by form key, then open the request to continue, review status, or resubmit.</p>
+                                <h2>Requests Viewer</h2>
+                                <p>Use the filter to narrow the list by form key. Each request stays collapsed until you expand it for the full saved details.</p>
                             </div>
                         </div>
                         <div class="panel-body">
@@ -128,47 +128,90 @@
                             </form>
 
                             {% if requests %}
-                                <div class="workflow-card-list">
+                                <div class="workflow-viewer-list">
                                     {% for item in requests %}
-                                        <article class="workflow-card">
-                                            <div class="workflow-card-head">
-                                                <div>
-                                                    <h3>{{ item.form_title }}</h3>
+                                        <details class="workflow-viewer-card">
+                                            <summary class="workflow-viewer-summary">
+                                                <div class="workflow-viewer-summary-copy">
+                                                    <strong>{{ item.form_title }}</strong>
                                                     <div class="workflow-card-meta">
                                                         {{ item.form_key }} &#8226;
                                                         {{ item.tracking_number or ('Draft #' ~ item.id) }} &#8226;
                                                         {{ item.owner_display_name }} &#8226;
                                                         Updated {{ item.updated_at }}
                                                     </div>
+                                                    {% if item.preview_rows %}
+                                                        <div class="workflow-viewer-preview-list">
+                                                            {% for row in item.preview_rows %}
+                                                                <span class="workflow-viewer-preview-pill">{{ row.label }}: {{ row.preview_value }}</span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% else %}
+                                                        <div class="workflow-card-meta">No saved field values yet.</div>
+                                                    {% endif %}
                                                 </div>
                                                 <span class="workflow-status-pill status-{{ item.status }}">{{ item.status|replace('_', ' ')|title }}</span>
-                                            </div>
+                                            </summary>
 
-                                            <div class="workflow-meta-grid">
-                                                <div class="workflow-meta-row">
-                                                    <span>Created</span>
-                                                    <strong>{{ item.created_at }}</strong>
+                                            <div class="workflow-viewer-body">
+                                                <div class="workflow-meta-grid">
+                                                    <div class="workflow-meta-row">
+                                                        <span>Created</span>
+                                                        <strong>{{ item.created_at }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Submitted</span>
+                                                        <strong>{{ item.submitted_at or 'Not yet submitted' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Requester</span>
+                                                        <strong>{{ item.requester_display_name }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Schema Version</span>
+                                                        <strong>{{ 'v' ~ item.schema_version_number if item.schema_version_number else 'Current' }}</strong>
+                                                    </div>
                                                 </div>
-                                                <div class="workflow-meta-row">
-                                                    <span>Submitted</span>
-                                                    <strong>{{ item.submitted_at or 'Not yet submitted' }}</strong>
-                                                </div>
-                                            </div>
 
-                                            <div class="workflow-card-actions">
-                                                {% if item.is_editable %}
-                                                    <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
-                                                {% else %}
-                                                    <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
+                                                {% if item.detail_rows %}
+                                                    <div class="workflow-field-stack">
+                                                        {% for row in item.detail_rows %}
+                                                            <div class="workflow-field-block">
+                                                                <div class="workflow-field-label">{{ row.label }}</div>
+                                                                {% if row.files %}
+                                                                    <div class="workflow-file-list">
+                                                                        {% for file in row.files %}
+                                                                            <div class="workflow-file-item">
+                                                                                <div class="workflow-file-row">
+                                                                                    <a href="{{ url_for('static', filename='uploads/forms/submissions/' ~ file.stored_name) }}" target="_blank" rel="noopener noreferrer">{{ file.original_name }}</a>
+                                                                                    <span>{{ (file.file_size_bytes / 1048576)|round(2) }} MB</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        {% endfor %}
+                                                                    </div>
+                                                                {% else %}
+                                                                    <div class="workflow-field-value{% if not row.value %} workflow-field-muted{% endif %}">{{ row.value or 'Not provided' }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
                                                 {% endif %}
 
-                                                {% if item.can_reopen %}
-                                                    <form method="POST" action="{{ url_for('form_submission_reopen', submission_id=item.id) }}">
-                                                        <button type="submit" class="workflow-action-btn">Reopen as Draft</button>
-                                                    </form>
-                                                {% endif %}
+                                                <div class="workflow-card-actions">
+                                                    {% if item.is_editable %}
+                                                        <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
+                                                    {% else %}
+                                                        <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
+                                                    {% endif %}
+
+                                                    {% if item.can_reopen %}
+                                                        <form method="POST" action="{{ url_for('form_submission_reopen', submission_id=item.id) }}">
+                                                            <button type="submit" class="workflow-action-btn">Reopen as Draft</button>
+                                                        </form>
+                                                    {% endif %}
+                                                </div>
                                             </div>
-                                        </article>
+                                        </details>
                                     {% endfor %}
                                 </div>
                             {% else %}

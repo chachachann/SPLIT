@@ -148,9 +148,7 @@
 
                                             <div class="workflow-card-actions">
                                                 <a class="btn-secondary" href="{{ url_for('forms_builder', form_key=form.form_key) }}">Open Builder</a>
-                                                {% if form.status == 'published' %}
-                                                    <a class="workflow-action-btn" href="{{ url_for('form_home', form_key=form.form_key) }}">Open User View</a>
-                                                {% endif %}
+                                                <a class="workflow-action-btn" href="{{ url_for('form_preview', form_key=form.form_key) }}">Preview Form</a>
                                             </div>
                                         </article>
                                     {% endfor %}

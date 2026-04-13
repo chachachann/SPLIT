@@ -25,6 +25,7 @@ from split_app.services.core import (
     timestamp_now,
     THEME_CHOICES,
 )
+from split_app.services.validation import validate_email_address, validate_password_strength
 
 
 def ensure_user_profile(connection, user_row):
@@ -746,6 +747,10 @@ def save_profile_basic(username, form_data, avatar_upload=None):
     if next_birthday and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", next_birthday):
         connection.close()
         return False, "Birthday must use YYYY-MM-DD.", None
+    ok, email_message = validate_email_address(next_email, allow_blank=True)
+    if not ok:
+        connection.close()
+        return False, email_message, None
 
     changes = {}
     if next_full_name != current_profile["full_name"]:
@@ -1023,6 +1028,9 @@ def submit_password_change_request(username, new_password, confirm_password):
         return False, "Enter the new password you want to request."
     if clean_password != clean_confirm:
         return False, "The password confirmation does not match."
+    ok, message = validate_password_strength(clean_password)
+    if not ok:
+        return False, message
 
     connection = connect_db()
     user_row = get_user_row_by_username(connection, username)
@@ -1059,8 +1067,11 @@ def submit_password_change_request(username, new_password, confirm_password):
     )
 
     reviewer_user_ids = []
+    reviewer_usernames = []
     for role_name in ("Developer", "SuperAdmin"):
-        reviewer_user_ids.extend([row["id"] for row in get_role_members(connection, role_name)])
+        role_members = get_role_members(connection, role_name)
+        reviewer_user_ids.extend([row["id"] for row in role_members])
+        reviewer_usernames.extend([row["username"] for row in role_members])
     create_profile_notifications(
         connection,
         reviewer_user_ids,
@@ -1073,11 +1084,23 @@ def submit_password_change_request(username, new_password, confirm_password):
     log_profile_audit(connection, user_row["id"], username, "profile.password-request-submitted")
     connection.commit()
     connection.close()
+    try:
+        from split_app.workflow.smtp import send_email_to_usernames
+
+        send_email_to_usernames(
+            reviewer_usernames,
+            "Password change request pending",
+            f"{(user_row['fullname'] or '').strip() or user_row['username']} submitted a password change request.",
+            link_url="/forms/review-queue",
+            sender_name=(user_row["fullname"] or "").strip() or user_row["username"],
+        )
+    except Exception:
+        pass
     return True, "Password change request submitted."
 
 
 def review_password_change_request(request_id, reviewer_username, role_names, action, rejection_note=""):
-    from logic import get_user_row_by_id
+    from logic import get_user_row_by_id, get_user_row_by_username
 
     role_keys = {str(role or "").casefold() for role in (role_names or [])}
     if not (role_keys & {"developer", "superadmin"}):
@@ -1110,7 +1133,12 @@ def review_password_change_request(request_id, reviewer_username, role_names, ac
         return False, "This password change request has already been resolved."
 
     requester_row = get_user_row_by_id(connection, request_row["requester_user_id"])
-    reviewer_identity = get_user_identity(reviewer_username) or {"fullname": reviewer_username}
+    reviewer_row = get_user_row_by_username(connection, reviewer_username)
+    reviewer_identity = (
+        build_profile_identity(connection, reviewer_row, viewer_username=reviewer_username)
+        if reviewer_row
+        else None
+    ) or {"full_name": reviewer_username, "display_name": reviewer_username}
     acted_at = timestamp_now()
     next_status = "approved" if review_action == "approve" else "rejected"
 
@@ -1161,7 +1189,11 @@ def review_password_change_request(request_id, reviewer_username, role_names, ac
         notification_message,
         link_url="/profile?tab=security",
         style_key="success" if review_action == "approve" else "danger",
-        sender_name=(reviewer_identity.get("fullname") or "").strip() or reviewer_username,
+        sender_name=(
+            (reviewer_identity.get("display_name") or "").strip()
+            or (reviewer_identity.get("full_name") or "").strip()
+            or reviewer_username
+        ),
     )
     log_profile_audit(
         connection,
@@ -1172,6 +1204,23 @@ def review_password_change_request(request_id, reviewer_username, role_names, ac
     )
     connection.commit()
     connection.close()
+    if requester_row:
+        try:
+            from split_app.workflow.smtp import send_email_to_usernames
+
+            send_email_to_usernames(
+                [requester_row["username"]],
+                notification_title,
+                notification_message,
+                link_url="/profile?tab=security",
+                sender_name=(
+                    (reviewer_identity.get("display_name") or "").strip()
+                    or (reviewer_identity.get("full_name") or "").strip()
+                    or reviewer_username
+                ),
+            )
+        except Exception:
+            pass
 
     requester_name = (requester_row["fullname"] or "").strip() if requester_row else ""
     if review_action == "approve":

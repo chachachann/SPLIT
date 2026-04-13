@@ -6,254 +6,161 @@
     data-thread-url="{{ url_for('chat_thread') }}"
     data-send-url="{{ url_for('chat_send') }}"
     data-channel-update-url="{{ url_for('chat_channel_update') }}"
+    data-message-update-url="{{ url_for('chat_message_update') }}"
+    data-message-delete-url="{{ url_for('chat_message_delete') }}"
     data-favorite-toggle-url="{{ url_for('chat_favorite_toggle') }}"
     data-favorite-move-url="{{ url_for('chat_favorite_move') }}"
     data-poll-ms="15000"
 >
     <div class="chat-toolbar">
-        <button type="button" class="online-trigger" data-online-trigger aria-label="Open online users">
-            <span class="online-trigger-icon" aria-hidden="true">&#128101;</span>
-            <span class="online-trigger-badge" data-online-badge hidden></span>
-        </button>
-
         <button type="button" class="chat-trigger" data-chat-trigger aria-label="Open messages">
             <span class="chat-trigger-icon" aria-hidden="true">&#128172;</span>
             <span class="chat-trigger-badge" data-chat-badge hidden></span>
         </button>
     </div>
 
-    <div class="chat-scrim" data-chat-scrim aria-hidden="true"></div>
-
-    <section class="online-panel" data-online-panel aria-hidden="true">
-        <div class="online-panel-header">
-            <div class="online-panel-copy">
-                <strong>People</strong>
-                <span data-online-summary>0 online</span>
-            </div>
-
-            <button type="button" class="chat-close-btn online-close-btn" data-online-close aria-label="Close people panel">&times;</button>
-        </div>
-
-        <div class="online-panel-tools">
-            <label class="chat-search-field chat-search-field-online">
-                <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
-                <input type="search" data-online-search placeholder="Search users by name, role, or @username">
-            </label>
-        </div>
-
-        <div class="online-panel-list" data-online-list>
-            <div class="chat-empty-state chat-empty-state-compact">No online users right now.</div>
-        </div>
-    </section>
-
     <aside class="chat-panel" data-chat-panel aria-hidden="true">
-        <div class="chat-panel-header">
-            <div class="chat-panel-copy">
-                <span class="chat-panel-eyebrow">Project SPLIT Messaging</span>
-                <strong>Messages</strong>
-                <span data-chat-summary>0 unread</span>
-            </div>
+        <div class="chat-panel-surface">
+            <div class="chat-panel-body">
+                <section class="chat-browser" data-chat-browser>
+                    <div class="chat-browser-shell">
+                        <div class="chat-browser-head">
+                            <div class="chat-browser-copy">
+                                <strong>Messages</strong>
+                                <span data-chat-summary>All caught up</span>
+                            </div>
 
-            <div class="chat-panel-header-actions">
-                <div class="chat-panel-mode-tabs" role="tablist" aria-label="Messaging views">
-                    <button type="button" class="chat-panel-mode-tab" data-chat-mode="chat" aria-selected="false">Chat</button>
-                    <button type="button" class="chat-panel-mode-tab is-active" data-chat-mode="messages" aria-selected="true">Messages</button>
-                    <button type="button" class="chat-panel-mode-tab" data-chat-mode="channels" aria-selected="false">Channels</button>
-                </div>
-                <button type="button" class="chat-panel-nav-btn" data-chat-mobile-browse hidden>Conversations</button>
-                <button type="button" class="chat-close-btn" data-chat-close aria-label="Close messages">&times;</button>
-            </div>
-        </div>
-
-        <div class="chat-panel-body">
-            <div class="chat-sidebar">
-                <div class="chat-sidebar-header">
-                    <div class="chat-sidebar-copy">
-                        <strong>Browse Conversations</strong>
-                        <span>Channels, role groups, direct messages, and directory access.</span>
-                    </div>
-
-                    <div class="chat-sidebar-stats">
-                        <div class="chat-sidebar-stat">
-                            <strong data-chat-stat-unread>0</strong>
-                            <span>Unread</span>
+                            <div class="chat-browser-meta">
+                                <span class="chat-browser-metric">
+                                    <strong data-chat-stat-unread>0</strong>
+                                    <span>Unread</span>
+                                </span>
+                                <span class="chat-browser-metric">
+                                    <strong data-chat-stat-online>0</strong>
+                                    <span>Online</span>
+                                </span>
+                                <span class="chat-sync-status" data-chat-sync-status>Waiting for sync</span>
+                            </div>
                         </div>
-                        <div class="chat-sidebar-stat">
-                            <strong data-chat-stat-online>0</strong>
-                            <span>Online</span>
+
+                        <div class="chat-browser-tools">
+                            <label class="chat-search-field">
+                                <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
+                                <input type="search" data-chat-search placeholder="Search conversations, staff, or @username">
+                            </label>
                         </div>
-                    </div>
 
-                    <label class="chat-search-field">
-                        <span class="chat-search-field-icon" aria-hidden="true">&#8981;</span>
-                        <input type="search" data-chat-search placeholder="Search conversations or people">
-                    </label>
-
-                    <div class="chat-sidebar-filters" role="group" aria-label="Conversation filters">
-                        <button type="button" class="chat-sidebar-filter is-active" data-chat-filter="all">All</button>
-                        <button type="button" class="chat-sidebar-filter" data-chat-filter="unread">Unread</button>
-                    </div>
-
-                    <div class="chat-sidebar-tabs" role="tablist" aria-label="Chat sections">
-                        <button type="button" class="chat-sidebar-tab is-active" data-chat-tab="channels">
-                            <span class="chat-sidebar-tab-label">Channels</span>
-                            <span class="chat-sidebar-tab-count" data-chat-tab-count hidden></span>
-                        </button>
-                        <button type="button" class="chat-sidebar-tab" data-chat-tab="roles">
-                            <span class="chat-sidebar-tab-label">Role Groups</span>
-                            <span class="chat-sidebar-tab-count" data-chat-tab-count hidden></span>
-                        </button>
-                        <button type="button" class="chat-sidebar-tab" data-chat-tab="directs">
-                            <span class="chat-sidebar-tab-label">Direct</span>
-                            <span class="chat-sidebar-tab-count" data-chat-tab-count hidden></span>
-                        </button>
-                        <button type="button" class="chat-sidebar-tab" data-chat-tab="users">
-                            <span class="chat-sidebar-tab-label">Users</span>
-                            <span class="chat-sidebar-tab-count" data-chat-tab-count hidden></span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="chat-sidebar-panes">
-                    <section class="chat-sidebar-pane is-active" data-chat-pane="channels">
-                        <div class="chat-sidebar-section-head">
-                            <div class="chat-sidebar-title">Channels</div>
-                            <span>Public rooms 1-10</span>
+                        <div class="chat-filter-strip" role="tablist" aria-label="Conversation filters">
+                            <button type="button" class="chat-filter-pill" data-chat-filter="all">All</button>
+                            <button type="button" class="chat-filter-pill" data-chat-filter="unread">Unread</button>
+                            <button type="button" class="chat-filter-pill" data-chat-filter="channels">Channels</button>
+                            <button type="button" class="chat-filter-pill" data-chat-filter="groups">Groups</button>
+                            <button type="button" class="chat-filter-pill is-active" data-chat-filter="people">Individuals</button>
                         </div>
-                        <div class="chat-thread-list" data-chat-list="channels"></div>
-                    </section>
 
-                    <section class="chat-sidebar-pane" data-chat-pane="roles">
-                        <div class="chat-sidebar-section-head">
-                            <div class="chat-sidebar-title">Role Groups</div>
-                            <span>Rooms configured by role</span>
-                        </div>
-                        <div class="chat-thread-list" data-chat-list="roles"></div>
-                    </section>
-
-                    <section class="chat-sidebar-pane" data-chat-pane="directs">
-                        <div class="chat-sidebar-section-head">
-                            <div class="chat-sidebar-title">Direct Messages</div>
-                            <span>Your one-to-one conversations</span>
-                        </div>
-                        <div class="chat-thread-list" data-chat-list="directs"></div>
-                    </section>
-
-                    <section class="chat-sidebar-pane" data-chat-pane="users">
-                        <div class="chat-sidebar-section-head">
-                            <div class="chat-sidebar-title">User Directory</div>
-                            <span>Start a new direct chat</span>
-                        </div>
-                        <div class="chat-thread-list" data-chat-list="users"></div>
-                    </section>
-                </div>
-            </div>
-
-            <div class="chat-stage">
-                <div class="chat-thread-header">
-                    <button type="button" class="chat-mobile-back-btn" data-chat-mobile-back hidden aria-label="Back to conversations">
-                        <span aria-hidden="true">&#8592;</span>
-                        <span>Conversations</span>
-                    </button>
-
-                    <div class="chat-thread-identity">
-                        <span class="chat-thread-avatar" data-chat-thread-avatar>
-                            <img data-chat-thread-avatar-image alt="" hidden>
-                            <span data-chat-thread-avatar-text>?</span>
-                            <span class="chat-thread-avatar-status" data-chat-thread-avatar-status hidden></span>
-                        </span>
-
-                        <div class="chat-thread-meta">
-                            <div class="chat-thread-kicker" data-chat-thread-kicker>Conversation</div>
-                            <div class="chat-thread-title" data-chat-thread-title>Select a conversation</div>
-                            <div class="chat-thread-subtitle" data-chat-thread-subtitle>Open a channel, role room, or direct message.</div>
-                            <div class="chat-thread-facts" data-chat-thread-facts></div>
+                        <div class="chat-list-wrap">
+                            <div class="chat-thread-list chat-unified-list" data-chat-list="unified">
+                                <div class="chat-empty-state chat-empty-state-compact">Loading conversations...</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="chat-thread-header-actions">
-                        <a href="{{ url_for('profile') }}" class="chat-thread-profile-link" data-chat-profile-link hidden>
-                            <span aria-hidden="true">&#128100;</span>
-                            <span>Profile</span>
-                        </a>
-                        <button type="button" class="chat-thread-refresh-btn" data-chat-refresh aria-label="Refresh conversation">
-                            <span aria-hidden="true">&#8635;</span>
-                            <span>Refresh</span>
-                        </button>
-                        <button type="button" class="chat-thread-settings-btn" data-chat-edit-toggle hidden aria-label="Open channel settings">
-                            <span aria-hidden="true">&#9881;</span>
-                            <span>Settings</span>
-                        </button>
-                    </div>
-                </div>
+                </section>
 
-                <form class="chat-channel-form" data-chat-channel-form hidden>
-                    <input type="hidden" name="room_key" data-chat-channel-room-key>
-                    <div class="chat-channel-form-head">
-                        <strong>Channel Settings</strong>
-                        <span>Rename this room and update the short description.</span>
-                    </div>
-                    <div class="chat-channel-form-grid">
-                        <label class="chat-field">
-                            <span>Channel Title</span>
-                            <input type="text" name="title" data-chat-channel-title-input required>
-                        </label>
-                        <label class="chat-field chat-field-full">
-                            <span>Description</span>
-                            <input type="text" name="description" data-chat-channel-description-input placeholder="Short description">
-                        </label>
-                    </div>
-                    <div class="chat-channel-actions">
-                        <button type="submit" class="chat-inline-btn">Save</button>
-                        <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-edit-cancel>Cancel</button>
-                    </div>
-                </form>
+                <section class="chat-thread-panel" data-chat-thread-panel hidden>
+                    <div class="chat-thread-shell">
+                        <div class="chat-thread-header">
+                            <button type="button" class="chat-back-btn" data-chat-back aria-label="Back to messages">
+                                <span aria-hidden="true">&#8592;</span>
+                                <span>Messages</span>
+                            </button>
 
-                <div class="chat-thread-tools">
-                    <div class="chat-thread-tools-copy">
-                        <strong data-chat-message-summary>No conversation selected</strong>
-                        <span data-chat-message-status>Open a channel, role room, or direct message to view history.</span>
-                    </div>
+                            <div class="chat-thread-identity">
+                                <span class="chat-thread-avatar" data-chat-thread-avatar>
+                                    <img data-chat-thread-avatar-image alt="" hidden>
+                                    <span data-chat-thread-avatar-text>?</span>
+                                    <span class="chat-thread-avatar-status" data-chat-thread-avatar-status hidden></span>
+                                </span>
 
-                    <div class="chat-thread-tools-actions">
-                        <span class="chat-sync-pill" data-chat-sync-status>Waiting for sync</span>
-                        <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-load-older hidden>Load Older</button>
-                        <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-jump-latest hidden>Newest</button>
-                    </div>
-                </div>
+                                <div class="chat-thread-meta">
+                                    <div class="chat-thread-title" data-chat-thread-title>Select a conversation</div>
+                                    <div class="chat-thread-subtitle" data-chat-thread-subtitle>Choose a message from the list.</div>
+                                </div>
+                            </div>
 
-                <div class="chat-thread-feed" data-chat-messages>
-                    <div class="chat-empty-state">Messages will appear here.</div>
-                </div>
-
-                <form class="chat-compose" data-chat-compose enctype="multipart/form-data">
-                    <input type="hidden" name="type" data-chat-compose-type>
-                    <input type="hidden" name="target" data-chat-compose-target>
-
-                    <div class="chat-compose-head">
-                        <div class="chat-compose-copy">
-                            <strong data-chat-compose-title>Message composer</strong>
-                            <span data-chat-compose-hint>Select a conversation to start messaging.</span>
+                            <div class="chat-thread-header-actions">
+                                <button type="button" class="chat-icon-btn" data-chat-refresh aria-label="Refresh conversation">
+                                    <span aria-hidden="true">&#8635;</span>
+                                </button>
+                                <button type="button" class="chat-icon-btn" data-chat-edit-toggle hidden aria-label="Conversation settings">
+                                    <span aria-hidden="true">&#9881;</span>
+                                </button>
+                            </div>
                         </div>
+
+                        <form class="chat-channel-form" data-chat-channel-form hidden>
+                            <input type="hidden" name="room_key" data-chat-channel-room-key>
+                            <div class="chat-channel-form-head">
+                                <strong>Channel Settings</strong>
+                                <span>Rename this room and update the short description.</span>
+                            </div>
+                            <div class="chat-channel-form-grid">
+                                <label class="chat-field">
+                                    <span>Channel Title</span>
+                                    <input type="text" name="title" data-chat-channel-title-input required>
+                                </label>
+                                <label class="chat-field chat-field-full">
+                                    <span>Description</span>
+                                    <input type="text" name="description" data-chat-channel-description-input placeholder="Short description">
+                                </label>
+                            </div>
+                            <div class="chat-channel-actions">
+                                <button type="submit" class="chat-inline-btn">Save</button>
+                                <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-edit-cancel>Cancel</button>
+                            </div>
+                        </form>
+
+                        <div class="chat-thread-tools" data-chat-thread-tools hidden>
+                            <button type="button" class="chat-inline-btn chat-inline-btn-muted" data-chat-load-older hidden>Load older messages</button>
+                        </div>
+
+                        <div class="chat-thread-feed-wrap">
+                            <div class="chat-thread-feed" data-chat-messages>
+                                <div class="chat-empty-state">Messages will appear here.</div>
+                            </div>
+
+                            <button type="button" class="chat-jump-latest" data-chat-jump-latest hidden>New messages</button>
+                        </div>
+
+                        <form class="chat-compose" data-chat-compose enctype="multipart/form-data">
+                            <input type="hidden" name="type" data-chat-compose-type>
+                            <input type="hidden" name="target" data-chat-compose-target>
+
+                            <input type="file" id="chat-attachment-file-input" class="chat-file-input" name="attachment_file" data-chat-file-input accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar">
+
+                            <div class="chat-compose-main">
+                                <label for="chat-attachment-file-input" class="chat-file-trigger" data-chat-file-trigger aria-label="Attach a file">
+                                    <span aria-hidden="true">&#128206;</span>
+                                </label>
+
+                                <label class="chat-compose-field" for="chat-compose-input">
+                                    <textarea id="chat-compose-input" name="message" rows="1" placeholder="Write a message..." data-chat-compose-input></textarea>
+                                </label>
+
+                                <button type="submit" class="chat-send-btn">Send</button>
+                            </div>
+
+                            <div class="chat-compose-meta">
+                                <div class="chat-compose-attachment-preview" data-chat-file-preview hidden>
+                                    <span class="chat-compose-attachment-chip" data-chat-file-chip>No file selected</span>
+                                    <button type="button" class="chat-attachment-clear" data-chat-file-clear>Remove</button>
+                                </div>
+
+                                <span class="chat-file-name" data-chat-file-name hidden>No file selected</span>
+                                <div class="chat-compose-status" data-chat-compose-status aria-live="polite"></div>
+                            </div>
+                        </form>
                     </div>
-
-                    <div class="chat-compose-attachment-preview" data-chat-file-preview hidden>
-                        <span class="chat-compose-attachment-chip" data-chat-file-chip>No file selected</span>
-                        <button type="button" class="chat-attachment-clear" data-chat-file-clear>Remove</button>
-                    </div>
-
-                    <label class="chat-compose-field">
-                        <textarea name="message" rows="3" placeholder="Write a message..." data-chat-compose-input></textarea>
-                    </label>
-
-                    <div class="chat-compose-actions">
-                        <input type="file" id="chat-attachment-file-input" class="chat-file-input" name="attachment_file" data-chat-file-input accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar">
-                        <label for="chat-attachment-file-input" class="chat-inline-btn chat-inline-btn-muted chat-file-trigger" data-chat-file-trigger>Add Photo/File</label>
-                        <span class="chat-file-name" data-chat-file-name>No file selected</span>
-                        <button type="submit" class="chat-send-btn">Send</button>
-                    </div>
-
-                    <div class="chat-compose-status" data-chat-compose-status aria-live="polite"></div>
-                </form>
+                </section>
             </div>
         </div>
     </aside>

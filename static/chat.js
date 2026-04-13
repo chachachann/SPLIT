@@ -55,6 +55,17 @@
         return String(value || "").trim().toLowerCase();
     }
 
+    function normalizeThreadDescription(value) {
+        var text = String(value || "").trim();
+        if (!text) {
+            return "";
+        }
+        if (/^edited$/i.test(text)) {
+            return "";
+        }
+        return text;
+    }
+
     function parseTimestamp(value) {
         var match = String(value || "").match(
             /^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/
@@ -108,11 +119,12 @@
         today.setHours(0, 0, 0, 0);
         var yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
+        var compare = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-        if (date.getTime() === today.getTime()) {
+        if (compare.getTime() === today.getTime()) {
             return "Today";
         }
-        if (date.getTime() === yesterday.getTime()) {
+        if (compare.getTime() === yesterday.getTime()) {
             return "Yesterday";
         }
 
@@ -133,12 +145,12 @@
         var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         var yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
-        var compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        var compare = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-        if (compareDate.getTime() === today.getTime()) {
+        if (compare.getTime() === today.getTime()) {
             return formatTimeOnly(value);
         }
-        if (compareDate.getTime() === yesterday.getTime()) {
+        if (compare.getTime() === yesterday.getTime()) {
             return "Yesterday";
         }
         if (date.getFullYear() === now.getFullYear()) {
@@ -147,7 +159,6 @@
                 day: "numeric"
             });
         }
-
         return date.toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
@@ -258,75 +269,55 @@
         var mobileQuery = window.matchMedia("(max-width: 860px)");
         var maxAttachmentSizeBytes = 15 * 1024 * 1024;
         var state = {
+            chatOpen: false,
+            currentView: "list",
+            overview: null,
             activeType: "",
             activeTarget: "",
             activeThread: null,
-            overview: null,
-            pollHandle: 0,
-            chatOpen: false,
-            onlineOpen: false,
-            activeTab: "channels",
-            panelMode: "messages",
-            settingsOpen: false,
-            mobileView: "browse",
             threadMessages: [],
             threadMeta: null,
             loadingOlder: false,
             searchTerm: "",
-            onlineSearchTerm: "",
-            filterMode: "all",
+            filterMode: "people",
             drafts: {},
+            collapsedSidebarForChat: false,
             syncState: "idle",
             lastSyncAt: 0,
-            sending: false
+            sending: false,
+            settingsOpen: false,
+            unseenCount: 0,
+            pollHandle: 0
         };
 
         var refs = {
-            scrim: root.querySelector("[data-chat-scrim]"),
-            onlineTrigger: root.querySelector("[data-online-trigger]"),
-            onlineBadge: root.querySelector("[data-online-badge]"),
-            onlinePanel: root.querySelector("[data-online-panel]"),
-            onlineSummary: root.querySelector("[data-online-summary]"),
-            onlineList: root.querySelector("[data-online-list]"),
-            onlineClose: root.querySelector("[data-online-close]"),
-            onlineSearch: root.querySelector("[data-online-search]"),
             chatTrigger: root.querySelector("[data-chat-trigger]"),
             chatBadge: root.querySelector("[data-chat-badge]"),
             chatPanel: root.querySelector("[data-chat-panel]"),
+            browser: root.querySelector("[data-chat-browser]"),
+            threadPanel: root.querySelector("[data-chat-thread-panel]"),
             chatSummary: root.querySelector("[data-chat-summary]"),
             chatStatUnread: root.querySelector("[data-chat-stat-unread]"),
             chatStatOnline: root.querySelector("[data-chat-stat-online]"),
-            modeButtons: Array.prototype.slice.call(root.querySelectorAll("[data-chat-mode]")),
+            syncStatus: root.querySelector("[data-chat-sync-status]"),
             chatSearch: root.querySelector("[data-chat-search]"),
             filterButtons: Array.prototype.slice.call(root.querySelectorAll("[data-chat-filter]")),
-            mobileBrowse: root.querySelector("[data-chat-mobile-browse]"),
-            close: root.querySelector("[data-chat-close]"),
-            tabButtons: Array.prototype.slice.call(root.querySelectorAll("[data-chat-tab]")),
-            tabPanes: Array.prototype.slice.call(root.querySelectorAll("[data-chat-pane]")),
-            channelList: root.querySelector('[data-chat-list="channels"]'),
-            roleList: root.querySelector('[data-chat-list="roles"]'),
-            directList: root.querySelector('[data-chat-list="directs"]'),
-            userList: root.querySelector('[data-chat-list="users"]'),
+            unifiedList: root.querySelector('[data-chat-list="unified"]'),
+            back: root.querySelector("[data-chat-back]"),
             threadAvatar: root.querySelector("[data-chat-thread-avatar]"),
             threadAvatarImage: root.querySelector("[data-chat-thread-avatar-image]"),
             threadAvatarText: root.querySelector("[data-chat-thread-avatar-text]"),
             threadAvatarStatus: root.querySelector("[data-chat-thread-avatar-status]"),
-            kicker: root.querySelector("[data-chat-thread-kicker]"),
             title: root.querySelector("[data-chat-thread-title]"),
             subtitle: root.querySelector("[data-chat-thread-subtitle]"),
-            threadFacts: root.querySelector("[data-chat-thread-facts]"),
-            profileLink: root.querySelector("[data-chat-profile-link]"),
             refresh: root.querySelector("[data-chat-refresh]"),
             editToggle: root.querySelector("[data-chat-edit-toggle]"),
-            mobileBack: root.querySelector("[data-chat-mobile-back]"),
             channelForm: root.querySelector("[data-chat-channel-form]"),
             channelRoomKey: root.querySelector("[data-chat-channel-room-key]"),
             channelTitleInput: root.querySelector("[data-chat-channel-title-input]"),
             channelDescriptionInput: root.querySelector("[data-chat-channel-description-input]"),
             editCancel: root.querySelector("[data-chat-edit-cancel]"),
-            messageSummary: root.querySelector("[data-chat-message-summary]"),
-            messageStatus: root.querySelector("[data-chat-message-status]"),
-            syncStatus: root.querySelector("[data-chat-sync-status]"),
+            threadTools: root.querySelector("[data-chat-thread-tools]"),
             loadOlder: root.querySelector("[data-chat-load-older]"),
             jumpLatest: root.querySelector("[data-chat-jump-latest]"),
             feed: root.querySelector("[data-chat-messages]"),
@@ -334,8 +325,6 @@
             composeType: root.querySelector("[data-chat-compose-type]"),
             composeTarget: root.querySelector("[data-chat-compose-target]"),
             composeInput: root.querySelector("[data-chat-compose-input]"),
-            composeTitle: root.querySelector("[data-chat-compose-title]"),
-            composeHint: root.querySelector("[data-chat-compose-hint]"),
             fileInput: root.querySelector("[data-chat-file-input]"),
             fileTrigger: root.querySelector("[data-chat-file-trigger]"),
             fileName: root.querySelector("[data-chat-file-name]"),
@@ -345,12 +334,6 @@
             sendButton: root.querySelector(".chat-send-btn"),
             composeStatus: root.querySelector("[data-chat-compose-status]")
         };
-
-        refs.tabButtons.forEach(function (button) {
-            var labelNode = button.querySelector(".chat-sidebar-tab-label");
-            button.dataset.baseLabel = labelNode ? labelNode.textContent.trim() : button.textContent.trim();
-            button._countNode = button.querySelector("[data-chat-tab-count]");
-        });
 
         function fetchJson(url, options) {
             var requestOptions = options || {};
@@ -386,11 +369,13 @@
             if (!refs.feed) {
                 return true;
             }
-            return refs.feed.scrollHeight - refs.feed.scrollTop - refs.feed.clientHeight < 72;
+            return refs.feed.scrollHeight - refs.feed.scrollTop - refs.feed.clientHeight < 88;
         }
 
         function scrollFeedToBottom() {
-            refs.feed.scrollTop = refs.feed.scrollHeight;
+            if (refs.feed) {
+                refs.feed.scrollTop = refs.feed.scrollHeight;
+            }
         }
 
         function autoResizeComposer() {
@@ -399,7 +384,10 @@
             }
             refs.composeInput.style.height = "auto";
             refs.composeInput.style.overflowY = "hidden";
-            refs.composeInput.style.height = Math.min(refs.composeInput.scrollHeight, isMobileLayout() ? 180 : 220) + "px";
+            refs.composeInput.style.height = Math.min(
+                refs.composeInput.scrollHeight,
+                isMobileLayout() ? 160 : 220
+            ) + "px";
             if (refs.composeInput.scrollHeight > parseInt(refs.composeInput.style.height, 10)) {
                 refs.composeInput.style.overflowY = "auto";
             }
@@ -407,7 +395,7 @@
 
         function saveCurrentDraft() {
             var draftKey = buildThreadKey(state.activeType, state.activeTarget);
-            if (!draftKey) {
+            if (!draftKey || !refs.composeInput) {
                 return;
             }
             state.drafts[draftKey] = refs.composeInput.value || "";
@@ -415,6 +403,9 @@
 
         function restoreCurrentDraft() {
             var draftKey = buildThreadKey(state.activeType, state.activeTarget);
+            if (!refs.composeInput) {
+                return;
+            }
             refs.composeInput.value = draftKey && state.drafts[draftKey] ? state.drafts[draftKey] : "";
             autoResizeComposer();
         }
@@ -447,266 +438,108 @@
             renderSyncStatus();
         }
 
-        function syncScrim() {
-            if (!refs.scrim) {
+        function syncAppShellLayout() {
+            var appShell = window.AppShell;
+            if (!appShell) {
                 return;
             }
-            var shouldShow = state.chatOpen || state.onlineOpen;
-            refs.scrim.setAttribute("aria-hidden", shouldShow ? "false" : "true");
-            refs.scrim.classList.toggle("is-visible", shouldShow);
-            document.body.classList.toggle("chat-overlay-open", shouldShow);
-        }
 
-        function syncMobileControls() {
-            var mobile = isMobileLayout();
-            var showThreadView = mobile && state.chatOpen && state.mobileView === "thread";
-            root.classList.toggle("is-mobile-layout", mobile);
-            root.classList.toggle("is-mobile-thread-view", showThreadView);
-            if (refs.mobileBrowse) {
-                refs.mobileBrowse.hidden = !showThreadView;
-            }
-            if (refs.mobileBack) {
-                refs.mobileBack.hidden = !showThreadView;
-            }
-        }
-
-        function setMobileView(viewName) {
-            state.mobileView = viewName === "thread" ? "thread" : "browse";
-            if (state.mobileView !== "thread") {
-                setSettingsOpen(false);
-            }
-            syncMobileControls();
-        }
-
-        function setPanelMode(modeName) {
-            if (modeName === "chat" || modeName === "messages" || modeName === "channels") {
-                state.panelMode = modeName;
-            } else {
-                state.panelMode = "messages";
-            }
-            root.classList.toggle("is-panel-mode-chat", state.panelMode === "chat");
-            root.classList.toggle("is-panel-mode-messages", state.panelMode === "messages");
-            root.classList.toggle("is-panel-mode-channels", state.panelMode === "channels");
-            refs.modeButtons.forEach(function (button) {
-                var isActive = button.dataset.chatMode === state.panelMode;
-                button.classList.toggle("is-active", isActive);
-                button.setAttribute("aria-selected", isActive ? "true" : "false");
-            });
-        }
-
-        function isTabAllowedForMode(tabName, modeName) {
-            var mode = modeName || state.panelMode;
-            if (mode === "messages") {
-                return tabName === "directs" || tabName === "users";
-            }
-            if (mode === "channels") {
-                return tabName === "channels" || tabName === "roles";
-            }
-            return true;
-        }
-
-        function getDefaultTabForMode(modeName) {
-            if (modeName === "messages") {
-                return "directs";
-            }
-            if (modeName === "channels") {
-                return "channels";
-            }
-            return state.activeTab || "channels";
-        }
-
-        function ensureTabForCurrentMode() {
-            if (state.panelMode === "chat") {
+            if (appShell.isMobile && appShell.isMobile()) {
+                if (appShell.closeSidebar) {
+                    appShell.closeSidebar();
+                }
+                state.collapsedSidebarForChat = false;
                 return;
             }
-            if (!isTabAllowedForMode(state.activeTab)) {
-                setActiveTab(getDefaultTabForMode(state.panelMode));
-            }
+
+            state.collapsedSidebarForChat = false;
         }
 
-        function setActiveTab(tabName) {
-            state.activeTab = tabName;
-            refs.tabButtons.forEach(function (button) {
-                button.classList.toggle("is-active", button.dataset.chatTab === tabName);
-            });
-            refs.tabPanes.forEach(function (pane) {
-                pane.classList.toggle("is-active", pane.dataset.chatPane === tabName);
-            });
+        function syncOpenState() {
+            var showThread = state.chatOpen && state.currentView === "thread";
+            var showList = state.chatOpen && !showThread;
+
+            root.classList.toggle("is-open", state.chatOpen);
+            root.classList.toggle("is-thread-view", showThread);
+            root.classList.toggle("is-list-view", showList);
+
+            if (refs.chatTrigger) {
+                refs.chatTrigger.classList.toggle("is-active", state.chatOpen);
+            }
+            if (refs.chatPanel) {
+                refs.chatPanel.setAttribute("aria-hidden", state.chatOpen ? "false" : "true");
+            }
+            if (refs.browser) {
+                refs.browser.hidden = !state.chatOpen;
+            }
+            if (refs.threadPanel) {
+                refs.threadPanel.hidden = !state.chatOpen;
+            }
+
+            syncAppShellLayout();
         }
 
-        function getListForTab(tabName) {
-            if (tabName === "channels") {
-                return refs.channelList;
-            }
-            if (tabName === "roles") {
-                return refs.roleList;
-            }
-            if (tabName === "directs") {
-                return refs.directList;
-            }
-            if (tabName === "users") {
-                return refs.userList;
-            }
-            return null;
-        }
-
-        function scrollTabListToTop(tabName) {
-            var list = getListForTab(tabName || state.activeTab);
-            if (list) {
-                list.scrollTop = 0;
-            }
-        }
-
-        function getTabForThread(type, preferredTab) {
-            if (preferredTab) {
-                return preferredTab;
-            }
-            if (type === "channel") {
-                return "channels";
-            }
-            if (type === "role") {
-                return "roles";
-            }
-            return "directs";
-        }
-
-        function setSettingsOpen(open) {
-            var canEdit = !!(state.activeThread && state.activeThread.editable);
-            state.settingsOpen = !!open && canEdit;
-            refs.channelForm.hidden = !state.settingsOpen;
-            refs.editToggle.hidden = !canEdit;
-            refs.editToggle.classList.toggle("is-active", state.settingsOpen);
-        }
-
-        function pickDefaultThread(overview) {
-            var collections = [
-                { items: overview.direct_threads || [], tab: "directs" },
-                { items: overview.role_groups || [], tab: "roles" },
-                { items: overview.channels || [], tab: "channels" }
-            ];
-
-            for (var index = 0; index < collections.length; index += 1) {
-                var unreadMatch = collections[index].items.find(function (item) {
-                    return Number(item.unread_count || 0) > 0;
-                });
-                if (unreadMatch) {
-                    return {
-                        type: unreadMatch.thread_type,
-                        target: unreadMatch.thread_type === "direct" ? unreadMatch.target_username : unreadMatch.room_key,
-                        tab: collections[index].tab
-                    };
+        function setView(viewName) {
+            state.currentView = viewName === "thread" && state.activeType ? "thread" : "list";
+            if (state.currentView !== "thread") {
+                state.settingsOpen = false;
+                if (refs.channelForm) {
+                    refs.channelForm.hidden = true;
                 }
             }
-
-            if (overview.channels && overview.channels.length) {
-                return { type: "channel", target: overview.channels[0].room_key, tab: "channels" };
-            }
-            if (overview.role_groups && overview.role_groups.length) {
-                return { type: "role", target: overview.role_groups[0].room_key, tab: "roles" };
-            }
-            if (overview.users && overview.users.length) {
-                return { type: "direct", target: overview.users[0].username, tab: "users" };
-            }
-            return null;
+            syncOpenState();
+            updateComposerAvailability();
+            syncComposerState();
+            syncJumpLatestVisibility();
         }
 
-        function setChatOpen(open) {
+        function setChatOpen(open, options) {
+            var config = options || {};
             state.chatOpen = !!open;
-            refs.chatPanel.setAttribute("aria-hidden", state.chatOpen ? "false" : "true");
             if (!state.chatOpen) {
-                setSettingsOpen(false);
+                syncOpenState();
+                return;
             }
-            if (state.chatOpen && state.onlineOpen) {
-                state.onlineOpen = false;
-                refs.onlinePanel.setAttribute("aria-hidden", "true");
-            }
-            if (state.chatOpen) {
-                if (isMobileLayout()) {
-                    setMobileView(state.activeType ? state.mobileView : "browse");
-                } else {
-                    syncMobileControls();
-                }
-                setPanelMode(state.activeType ? "chat" : "messages");
-                ensureTabForCurrentMode();
-                refreshOverview();
-            } else {
-                syncMobileControls();
-            }
-            syncScrim();
 
-            if (state.chatOpen && !isMobileLayout() && !state.activeType && state.overview) {
-                var firstItem = pickDefaultThread(state.overview);
-                if (firstItem) {
-                    setActiveTab(getTabForThread(firstItem.type, firstItem.tab));
-                    loadThread(firstItem.type, firstItem.target, {
-                        scrollToBottom: true,
-                        tab: firstItem.tab,
-                        switchMobileView: false,
-                        mode: "replace"
-                    }).catch(function () {
-                        return;
-                    });
-                }
+            if (state.currentView === "thread" && !state.activeType) {
+                state.currentView = "list";
             }
-        }
 
-        function setOnlineOpen(open) {
-            state.onlineOpen = !!open;
-            refs.onlinePanel.setAttribute("aria-hidden", state.onlineOpen ? "false" : "true");
-            if (state.onlineOpen && state.chatOpen) {
-                state.chatOpen = false;
-                refs.chatPanel.setAttribute("aria-hidden", "true");
-                setSettingsOpen(false);
-            }
-            if (state.onlineOpen) {
-                if (refs.onlineList) {
-                    refs.onlineList.scrollTop = 0;
-                }
-                if (refs.onlinePanel) {
-                    refs.onlinePanel.scrollTop = 0;
-                }
-                refreshOverview();
-                if (refs.onlineSearch && !isMobileLayout()) {
-                    refs.onlineSearch.focus();
-                }
-            }
-            syncMobileControls();
-            syncScrim();
-        }
+            syncOpenState();
 
-        function closePanels() {
-            if (state.chatOpen) {
-                state.chatOpen = false;
-                refs.chatPanel.setAttribute("aria-hidden", "true");
-                setSettingsOpen(false);
+            if (config.skipRefresh) {
+                return;
             }
-            if (state.onlineOpen) {
-                state.onlineOpen = false;
-                refs.onlinePanel.setAttribute("aria-hidden", "true");
+
+            if (state.currentView === "thread" && state.activeType && state.activeTarget) {
+                refreshActiveThread();
+                return;
             }
-            syncMobileControls();
-            syncScrim();
+
+            refreshOverview();
+            if (refs.chatSearch && !isMobileLayout()) {
+                refs.chatSearch.focus();
+            }
         }
 
         function updateUnreadBadge(total) {
             var unread = Number(total || 0);
-            refs.chatBadge.hidden = unread <= 0;
-            refs.chatBadge.textContent = unread > 99 ? "99+" : String(unread);
-            refs.chatSummary.textContent = unread <= 0 ? "All caught up" : (unread === 1 ? "1 unread" : String(unread) + " unread");
+            if (refs.chatBadge) {
+                refs.chatBadge.hidden = unread <= 0;
+                refs.chatBadge.textContent = unread > 99 ? "99+" : String(unread);
+            }
+            if (refs.chatSummary) {
+                refs.chatSummary.textContent = unread <= 0
+                    ? "All caught up"
+                    : (unread === 1 ? "1 unread conversation" : unread + " unread conversations");
+            }
         }
 
-        function updateOnlineBadge(total) {
-            var online = Number(total || 0);
-            refs.onlineBadge.hidden = online <= 0;
-            refs.onlineBadge.textContent = online > 99 ? "99+" : String(online);
-            refs.onlineSummary.textContent = online === 1 ? "1 online now" : String(online) + " online now";
-        }
-
-        function updateStatCards(overview) {
+        function updateStatChips(overview) {
             var unreadTotal = Number((overview && overview.unread_total) || 0);
-            var onlineTotal = (overview && overview.users ? overview.users.filter(function (item) {
-                return item.presence === "online";
-            }).length : 0);
+            var onlineTotal = overview && overview.users
+                ? overview.users.filter(function (item) { return item.presence === "online"; }).length
+                : 0;
 
             if (refs.chatStatUnread) {
                 refs.chatStatUnread.textContent = unreadTotal > 99 ? "99+" : String(unreadTotal);
@@ -716,238 +549,11 @@
             }
         }
 
-        function isItemActive(type, target) {
-            return state.activeType === type && state.activeTarget === target;
-        }
-
-        function updateTabCounts(overview) {
-            var counts = {
-                channels: (overview.channels || []).reduce(function (sum, item) { return sum + Number(item.unread_count || 0); }, 0),
-                roles: (overview.role_groups || []).reduce(function (sum, item) { return sum + Number(item.unread_count || 0); }, 0),
-                directs: (overview.direct_threads || []).reduce(function (sum, item) { return sum + Number(item.unread_count || 0); }, 0),
-                users: 0
-            };
-
-            refs.tabButtons.forEach(function (button) {
-                var countNode = button._countNode;
-                var count = counts[button.dataset.chatTab] || 0;
-                if (!countNode) {
-                    return;
-                }
-                countNode.hidden = count <= 0;
-                countNode.textContent = count > 99 ? "99+" : String(count);
-            });
-        }
-
-        function getSearchText(item) {
-            return normalizeSearch([
-                item.title,
-                item.description,
-                item.role_name,
-                item.target_username,
-                item.username,
-                item.fullname,
-                item.designation,
-                item.last_message_preview,
-                item.last_message_sender_name
-            ].join(" "));
-        }
-
-        function getSearchRank(item, term) {
-            var searchTerm = normalizeSearch(term);
-            if (!searchTerm) {
-                return 0;
-            }
-
-            var username = normalizeSearch(item.target_username || item.username);
-            var primaryName = normalizeSearch(item.title || item.fullname || item.display_name);
-            var secondaryName = normalizeSearch(item.fullname || item.display_name || item.title);
-            var designation = normalizeSearch(item.description || item.designation || "");
-            var combined = getSearchText(item);
-            var compactTerm = searchTerm.replace(/\s+/g, "");
-            var compactCombined = combined.replace(/\s+/g, "");
-            var tokens = searchTerm.split(/\s+/).filter(Boolean);
-
-            if (username && username === searchTerm) {
-                return 0;
-            }
-            if (primaryName && primaryName === searchTerm) {
-                return 1;
-            }
-            if (secondaryName && secondaryName === searchTerm) {
-                return 2;
-            }
-            if (username && username.indexOf(searchTerm) !== -1) {
-                return 10 + username.indexOf(searchTerm);
-            }
-            if (primaryName && primaryName.indexOf(searchTerm) !== -1) {
-                return 30 + primaryName.indexOf(searchTerm);
-            }
-            if (secondaryName && secondaryName.indexOf(searchTerm) !== -1) {
-                return 40 + secondaryName.indexOf(searchTerm);
-            }
-            if (designation && designation.indexOf(searchTerm) !== -1) {
-                return 60 + designation.indexOf(searchTerm);
-            }
-            if (compactTerm && compactCombined.indexOf(compactTerm) !== -1) {
-                return 80 + compactCombined.indexOf(compactTerm);
-            }
-            if (tokens.length && tokens.every(function (token) { return combined.indexOf(token) !== -1; })) {
-                return 120 + combined.indexOf(tokens[0]);
-            }
-            return -1;
-        }
-
-        function sortSearchItems(items, term) {
-            return (items || []).slice().sort(function (left, right) {
-                var leftRank = getSearchRank(left, term);
-                var rightRank = getSearchRank(right, term);
-                if (leftRank !== rightRank) {
-                    return leftRank - rightRank;
-                }
-                if (!!left.is_favorite !== !!right.is_favorite) {
-                    return left.is_favorite ? -1 : 1;
-                }
-                return getSearchText(left).localeCompare(getSearchText(right));
-            });
-        }
-
-        function filterItems(items, tabName) {
-            var filteredItems = (items || []).filter(function (item) {
-                if (state.searchTerm && getSearchRank(item, state.searchTerm) < 0) {
-                    return false;
-                }
-                if (state.filterMode === "unread" && tabName !== "users") {
-                    return Number(item.unread_count || 0) > 0;
-                }
-                return true;
-            });
-
-            if (state.searchTerm) {
-                return sortSearchItems(filteredItems, state.searchTerm);
-            }
-
-            return filteredItems;
-        }
-
-        function formatPreviewLine(item) {
-            var preview = item.last_message_preview || "No messages yet";
-            if (!item.last_message_sender_name) {
-                return preview;
-            }
-
-            if (item.thread_type === "direct") {
-                return item.last_message_is_self ? "You: " + preview : preview;
-            }
-
-            return (item.last_message_is_self ? "You" : item.last_message_sender_name) + ": " + preview;
-        }
-
-        function buildListItem(config) {
-            var shell = createNode("div", "chat-list-item-shell");
-            var button = createNode("button", "chat-list-item");
-            var actions = null;
-            button.type = "button";
-            button.dataset.chatType = config.type;
-            button.dataset.chatTarget = config.target;
-            if (isItemActive(config.type, config.target)) {
-                button.classList.add("is-active");
-            }
-            if (config.isFavorite) {
-                button.classList.add("is-favorite");
-            }
-
-            var main = createNode("div", "chat-list-item-main");
-            var avatar = createNode("span", "chat-list-item-avatar" + (config.avatarTone ? " chat-list-item-avatar-" + config.avatarTone : ""));
-            applyAvatarFace(avatar, config.avatarUrl, config.avatarText);
-            if (config.status) {
-                avatar.appendChild(createNode("span", "chat-list-item-avatar-status" + (config.status === "online" ? " is-online" : "")));
-            }
-            main.appendChild(avatar);
-
-            var copy = createNode("div", "chat-list-item-copy");
-            if (config.eyebrow) {
-                copy.appendChild(createNode("div", "chat-list-item-eyebrow", config.eyebrow));
-            }
-            var titleRow = createNode("div", "chat-list-item-row");
-            titleRow.appendChild(createNode("div", "chat-list-item-title", config.title));
-
-            var tail = createNode("div", "chat-list-item-tail");
-            if (config.timestamp) {
-                tail.appendChild(createNode("span", "chat-list-item-time", config.timestamp));
-            }
-            if (config.meta) {
-                tail.appendChild(createNode("span", "chat-list-item-status" + (config.metaTone ? " is-" + config.metaTone : ""), config.meta));
-            }
-            if (config.unreadCount > 0) {
-                tail.appendChild(createNode("span", "chat-list-item-unread", String(config.unreadCount)));
-            }
-            if (tail.childNodes.length) {
-                titleRow.appendChild(tail);
-            }
-            copy.appendChild(titleRow);
-
-            if (config.subtitle) {
-                copy.appendChild(createNode("div", "chat-list-item-subtitle", config.subtitle));
-            }
-            if (config.note) {
-                copy.appendChild(createNode("div", "chat-list-item-note" + (config.unreadCount > 0 ? " is-unread" : ""), config.note));
-            }
-
-            main.appendChild(copy);
-            button.appendChild(main);
-            if (config.actions && config.actions.length) {
-                actions = createNode("div", "chat-list-item-actions");
-                config.actions.forEach(function (action) {
-                    var actionButton = createNode(
-                        "button",
-                        "chat-list-item-action" + (action.className ? " " + action.className : ""),
-                        action.label
-                    );
-                    actionButton.type = "button";
-                    actionButton.title = action.title || action.label;
-                    actionButton.setAttribute("aria-label", action.title || action.label);
-                    actionButton.addEventListener("click", function (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        action.onClick();
-                    });
-                    actions.appendChild(actionButton);
-                });
-            }
-            button.addEventListener("click", function () {
-                if (typeof button.blur === "function") {
-                    button.blur();
-                }
-                setChatOpen(true);
-                setPanelMode("chat");
-                setActiveTab(getTabForThread(config.type, config.tab));
-                loadThread(config.type, config.target, {
-                    scrollToBottom: true,
-                    tab: config.tab,
-                    switchMobileView: true,
-                    mode: "replace"
-                }).catch(function () {
-                    return;
-                });
-            });
-            shell.appendChild(button);
-            if (actions) {
-                shell.appendChild(actions);
-            }
-            return shell;
-        }
-
         function updateFavoriteButtonLabel(button, isActive) {
             if (!button) {
                 return;
             }
             button.dataset.chatFavoriteActive = isActive ? "true" : "false";
-            if (button.classList.contains("online-user-action-button")) {
-                button.textContent = isActive ? "★ Favorite" : "☆ Favorite";
-                button.classList.toggle("is-active", isActive);
-                return;
-            }
             if (button.classList.contains("chat-list-item-action-favorite")) {
                 button.textContent = isActive ? "★" : "☆";
                 button.classList.toggle("is-active", isActive);
@@ -985,23 +591,6 @@
             });
         }
 
-        function sendFavoriteMove(username, direction) {
-            var favoriteMoveUrl = root.dataset.favoriteMoveUrl;
-            if (!favoriteMoveUrl) {
-                return Promise.reject(new Error("Favorite ordering is unavailable."));
-            }
-            var formData = new FormData();
-            formData.append("username", username);
-            formData.append("direction", direction);
-            return fetchJson(favoriteMoveUrl, {
-                method: "POST",
-                body: formData
-            }).then(function (payload) {
-                syncOverview(payload.overview || {});
-                return payload;
-            });
-        }
-
         function toggleFavorite(username, shouldFavorite, triggerButton) {
             if (!username) {
                 return Promise.resolve();
@@ -1016,7 +605,7 @@
                     return payload;
                 })
                 .catch(function (error) {
-                    setComposeStatus(error.message, "error");
+                    setComposeStatus(error.message || "Unable to update favorite.", "error");
                     throw error;
                 })
                 .finally(function () {
@@ -1026,162 +615,451 @@
                 });
         }
 
-        function buildFavoriteActions(item, tabName) {
-            if (!item || !item.username && !item.target_username) {
-                return [];
+        function getSearchText(item) {
+            return normalizeSearch([
+                item.title,
+                item.subtitle,
+                item.note,
+                item.eyebrowText,
+                item.username,
+                item.pill,
+                item.description,
+                item.searchBlob
+            ].join(" "));
+        }
+
+        function getSearchRank(item, term) {
+            var searchTerm = normalizeSearch(term);
+            if (!searchTerm) {
+                return 0;
             }
-            var username = item.target_username || item.username;
-            var actions = [
-                {
-                    label: item.is_favorite ? "★" : "☆",
-                    title: item.is_favorite ? "Remove from favorites" : "Add to favorites",
-                    className: "chat-list-item-action-favorite" + (item.is_favorite ? " is-active" : ""),
-                    onClick: function () {
-                        toggleFavorite(username, !item.is_favorite).catch(function () {
-                            return;
-                        });
-                    }
+
+            var username = normalizeSearch(item.username);
+            var primaryName = normalizeSearch(item.title);
+            var secondaryName = normalizeSearch(item.subtitle);
+            var combined = getSearchText(item);
+            var compactTerm = searchTerm.replace(/\s+/g, "");
+            var compactCombined = combined.replace(/\s+/g, "");
+            var tokens = searchTerm.split(/\s+/).filter(Boolean);
+
+            if (username && username === searchTerm) {
+                return 0;
+            }
+            if (primaryName && primaryName === searchTerm) {
+                return 1;
+            }
+            if (secondaryName && secondaryName === searchTerm) {
+                return 2;
+            }
+            if (username && username.indexOf(searchTerm) !== -1) {
+                return 10 + username.indexOf(searchTerm);
+            }
+            if (primaryName && primaryName.indexOf(searchTerm) !== -1) {
+                return 20 + primaryName.indexOf(searchTerm);
+            }
+            if (secondaryName && secondaryName.indexOf(searchTerm) !== -1) {
+                return 40 + secondaryName.indexOf(searchTerm);
+            }
+            if (compactTerm && compactCombined.indexOf(compactTerm) !== -1) {
+                return 60 + compactCombined.indexOf(compactTerm);
+            }
+            if (tokens.length && tokens.every(function (token) { return combined.indexOf(token) !== -1; })) {
+                return 90 + combined.indexOf(tokens[0]);
+            }
+            return -1;
+        }
+
+        function sortSearchItems(items, term) {
+            return (items || []).slice().sort(function (left, right) {
+                var leftRank = getSearchRank(left, term);
+                var rightRank = getSearchRank(right, term);
+                if (leftRank !== rightRank) {
+                    return leftRank - rightRank;
                 }
-            ];
-            if (item.is_favorite && (tabName === "directs" || tabName === "users")) {
-                actions.push({
-                    label: "↑",
-                    title: "Move favorite up",
-                    onClick: function () {
-                        sendFavoriteMove(username, "up").catch(function (error) {
-                            setComposeStatus(error.message, "error");
-                        });
-                    }
-                });
-                actions.push({
-                    label: "↓",
-                    title: "Move favorite down",
-                    onClick: function () {
-                        sendFavoriteMove(username, "down").catch(function (error) {
-                            setComposeStatus(error.message, "error");
-                        });
-                    }
-                });
-            }
-            return actions;
-        }
-
-        function openDirectConversation(username, preferredTab) {
-            if (!username) {
-                return Promise.resolve();
-            }
-            setOnlineOpen(false);
-            setChatOpen(true);
-            setPanelMode("chat");
-            setActiveTab(preferredTab || "directs");
-            return loadThread("direct", username, {
-                scrollToBottom: true,
-                tab: preferredTab || "directs",
-                switchMobileView: true,
-                mode: "replace"
-            });
-        }
-
-        function renderList(container, items, builder, emptyLabel) {
-            container.innerHTML = "";
-            if (!items || !items.length) {
-                container.appendChild(createNode("div", "chat-empty-state chat-empty-state-compact", emptyLabel || "Nothing here yet."));
-                return;
-            }
-            items.forEach(function (item) {
-                container.appendChild(builder(item));
-            });
-        }
-
-        function renderOnlineUsers(overview) {
-            var directoryUsers = overview.users || [];
-            var onlineUsers = directoryUsers.filter(function (item) {
-                return item.presence === "online";
-            });
-            var totalOnline = onlineUsers.length;
-            if (state.onlineSearchTerm) {
-                onlineUsers = sortSearchItems(
-                    directoryUsers.filter(function (item) {
-                        return getSearchRank(item, state.onlineSearchTerm) >= 0;
-                    }),
-                    state.onlineSearchTerm
-                );
-            }
-            updateOnlineBadge(totalOnline);
-            if (refs.onlineSummary) {
-                if (state.onlineSearchTerm) {
-                    refs.onlineSummary.textContent = onlineUsers.length + " match" + (onlineUsers.length === 1 ? "" : "es") + " across all users";
-                } else {
-                    refs.onlineSummary.textContent = totalOnline === 1 ? "1 online" : totalOnline + " online";
+                if (!!left.isFavorite !== !!right.isFavorite) {
+                    return left.isFavorite ? -1 : 1;
                 }
+                return String(left.title || "").localeCompare(String(right.title || ""));
+            });
+        }
+
+        function formatPreviewLine(item) {
+            var preview = item.last_message_preview || "No messages yet";
+            if (!item.last_message_sender_name) {
+                return preview;
             }
-            refs.onlineList.innerHTML = "";
-            if (!onlineUsers.length) {
-                refs.onlineList.appendChild(createNode(
-                    "div",
-                    "chat-empty-state chat-empty-state-compact",
-                    state.onlineSearchTerm ? "No users match your search." : "No online users right now."
-                ));
-                return;
+
+            if (item.thread_type === "direct") {
+                return item.last_message_is_self ? "You: " + preview : preview;
             }
 
-            onlineUsers.forEach(function (user) {
-                var card = createNode("article", "online-user-card");
-                var button = createNode("button", "online-user-item");
-                button.type = "button";
+            return (item.last_message_is_self ? "You" : item.last_message_sender_name) + ": " + preview;
+        }
 
-                var avatar = createNode("span", "chat-list-item-avatar chat-list-item-avatar-person");
-                applyAvatarFace(avatar, user.avatar_url, user.avatar_initials || getInitials(user.fullname, "U"));
-                avatar.appendChild(createNode("span", "chat-list-item-avatar-status" + (user.presence === "online" ? " is-online" : "")));
+        function formatPresenceNote(item) {
+            if (!item) {
+                return "";
+            }
+            if (item.presence === "online") {
+                return "Online now";
+            }
+            return "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "not available");
+        }
 
-                var copy = createNode("div", "online-user-copy");
-                copy.appendChild(createNode("strong", "", user.fullname));
-                copy.appendChild(createNode(
+        function buildUnifiedItems(overview) {
+            var items = [];
+            var directLookup = {};
+
+            (overview.direct_threads || []).forEach(function (item) {
+                directLookup[String(item.target_username || "").toLowerCase()] = true;
+                var directDescription = normalizeThreadDescription(item.description);
+                items.push({
+                    type: "direct",
+                    target: item.target_username,
+                    title: item.title,
+                    subtitle: joinBits([directDescription, buildHandle(item.target_username)]),
+                    note: formatPreviewLine(item),
+                    eyebrowText: formatPresenceNote(item),
+                    unreadCount: Number(item.unread_count || 0),
+                    timestamp: formatConversationTime(item.last_message_at),
+                    pill: "Direct",
+                    pillTone: "direct",
+                    avatarText: getInitials(item.title, "DM"),
+                    avatarUrl: item.avatar_url,
+                    avatarTone: "direct",
+                    status: item.presence || "",
+                    isFavorite: !!item.is_favorite,
+                    canFavorite: true,
+                    username: item.target_username,
+                    hasConversation: true,
+                    description: directDescription,
+                    sortTime: parseTimestamp(item.last_message_at),
+                    searchBlob: [
+                        directDescription,
+                        item.target_username,
+                        item.last_message_preview,
+                        item.last_message_sender_name
+                    ].join(" ")
+                });
+            });
+
+            (overview.channels || []).forEach(function (item) {
+                var channelDescription = normalizeThreadDescription(item.description);
+                items.push({
+                    type: "channel",
+                    target: item.room_key,
+                    title: item.title,
+                    subtitle: channelDescription || "Public channel",
+                    note: formatPreviewLine(item),
+                    eyebrowText: joinBits([
+                        "Channel " + getChannelBadge(item.room_key),
+                        item.member_count ? item.member_count + " members" : "Shared room"
+                    ]),
+                    unreadCount: Number(item.unread_count || 0),
+                    timestamp: formatConversationTime(item.last_message_at),
+                    pill: "Channel",
+                    pillTone: "channel",
+                    avatarText: getChannelBadge(item.room_key),
+                    avatarUrl: "",
+                    avatarTone: "channel",
+                    status: "",
+                    isFavorite: false,
+                    canFavorite: false,
+                    username: "",
+                    hasConversation: true,
+                    description: channelDescription,
+                    sortTime: parseTimestamp(item.last_message_at),
+                    searchBlob: [
+                        channelDescription,
+                        item.role_name,
+                        item.last_message_preview,
+                        item.last_message_sender_name
+                    ].join(" ")
+                });
+            });
+
+            (overview.role_groups || []).forEach(function (item) {
+                var roleDescription = normalizeThreadDescription(item.description);
+                items.push({
+                    type: "role",
+                    target: item.room_key,
+                    title: item.title,
+                    subtitle: roleDescription || (item.role_name ? item.role_name + " group" : "Restricted group"),
+                    note: formatPreviewLine(item),
+                    eyebrowText: joinBits([
+                        item.role_name || "Role group",
+                        item.member_count ? item.member_count + " members" : "Restricted"
+                    ]),
+                    unreadCount: Number(item.unread_count || 0),
+                    timestamp: formatConversationTime(item.last_message_at),
+                    pill: "Group",
+                    pillTone: "group",
+                    avatarText: getInitials(item.role_name || item.title, "RG"),
+                    avatarUrl: "",
+                    avatarTone: "group",
+                    status: "",
+                    isFavorite: false,
+                    canFavorite: false,
+                    username: "",
+                    hasConversation: true,
+                    description: roleDescription,
+                    sortTime: parseTimestamp(item.last_message_at),
+                    searchBlob: [
+                        roleDescription,
+                        item.role_name,
+                        item.last_message_preview,
+                        item.last_message_sender_name
+                    ].join(" ")
+                });
+            });
+
+            (overview.users || []).forEach(function (item) {
+                var usernameKey = String(item.username || "").toLowerCase();
+                if (directLookup[usernameKey]) {
+                    return;
+                }
+                items.push({
+                    type: "direct",
+                    target: item.username,
+                    title: item.fullname,
+                    subtitle: joinBits([item.designation, buildHandle(item.username)]),
+                    note: formatPresenceNote(item),
+                    eyebrowText: "Start a direct conversation",
+                    unreadCount: 0,
+                    timestamp: formatConversationTime(item.last_seen_at || item.last_login_at),
+                    pill: "Individual",
+                    pillTone: "person",
+                    avatarText: getInitials(item.fullname, "U"),
+                    avatarUrl: item.avatar_url,
+                    avatarTone: "person",
+                    status: item.presence || "",
+                    isFavorite: !!item.is_favorite,
+                    canFavorite: true,
+                    username: item.username,
+                    hasConversation: false,
+                    description: item.designation || "",
+                    sortTime: parseTimestamp(item.last_seen_at || item.last_login_at),
+                    searchBlob: [
+                        item.fullname,
+                        item.display_name,
+                        item.designation,
+                        item.username,
+                        item.presence_label
+                    ].join(" ")
+                });
+            });
+
+            return items;
+        }
+
+        function sortUnifiedItems(items) {
+            return (items || []).slice().sort(function (left, right) {
+                if (!!left.hasConversation !== !!right.hasConversation) {
+                    return left.hasConversation ? -1 : 1;
+                }
+                if (!left.hasConversation && !right.hasConversation) {
+                    if (!!left.isFavorite !== !!right.isFavorite) {
+                        return left.isFavorite ? -1 : 1;
+                    }
+                    if ((left.status === "online") !== (right.status === "online")) {
+                        return left.status === "online" ? -1 : 1;
+                    }
+                    return String(left.title || "").localeCompare(String(right.title || ""));
+                }
+
+                var leftTime = left.sortTime ? left.sortTime.getTime() : 0;
+                var rightTime = right.sortTime ? right.sortTime.getTime() : 0;
+                if (leftTime !== rightTime) {
+                    return rightTime - leftTime;
+                }
+                if (left.unreadCount !== right.unreadCount) {
+                    return right.unreadCount - left.unreadCount;
+                }
+                return String(left.title || "").localeCompare(String(right.title || ""));
+            });
+        }
+
+        function sortPeopleItems(items) {
+            return (items || []).slice().sort(function (left, right) {
+                if (!!left.isFavorite !== !!right.isFavorite) {
+                    return left.isFavorite ? -1 : 1;
+                }
+                if (!!left.hasConversation !== !!right.hasConversation) {
+                    return left.hasConversation ? -1 : 1;
+                }
+                var leftTime = left.sortTime ? left.sortTime.getTime() : 0;
+                var rightTime = right.sortTime ? right.sortTime.getTime() : 0;
+                if (leftTime !== rightTime) {
+                    return rightTime - leftTime;
+                }
+                if ((left.status === "online") !== (right.status === "online")) {
+                    return left.status === "online" ? -1 : 1;
+                }
+                return String(left.title || "").localeCompare(String(right.title || ""));
+            });
+        }
+
+        function getFilteredItems() {
+            var items = buildUnifiedItems(state.overview || {});
+
+            items = items.filter(function (item) {
+                if (state.filterMode === "unread") {
+                    return item.hasConversation && item.unreadCount > 0;
+                }
+                if (state.filterMode === "channels") {
+                    return item.type === "channel";
+                }
+                if (state.filterMode === "groups") {
+                    return item.type === "role";
+                }
+                if (state.filterMode === "people") {
+                    return item.type === "direct";
+                }
+                return true;
+            });
+
+            if (state.searchTerm) {
+                items = items.filter(function (item) {
+                    return getSearchRank(item, state.searchTerm) >= 0;
+                });
+                return sortSearchItems(items, state.searchTerm);
+            }
+
+            if (state.filterMode === "people") {
+                return sortPeopleItems(items);
+            }
+
+            return sortUnifiedItems(items);
+        }
+
+        function getEmptyListLabel() {
+            if (state.searchTerm) {
+                return "No conversations or staff match your search.";
+            }
+            if (state.filterMode === "unread") {
+                return "No unread conversations right now.";
+            }
+            if (state.filterMode === "channels") {
+                return "No channels available.";
+            }
+            if (state.filterMode === "groups") {
+                return "No role groups available.";
+            }
+            if (state.filterMode === "people") {
+                return "No individuals available.";
+            }
+            return "No conversations available yet.";
+        }
+
+        function buildConversationRow(item) {
+            var shell = createNode("div", "chat-list-item-shell");
+            var button = createNode("button", "chat-list-item");
+            button.type = "button";
+            if (state.activeType === item.type && state.activeTarget === item.target) {
+                button.classList.add("is-active");
+            }
+            if (item.unreadCount > 0) {
+                button.classList.add("is-unread");
+            }
+            if (item.isFavorite) {
+                button.classList.add("is-favorite");
+            }
+
+            var main = createNode("div", "chat-list-item-main");
+            var avatar = createNode("span", "chat-list-item-avatar chat-list-item-avatar-" + item.avatarTone);
+            applyAvatarFace(avatar, item.avatarUrl, item.avatarText);
+            if (item.status) {
+                avatar.appendChild(createNode("span", "chat-list-item-avatar-status" + (item.status === "online" ? " is-online" : "")));
+            }
+            main.appendChild(avatar);
+
+            var copy = createNode("div", "chat-list-item-copy");
+            var eyebrow = createNode("div", "chat-list-item-eyebrow");
+            eyebrow.appendChild(createNode("span", "chat-list-pill is-" + item.pillTone, item.pill));
+            if (item.eyebrowText) {
+                eyebrow.appendChild(createNode(
                     "span",
-                    "",
-                    joinBits([
-                        buildHandle(user.username),
-                        user.presence === "online"
-                            ? "Online now"
-                            : "Last active " + (formatLastActivity(user.last_seen_at || user.last_login_at) || "Not available")
-                    ])
+                    "chat-list-item-eyebrow-text" + (item.status === "online" ? " is-online" : ""),
+                    item.eyebrowText
                 ));
+            }
+            copy.appendChild(eyebrow);
 
-                button.appendChild(avatar);
-                button.appendChild(copy);
-                button.addEventListener("click", function () {
-                    if (typeof button.blur === "function") {
-                        button.blur();
-                    }
-                    openDirectConversation(user.username, "directs").catch(function () {
-                        return;
-                    });
+            var titleRow = createNode("div", "chat-list-item-row");
+            titleRow.appendChild(createNode("div", "chat-list-item-title", item.title));
+            var tail = createNode("div", "chat-list-item-tail");
+            if (item.timestamp) {
+                tail.appendChild(createNode("span", "chat-list-item-time", item.timestamp));
+            }
+            if (item.unreadCount > 0) {
+                tail.appendChild(createNode("span", "chat-list-item-unread", item.unreadCount > 99 ? "99+" : String(item.unreadCount)));
+            }
+            titleRow.appendChild(tail);
+            copy.appendChild(titleRow);
+
+            if (item.subtitle) {
+                copy.appendChild(createNode("div", "chat-list-item-subtitle", item.subtitle));
+            }
+            if (item.note) {
+                copy.appendChild(createNode(
+                    "div",
+                    "chat-list-item-note" + (item.unreadCount > 0 ? " is-unread" : ""),
+                    item.note
+                ));
+            }
+
+            main.appendChild(copy);
+            button.appendChild(main);
+            button.addEventListener("click", function () {
+                if (typeof button.blur === "function") {
+                    button.blur();
+                }
+                openConversation(item.type, item.target).catch(function () {
+                    return;
                 });
-                card.appendChild(button);
-                var actions = createNode("div", "online-user-actions");
-                var favoriteButton = createNode(
+            });
+            shell.appendChild(button);
+
+            if (item.canFavorite) {
+                var actionButton = createNode(
                     "button",
-                    "online-user-action online-user-action-button" + (user.is_favorite ? " is-active" : ""),
-                    user.is_favorite ? "★ Favorite" : "☆ Favorite"
+                    "chat-list-item-action chat-list-item-action-favorite" + (item.isFavorite ? " is-active" : ""),
+                    item.isFavorite ? "★" : "☆"
                 );
-                favoriteButton.type = "button";
-                favoriteButton.addEventListener("click", function (event) {
+                actionButton.type = "button";
+                actionButton.title = item.isFavorite ? "Remove from favorites" : "Add to favorites";
+                actionButton.setAttribute("aria-label", actionButton.title);
+                actionButton.addEventListener("click", function (event) {
                     event.preventDefault();
                     event.stopPropagation();
-                    toggleFavorite(user.username, !user.is_favorite, favoriteButton).then(function () {
-                        favoriteButton.classList.toggle("is-active", !user.is_favorite);
-                    }).catch(function () {
+                    toggleFavorite(item.username || item.target, !item.isFavorite, actionButton).catch(function () {
                         return;
                     });
                 });
-                actions.appendChild(favoriteButton);
-                if (user.profile_url) {
-                    var profileLink = createNode("a", "online-user-action", "Profile");
-                    profileLink.href = user.profile_url;
-                    actions.appendChild(profileLink);
-                }
-                card.appendChild(actions);
-                refs.onlineList.appendChild(card);
+                shell.appendChild(actionButton);
+            }
+
+            return shell;
+        }
+
+        function renderUnifiedList() {
+            if (!refs.unifiedList) {
+                return;
+            }
+            refs.unifiedList.innerHTML = "";
+
+            var items = getFilteredItems();
+            if (!items.length) {
+                refs.unifiedList.appendChild(createNode(
+                    "div",
+                    "chat-empty-state chat-empty-state-compact",
+                    getEmptyListLabel()
+                ));
+                return;
+            }
+
+            items.forEach(function (item) {
+                refs.unifiedList.appendChild(buildConversationRow(item));
             });
         }
 
@@ -1206,8 +1084,8 @@
                 }
 
                 var matches = sortSearchItems(
-                    (state.overview && state.overview.users || []).filter(function (item) {
-                        return getSearchRank(item, term) >= 0;
+                    buildUnifiedItems(state.overview || {}).filter(function (item) {
+                        return item.type === "direct" && !item.hasConversation && getSearchRank(item, term) >= 0;
                     }),
                     term
                 ).slice(0, 8);
@@ -1223,10 +1101,10 @@
                     var row = createNode("div", "profile-chat-search-row");
                     var identity = createNode("button", "profile-chat-search-user");
                     identity.type = "button";
-                    identity.appendChild(createNode("strong", "", item.fullname));
-                    identity.appendChild(createNode("span", "", joinBits([buildHandle(item.username), item.designation])));
+                    identity.appendChild(createNode("strong", "", item.title));
+                    identity.appendChild(createNode("span", "", joinBits([buildHandle(item.username), item.description])));
                     identity.addEventListener("click", function () {
-                        openDirectConversation(item.username, "directs").catch(function (error) {
+                        openDirectConversation(item.username).catch(function (error) {
                             setComposeStatus(error.message, "error");
                         });
                     });
@@ -1234,12 +1112,12 @@
 
                     var favoriteButton = createNode(
                         "button",
-                        "chat-list-item-action chat-list-item-action-favorite" + (item.is_favorite ? " is-active" : ""),
-                        item.is_favorite ? "★" : "☆"
+                        "chat-list-item-action chat-list-item-action-favorite" + (item.isFavorite ? " is-active" : ""),
+                        item.isFavorite ? "★" : "☆"
                     );
                     favoriteButton.type = "button";
                     favoriteButton.addEventListener("click", function () {
-                        toggleFavorite(item.username, !item.is_favorite, favoriteButton).catch(function () {
+                        toggleFavorite(item.username, !item.isFavorite, favoriteButton).catch(function () {
                             return;
                         });
                     });
@@ -1247,25 +1125,6 @@
                     results.appendChild(row);
                 });
             });
-        }
-
-        function getEmptyListLabel(tabName) {
-            if (state.searchTerm) {
-                return "No conversations match your search.";
-            }
-            if (state.filterMode === "unread" && tabName !== "users") {
-                return "No unread conversations in this section.";
-            }
-            if (tabName === "channels") {
-                return "No channels available.";
-            }
-            if (tabName === "roles") {
-                return "No role groups available.";
-            }
-            if (tabName === "directs") {
-                return "No direct conversations yet.";
-            }
-            return "No other users found.";
         }
 
         function findOverviewThread(type, target) {
@@ -1325,189 +1184,93 @@
                 role_groups: [],
                 direct_threads: [],
                 users: [],
+                favorites: [],
                 unread_total: 0
             };
 
             updateUnreadBadge(state.overview.unread_total);
-            updateStatCards(state.overview);
-            updateTabCounts(state.overview);
-            renderOnlineUsers(state.overview);
+            updateStatChips(state.overview);
+            renderUnifiedList();
             syncProfileFavoriteButtons();
             renderProfileSearchPanels();
-
-            renderList(refs.channelList, filterItems(state.overview.channels, "channels"), function (item) {
-                return buildListItem({
-                    type: "channel",
-                    tab: "channels",
-                    target: item.room_key,
-                    title: item.title,
-                    subtitle: item.description || "Public room",
-                    note: formatPreviewLine(item),
-                    unreadCount: item.unread_count || 0,
-                    timestamp: formatConversationTime(item.last_message_at),
-                    eyebrow: joinBits(["Channel " + getChannelBadge(item.room_key), item.member_count ? item.member_count + " members" : "Public room"]),
-                    avatarText: getChannelBadge(item.room_key),
-                    avatarTone: "channel"
-                });
-            }, getEmptyListLabel("channels"));
-
-            renderList(refs.roleList, filterItems(state.overview.role_groups, "roles"), function (item) {
-                return buildListItem({
-                    type: "role",
-                    tab: "roles",
-                    target: item.room_key,
-                    title: item.title,
-                    subtitle: item.description || (item.role_name ? item.role_name + " group" : "Role-based room"),
-                    note: formatPreviewLine(item),
-                    unreadCount: item.unread_count || 0,
-                    timestamp: formatConversationTime(item.last_message_at),
-                    eyebrow: joinBits([item.role_name || "Role room", item.member_count ? item.member_count + " members" : "Restricted"]),
-                    avatarText: getInitials(item.role_name || item.title, "RG"),
-                    avatarTone: "role"
-                });
-            }, getEmptyListLabel("roles"));
-
-            renderList(refs.directList, filterItems(state.overview.direct_threads, "directs"), function (item) {
-                return buildListItem({
-                    type: "direct",
-                    tab: "directs",
-                    target: item.target_username,
-                    title: item.title,
-                    subtitle: joinBits([item.description, buildHandle(item.target_username)]),
-                    note: formatPreviewLine(item),
-                    unreadCount: item.unread_count || 0,
-                    timestamp: formatConversationTime(item.last_message_at),
-                    meta: item.presence === "online" ? "Online" : "Offline",
-                    metaTone: item.presence || "offline",
-                    status: item.presence,
-                    eyebrow: joinBits([
-                        item.is_favorite ? "Pinned favorite" : "",
-                        item.presence === "online"
-                            ? "Online now"
-                            : "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "Not available")
-                    ]),
-                    avatarText: getInitials(item.title, "DM"),
-                    avatarUrl: item.avatar_url,
-                    avatarTone: "direct",
-                    isFavorite: item.is_favorite,
-                    actions: buildFavoriteActions(item, "directs")
-                });
-            }, getEmptyListLabel("directs"));
-
-            renderList(refs.userList, filterItems(state.overview.users, "users"), function (item) {
-                var presenceNote = item.presence === "online"
-                    ? "Currently online"
-                    : "Last active " + (formatLastActivity(item.last_seen_at || item.last_login_at) || "Not available");
-                return buildListItem({
-                    type: "direct",
-                    tab: "users",
-                    target: item.username,
-                    title: item.fullname,
-                    subtitle: joinBits([item.designation, buildHandle(item.username)]),
-                    note: presenceNote,
-                    unreadCount: 0,
-                    meta: item.presence_label || "Offline",
-                    metaTone: item.presence || "offline",
-                    status: item.presence,
-                    eyebrow: item.is_favorite ? "Pinned favorite" : "Start a direct chat",
-                    avatarText: getInitials(item.fullname, "U"),
-                    avatarUrl: item.avatar_url,
-                    avatarTone: "person",
-                    isFavorite: item.is_favorite,
-                    actions: buildFavoriteActions(item, "users")
-                });
-            }, getEmptyListLabel("users"));
-
             syncActiveThreadFromOverview();
         }
 
-        function updateThreadTools() {
-            var totalCount = Number(state.threadMeta && state.threadMeta.total_count || 0);
-            var loadedCount = state.threadMessages.length;
-            var remainingCount = state.threadMeta && state.threadMeta.has_more_before ? Math.max(totalCount - loadedCount, 0) : 0;
-
-            if (!state.activeThread) {
-                refs.messageSummary.textContent = "No conversation selected";
-                refs.messageStatus.textContent = "Open a channel, role room, or direct message to view history.";
-                refs.loadOlder.hidden = true;
-                refs.jumpLatest.hidden = true;
+        function setComposeStatus(message, tone) {
+            if (!refs.composeStatus) {
                 return;
             }
-
-            if (!loadedCount && !totalCount) {
-                refs.messageSummary.textContent = "No messages yet";
-                refs.messageStatus.textContent = "Send the first message in this conversation.";
-                refs.loadOlder.hidden = true;
-                refs.jumpLatest.hidden = true;
-                return;
+            refs.composeStatus.textContent = message || "";
+            refs.composeStatus.classList.remove("is-error", "is-success");
+            if (tone === "error" || tone === "success") {
+                refs.composeStatus.classList.add("is-" + tone);
             }
-
-            if (remainingCount > 0) {
-                refs.messageSummary.textContent = "Showing " + loadedCount + " of " + totalCount + " messages";
-                refs.messageStatus.textContent = state.loadingOlder ? "Loading older messages..." : remainingCount + " older messages are not loaded yet.";
-            } else {
-                refs.messageSummary.textContent = totalCount === 1 ? "1 message" : totalCount + " messages";
-                refs.messageStatus.textContent = "You are viewing the full conversation.";
-            }
-
-            refs.loadOlder.hidden = !state.threadMeta || !state.threadMeta.has_more_before;
-            refs.loadOlder.disabled = state.loadingOlder;
-            refs.loadOlder.textContent = state.loadingOlder ? "Loading..." : (remainingCount > 0 ? "Load Older (" + remainingCount + ")" : "Load Older");
         }
 
-        function syncJumpLatestVisibility() {
-            refs.jumpLatest.hidden = !state.activeThread || !state.threadMessages.length || isFeedNearBottom();
+        function clearComposer() {
+            clearCurrentDraft();
+            if (refs.composeInput) {
+                refs.composeInput.value = "";
+            }
+            autoResizeComposer();
+            if (refs.fileInput) {
+                refs.fileInput.value = "";
+            }
+            if (refs.fileName) {
+                refs.fileName.textContent = "No file selected";
+                refs.fileName.hidden = true;
+            }
+            if (refs.filePreview) {
+                refs.filePreview.hidden = true;
+            }
+            if (refs.fileChip) {
+                refs.fileChip.textContent = "No file selected";
+            }
+            setComposeStatus("");
+            syncComposerState();
         }
 
-        function buildFactNode(label, tone) {
-            return createNode("span", "chat-thread-fact" + (tone ? " is-" + tone : ""), label);
+        function updateFilePreview() {
+            var fileName = refs.fileInput && refs.fileInput.files && refs.fileInput.files.length
+                ? refs.fileInput.files[0].name
+                : "";
+            if (refs.fileName) {
+                refs.fileName.textContent = fileName || "No file selected";
+                refs.fileName.hidden = !fileName;
+            }
+            if (refs.fileChip) {
+                refs.fileChip.textContent = fileName || "No file selected";
+            }
+            if (refs.filePreview) {
+                refs.filePreview.hidden = !fileName;
+            }
+            syncComposerState();
         }
 
-        function renderThreadFacts(thread) {
-            if (!refs.threadFacts) {
+        function syncComposerState() {
+            if (!refs.compose || !refs.composeInput) {
                 return;
             }
-            refs.threadFacts.innerHTML = "";
-            if (!thread) {
-                return;
-            }
+            var hasThread = !!state.activeThread;
+            var hasFocus = !!refs.compose.contains(document.activeElement);
+            var hasDraft = !!String(refs.composeInput.value || "").trim();
+            var hasFile = !!(refs.fileInput && refs.fileInput.files && refs.fileInput.files.length);
+            var shouldExpand = hasThread && (hasFocus || hasDraft || hasFile || state.sending);
 
-            if (thread.thread_type === "direct") {
-                if (thread.target_username) {
-                    refs.threadFacts.appendChild(buildFactNode(buildHandle(thread.target_username), "soft"));
-                }
-                if (thread.presence && thread.presence.status_label) {
-                    refs.threadFacts.appendChild(
-                        buildFactNode(
-                            thread.presence.status_label,
-                            thread.presence.status === "online" ? "online" : "offline"
-                        )
-                    );
-                }
-                refs.threadFacts.appendChild(buildFactNode("2 participants", "soft"));
-                return;
-            }
-
-            if (thread.member_count) {
-                refs.threadFacts.appendChild(
-                    buildFactNode(
-                        thread.member_count + (thread.member_count === 1 ? " member" : " members"),
-                        "soft"
-                    )
-                );
-            }
-            if (thread.thread_type === "channel") {
-                refs.threadFacts.appendChild(buildFactNode("Channel " + getChannelBadge(thread.room_key), "channel"));
-            } else if (thread.thread_type === "role") {
-                refs.threadFacts.appendChild(buildFactNode("Role room", "role"));
-            }
+            refs.compose.classList.toggle("is-expanded", shouldExpand);
+            refs.compose.classList.toggle("has-file", hasFile);
         }
 
         function updateComposerAvailability() {
+            if (!refs.compose || !refs.composeInput || !refs.fileInput) {
+                return;
+            }
             var hasThread = !!state.activeThread;
             refs.compose.classList.toggle("is-disabled", !hasThread);
             refs.composeInput.disabled = !hasThread || state.sending;
             refs.fileInput.disabled = !hasThread || state.sending;
+            refs.composeInput.placeholder = hasThread ? "Write a message..." : "Select a conversation first.";
+
             if (refs.sendButton) {
                 refs.sendButton.disabled = !hasThread || state.sending;
                 refs.sendButton.textContent = state.sending ? "Sending..." : "Send";
@@ -1515,115 +1278,169 @@
             if (refs.fileTrigger) {
                 refs.fileTrigger.classList.toggle("is-disabled", !hasThread || state.sending);
             }
-            refs.composeInput.placeholder = hasThread ? "Write a message..." : "Select a conversation first.";
+            syncComposerState();
+        }
+
+        function setSettingsOpen(open) {
+            var canEdit = !!(state.activeThread && state.activeThread.editable);
+            state.settingsOpen = !!open && canEdit;
+            if (refs.channelForm) {
+                refs.channelForm.hidden = !state.settingsOpen;
+            }
+            if (refs.editToggle) {
+                refs.editToggle.hidden = !canEdit;
+                refs.editToggle.classList.toggle("is-active", state.settingsOpen);
+            }
         }
 
         function applyThreadHeader(thread) {
             if (!thread) {
-                refs.kicker.textContent = "Conversation";
-                refs.title.textContent = "Select a conversation";
-                refs.subtitle.textContent = "Open a channel, role room, or direct message.";
-                refs.threadAvatar.className = "chat-thread-avatar";
-                refs.threadAvatarText.textContent = "?";
+                if (refs.title) {
+                    refs.title.textContent = "Select a conversation";
+                }
+                if (refs.subtitle) {
+                    refs.subtitle.textContent = "Choose a message from the list.";
+                }
+                if (refs.threadAvatar) {
+                    refs.threadAvatar.className = "chat-thread-avatar";
+                    refs.threadAvatar.classList.remove("has-image");
+                }
+                if (refs.threadAvatarText) {
+                    refs.threadAvatarText.textContent = "?";
+                }
                 if (refs.threadAvatarImage) {
                     refs.threadAvatarImage.hidden = true;
                     refs.threadAvatarImage.removeAttribute("src");
                 }
-                refs.threadAvatarStatus.hidden = true;
-                if (refs.profileLink) {
-                    refs.profileLink.hidden = true;
-                    refs.profileLink.removeAttribute("href");
+                if (refs.threadAvatarStatus) {
+                    refs.threadAvatarStatus.hidden = true;
+                    refs.threadAvatarStatus.classList.remove("is-online");
                 }
-                renderThreadFacts(null);
-                refs.composeType.value = "";
-                refs.composeTarget.value = "";
-                refs.composeTitle.textContent = "Message composer";
-                refs.composeHint.textContent = "Select a conversation to start messaging.";
-                refs.composeInput.value = "";
-                autoResizeComposer();
+                if (refs.composeType) {
+                    refs.composeType.value = "";
+                }
+                if (refs.composeTarget) {
+                    refs.composeTarget.value = "";
+                }
+                if (refs.channelRoomKey) {
+                    refs.channelRoomKey.value = "";
+                }
+                if (refs.channelTitleInput) {
+                    refs.channelTitleInput.value = "";
+                }
+                if (refs.channelDescriptionInput) {
+                    refs.channelDescriptionInput.value = "";
+                }
+                if (refs.composeInput) {
+                    refs.composeInput.value = "";
+                    autoResizeComposer();
+                }
                 setSettingsOpen(false);
                 updateComposerAvailability();
-                updateThreadTools();
                 return;
             }
 
-            refs.title.textContent = thread.title || "Conversation";
-
-            var kicker = "Conversation";
-            var subtitle = thread.description || "";
+            var subtitleBits = [];
             var avatarText = "?";
             var avatarUrl = "";
             var avatarTone = "direct";
             var directStatus = "";
+            var normalizedDescription = normalizeThreadDescription(thread.description);
 
             if (thread.thread_type === "channel") {
-                kicker = "Channel";
-                subtitle = thread.description || "Public room";
+                subtitleBits = [
+                    normalizedDescription,
+                    thread.member_count ? thread.member_count + " members" : "Channel"
+                ];
                 avatarText = getChannelBadge(thread.room_key);
                 avatarTone = "channel";
             } else if (thread.thread_type === "role") {
-                kicker = "Role Group";
-                subtitle = thread.description || "Role-based room";
+                subtitleBits = [
+                    normalizedDescription,
+                    thread.member_count ? thread.member_count + " members" : "Group"
+                ];
                 avatarText = getInitials(thread.title, "RG");
-                avatarTone = "role";
+                avatarTone = "group";
             } else if (thread.thread_type === "direct") {
-                kicker = "Direct Message";
-                subtitle = joinBits([
-                    thread.description,
+                subtitleBits = [
+                    normalizedDescription,
                     buildHandle(thread.target_username),
                     thread.presence && thread.presence.is_online
                         ? "Online now"
                         : (thread.presence && (thread.presence.last_seen_at || thread.presence.last_login_at)
                             ? "Last active " + formatLastActivity(thread.presence.last_seen_at || thread.presence.last_login_at)
                             : "")
-                ]);
+                ];
                 avatarText = getInitials(thread.title, "DM");
                 avatarUrl = thread.avatar_url || "";
                 avatarTone = "direct";
                 directStatus = thread.presence ? thread.presence.status : "";
             }
 
-            refs.kicker.textContent = kicker;
-            refs.subtitle.textContent = subtitle || "Conversation ready.";
-            refs.threadAvatar.className = "chat-thread-avatar chat-thread-avatar-" + avatarTone;
-            refs.threadAvatarText.textContent = avatarText;
+            if (refs.title) {
+                refs.title.textContent = thread.title || "Conversation";
+            }
+            if (refs.subtitle) {
+                refs.subtitle.textContent = joinBits(subtitleBits) || "Conversation ready.";
+            }
+            if (refs.threadAvatar) {
+                refs.threadAvatar.className = "chat-thread-avatar chat-thread-avatar-" + avatarTone;
+            }
+            if (refs.threadAvatarText) {
+                refs.threadAvatarText.textContent = avatarText;
+            }
             if (refs.threadAvatarImage) {
                 if (avatarUrl) {
                     refs.threadAvatarImage.src = avatarUrl;
                     refs.threadAvatarImage.hidden = false;
-                    refs.threadAvatar.classList.add("has-image");
+                    if (refs.threadAvatar) {
+                        refs.threadAvatar.classList.add("has-image");
+                    }
                 } else {
                     refs.threadAvatarImage.hidden = true;
                     refs.threadAvatarImage.removeAttribute("src");
-                    refs.threadAvatar.classList.remove("has-image");
+                    if (refs.threadAvatar) {
+                        refs.threadAvatar.classList.remove("has-image");
+                    }
                 }
             }
-            refs.threadAvatarStatus.hidden = !directStatus;
-            refs.threadAvatarStatus.classList.toggle("is-online", directStatus === "online");
-            if (refs.profileLink) {
-                refs.profileLink.hidden = thread.thread_type !== "direct" || !thread.profile_url;
-                if (thread.thread_type === "direct" && thread.profile_url) {
-                    refs.profileLink.href = thread.profile_url;
-                } else {
-                    refs.profileLink.removeAttribute("href");
-                }
+            if (refs.threadAvatarStatus) {
+                refs.threadAvatarStatus.hidden = !directStatus;
+                refs.threadAvatarStatus.classList.toggle("is-online", directStatus === "online");
             }
-            refs.channelRoomKey.value = thread.editable ? thread.room_key : "";
-            refs.channelTitleInput.value = thread.editable ? (thread.title || "") : "";
-            refs.channelDescriptionInput.value = thread.editable ? (thread.description || "") : "";
-            refs.composeType.value = thread.thread_type;
-            refs.composeTarget.value = thread.thread_type === "direct" ? thread.target_username : thread.room_key;
-            refs.composeTitle.textContent = "Message " + (thread.title || "conversation");
-            refs.composeHint.textContent = isMobileLayout()
-                ? "Tap send to reply. Attachments up to 15 MB."
-                : "Enter to send. Shift+Enter for a line break. Attachments up to 15 MB.";
+            if (refs.channelRoomKey) {
+                refs.channelRoomKey.value = thread.editable ? thread.room_key : "";
+            }
+            if (refs.channelTitleInput) {
+                refs.channelTitleInput.value = thread.editable ? (thread.title || "") : "";
+            }
+            if (refs.channelDescriptionInput) {
+                refs.channelDescriptionInput.value = thread.editable ? (thread.description || "") : "";
+            }
+            if (refs.composeType) {
+                refs.composeType.value = thread.thread_type;
+            }
+            if (refs.composeTarget) {
+                refs.composeTarget.value = thread.thread_type === "direct" ? thread.target_username : thread.room_key;
+            }
 
-            renderThreadFacts(thread);
-            setSettingsOpen(false);
+            setSettingsOpen(state.settingsOpen);
             restoreCurrentDraft();
             updateComposerAvailability();
-            syncMobileControls();
-            updateThreadTools();
+        }
+
+        function showThreadLoading(message) {
+            applyThreadHeader(null);
+            if (refs.feed) {
+                refs.feed.innerHTML = "";
+                refs.feed.appendChild(createNode("div", "chat-empty-state", message || "Loading conversation..."));
+            }
+            if (refs.threadTools) {
+                refs.threadTools.hidden = true;
+            }
+            if (refs.jumpLatest) {
+                refs.jumpLatest.hidden = true;
+            }
         }
 
         function buildAttachmentNode(attachment) {
@@ -1657,6 +1474,17 @@
             }
 
             return attachmentNode;
+        }
+
+        function buildMessageStamp(message) {
+            var labels = [];
+            if (message.is_deleted) {
+                labels.push("Deleted");
+            } else if (message.is_edited) {
+                labels.push("Edited");
+            }
+            labels.push(formatTimeOnly(message.created_at));
+            return labels.join(" | ");
         }
 
         function buildMessageNode(thread, message, options) {
@@ -1721,11 +1549,27 @@
             }
 
             stack.appendChild(bubble);
+            if (!message.is_deleted && (message.can_edit || message.can_delete)) {
+                var actionRow = createNode("div", "chat-message-actions" + (message.is_self ? " is-self" : ""));
+                if (message.can_edit) {
+                    var editButton = createNode("button", "chat-message-action", "Edit");
+                    editButton.type = "button";
+                    editButton.setAttribute("data-chat-edit-message", String(message.id));
+                    actionRow.appendChild(editButton);
+                }
+                if (message.can_delete) {
+                    var deleteButton = createNode("button", "chat-message-action chat-message-action-danger", "Delete");
+                    deleteButton.type = "button";
+                    deleteButton.setAttribute("data-chat-delete-message", String(message.id));
+                    actionRow.appendChild(deleteButton);
+                }
+                stack.appendChild(actionRow);
+            }
             if (!layout.continuesToNext) {
                 stack.appendChild(createNode(
                     "div",
                     "chat-message-stamp" + (message.is_self ? " is-self" : ""),
-                    formatTimeOnly(message.created_at)
+                    buildMessageStamp(message)
                 ));
             }
             shell.appendChild(stack);
@@ -1733,6 +1577,9 @@
         }
 
         function renderThreadMessages() {
+            if (!refs.feed) {
+                return;
+            }
             refs.feed.innerHTML = "";
 
             if (!state.activeThread) {
@@ -1771,17 +1618,34 @@
             syncJumpLatestVisibility();
         }
 
-        function renderThreadError(message) {
-            state.activeThread = null;
-            state.threadMessages = [];
-            state.threadMeta = null;
-            applyThreadHeader(null);
-            refs.feed.innerHTML = "";
-            refs.feed.appendChild(createNode("div", "chat-empty-state", message || "Unable to load this conversation."));
-            refs.messageSummary.textContent = "Conversation unavailable";
-            refs.messageStatus.textContent = "Try opening another conversation.";
-            refs.loadOlder.hidden = true;
-            refs.jumpLatest.hidden = true;
+        function updateThreadTools() {
+            if (!refs.threadTools || !refs.loadOlder) {
+                return;
+            }
+            var canLoadOlder = !!(state.activeThread && state.threadMeta && state.threadMeta.has_more_before);
+            refs.threadTools.hidden = !canLoadOlder;
+            refs.loadOlder.hidden = !canLoadOlder;
+            refs.loadOlder.disabled = state.loadingOlder;
+            refs.loadOlder.textContent = state.loadingOlder ? "Loading..." : "Load older messages";
+        }
+
+        function syncJumpLatestVisibility() {
+            if (!refs.jumpLatest) {
+                return;
+            }
+            if (!state.activeThread || !state.threadMessages.length || !refs.feed) {
+                refs.jumpLatest.hidden = true;
+                return;
+            }
+            if (isFeedNearBottom()) {
+                state.unseenCount = 0;
+                refs.jumpLatest.hidden = true;
+                return;
+            }
+            refs.jumpLatest.hidden = false;
+            refs.jumpLatest.textContent = state.unseenCount > 0
+                ? (state.unseenCount === 1 ? "1 new message" : state.unseenCount + " new messages")
+                : "Jump to latest";
         }
 
         function reconcileThreadMeta() {
@@ -1793,8 +1657,16 @@
             var loadedNewestId = getLoadedNewestId();
             state.threadMeta.window_oldest_id = loadedOldestId;
             state.threadMeta.window_newest_id = loadedNewestId;
-            state.threadMeta.has_more_before = !!(loadedOldestId && state.threadMeta.thread_oldest_id && loadedOldestId > state.threadMeta.thread_oldest_id);
-            state.threadMeta.has_more_after = !!(loadedNewestId && state.threadMeta.thread_newest_id && loadedNewestId < state.threadMeta.thread_newest_id);
+            state.threadMeta.has_more_before = !!(
+                loadedOldestId &&
+                state.threadMeta.thread_oldest_id &&
+                loadedOldestId > state.threadMeta.thread_oldest_id
+            );
+            state.threadMeta.has_more_after = !!(
+                loadedNewestId &&
+                state.threadMeta.thread_newest_id &&
+                loadedNewestId < state.threadMeta.thread_newest_id
+            );
         }
 
         function applyThreadPayload(payload, mode) {
@@ -1815,50 +1687,6 @@
             updateThreadTools();
         }
 
-        function clearComposer() {
-            clearCurrentDraft();
-            refs.composeInput.value = "";
-            autoResizeComposer();
-            refs.fileInput.value = "";
-            refs.fileName.textContent = "No file selected";
-            if (refs.filePreview) {
-                refs.filePreview.hidden = true;
-            }
-            if (refs.fileChip) {
-                refs.fileChip.textContent = "No file selected";
-            }
-            setComposeStatus("");
-        }
-
-        function setComposeStatus(message, tone) {
-            if (!refs.composeStatus) {
-                return;
-            }
-            refs.composeStatus.textContent = message || "";
-            refs.composeStatus.classList.remove("is-error", "is-success");
-            if (tone === "error" || tone === "success") {
-                refs.composeStatus.classList.add("is-" + tone);
-            }
-        }
-
-        function updateFilePreview() {
-            var fileName = refs.fileInput.files && refs.fileInput.files.length ? refs.fileInput.files[0].name : "";
-            refs.fileName.textContent = fileName || "No file selected";
-            refs.fileName.hidden = !fileName;
-            if (refs.fileChip) {
-                refs.fileChip.textContent = fileName || "No file selected";
-            }
-            if (refs.filePreview) {
-                refs.filePreview.hidden = !fileName;
-            }
-        }
-
-        function setSending(isSending) {
-            state.sending = !!isSending;
-            refs.compose.classList.toggle("is-sending", state.sending);
-            updateComposerAvailability();
-        }
-
         function loadThread(type, target, options) {
             if (!type || !target) {
                 return Promise.resolve();
@@ -1869,12 +1697,16 @@
             var mode = config.mode || "replace";
             var shouldStickToBottom = !!config.scrollToBottom;
             var previousMetrics = null;
+            var wasNearBottom = sameThread ? isFeedNearBottom() : true;
 
             if (!sameThread) {
                 saveCurrentDraft();
-                refs.fileInput.value = "";
+                if (refs.fileInput) {
+                    refs.fileInput.value = "";
+                }
                 updateFilePreview();
                 setComposeStatus("");
+                state.unseenCount = 0;
             }
 
             if (sameThread && refs.feed) {
@@ -1886,7 +1718,6 @@
 
             state.activeType = type;
             state.activeTarget = target;
-            setActiveTab(getTabForThread(type, config.tab));
             setSyncState("syncing");
 
             var url = new URL(root.dataset.threadUrl, window.location.origin);
@@ -1901,9 +1732,10 @@
             }
 
             return fetchJson(url.toString()).then(function (payload) {
+                var incomingCount = Number((payload.messages || []).length);
                 syncOverview(payload.overview);
 
-                if (mode === "append" && (!payload.messages || !payload.messages.length)) {
+                if (mode === "append" && !incomingCount) {
                     state.activeThread = payload.thread;
                     state.threadMeta = Object.assign({}, state.threadMeta || {}, payload.message_meta || {});
                     reconcileThreadMeta();
@@ -1915,29 +1747,101 @@
                 }
 
                 applyThreadPayload(payload, mode);
-                setPanelMode("chat");
-
-                if (config.switchMobileView && isMobileLayout()) {
-                    setMobileView("thread");
-                }
 
                 if (mode === "prepend" && previousMetrics) {
                     refs.feed.scrollTop = previousMetrics.top + (refs.feed.scrollHeight - previousMetrics.height);
-                } else if (shouldStickToBottom) {
+                } else if (mode === "append" && sameThread && !shouldStickToBottom && !wasNearBottom) {
+                    if (previousMetrics) {
+                        refs.feed.scrollTop = previousMetrics.top;
+                    }
+                    state.unseenCount += incomingCount;
+                } else if (shouldStickToBottom || mode === "replace" || !sameThread || wasNearBottom) {
                     scrollFeedToBottom();
+                    state.unseenCount = 0;
                 } else if (previousMetrics) {
                     refs.feed.scrollTop = previousMetrics.top;
                 }
 
+                syncJumpLatestVisibility();
                 setSyncState("synced");
                 return payload;
             }).catch(function (error) {
                 setSettingsOpen(false);
-                renderThreadError(error.message);
+                state.activeThread = null;
+                state.threadMessages = [];
+                state.threadMeta = null;
+                state.activeType = "";
+                state.activeTarget = "";
+                state.unseenCount = 0;
+                applyThreadHeader(null);
+                setView("list");
                 setComposeStatus(error.message || "Unable to load this conversation.", "error");
                 setSyncState("error");
                 throw error;
             });
+        }
+
+        function refreshActiveThread() {
+            if (!state.activeType || !state.activeTarget) {
+                refreshOverview();
+                return;
+            }
+
+            var newestId = getLoadedNewestId();
+            loadThread(state.activeType, state.activeTarget, {
+                mode: newestId ? "append" : "replace",
+                afterId: newestId,
+                scrollToBottom: newestId ? isFeedNearBottom() : true
+            }).catch(function () {
+                return;
+            });
+        }
+
+        function refreshOverview() {
+            if (document.hidden) {
+                return;
+            }
+
+            if (state.chatOpen && state.currentView === "thread" && state.activeType && state.activeTarget) {
+                refreshActiveThread();
+                return;
+            }
+
+            setSyncState("syncing");
+            fetchJson(root.dataset.bootstrapUrl).then(function (payload) {
+                syncOverview(payload.overview);
+                setSyncState("synced");
+            }).catch(function () {
+                setSyncState("error");
+                return;
+            });
+        }
+
+        function openConversation(type, target) {
+            var sameThread = state.activeType === type && state.activeTarget === target;
+            setChatOpen(true, { skipRefresh: true });
+            state.currentView = "thread";
+            syncOpenState();
+            if (!sameThread) {
+                showThreadLoading("Loading conversation...");
+            }
+            return loadThread(type, target, {
+                mode: "replace",
+                scrollToBottom: true
+            }).then(function (payload) {
+                setView("thread");
+                if (!isMobileLayout() && refs.composeInput) {
+                    refs.composeInput.focus();
+                }
+                return payload;
+            });
+        }
+
+        function openDirectConversation(username) {
+            if (!username) {
+                return Promise.resolve();
+            }
+            return openConversation("direct", username);
         }
 
         function loadOlderMessages() {
@@ -1955,114 +1859,114 @@
             loadThread(state.activeType, state.activeTarget, {
                 mode: "prepend",
                 beforeId: oldestId,
-                scrollToBottom: false,
-                tab: state.activeTab
-            }).then(function () {
-                return;
-            }, function () {
-                return;
-            }).then(function () {
+                scrollToBottom: false
+            }).finally(function () {
                 state.loadingOlder = false;
                 updateThreadTools();
             });
         }
 
-        function refreshActiveThread() {
-            if (!state.chatOpen || !state.activeType || !state.activeTarget) {
-                return;
-            }
-
-            var newestId = getLoadedNewestId();
-            loadThread(state.activeType, state.activeTarget, {
-                mode: newestId ? "append" : "replace",
-                afterId: newestId,
-                scrollToBottom: isFeedNearBottom(),
-                switchMobileView: false,
-                tab: state.activeTab
-            }).catch(function () {
-                return;
-            });
+        function findMessageById(messageId) {
+            var numericId = Number(messageId);
+            return state.threadMessages.find(function (item) {
+                return Number(item.id) === numericId;
+            }) || null;
         }
 
-        function refreshOverview() {
-            if (document.hidden) {
+        function refreshCurrentThread(options) {
+            if (!state.activeType || !state.activeTarget) {
+                return Promise.resolve();
+            }
+            return loadThread(state.activeType, state.activeTarget, Object.assign({
+                mode: "replace",
+                scrollToBottom: false
+            }, options || {}));
+        }
+
+        function handleMessageEdit(messageId) {
+            var message = findMessageById(messageId);
+            if (!message || !message.can_edit) {
                 return;
             }
-
-            if (state.chatOpen && state.activeType && state.activeTarget) {
-                refreshActiveThread();
+            var nextBody = window.prompt("Edit message", message.body || "");
+            if (nextBody === null) {
                 return;
             }
-
+            nextBody = String(nextBody || "").trim();
+            if (!nextBody && !message.attachment) {
+                setComposeStatus("Message body cannot be blank.", "error");
+                return;
+            }
+            var formData = new FormData();
+            formData.append("message_id", String(message.id));
+            formData.append("body", nextBody);
             setSyncState("syncing");
-            fetchJson(root.dataset.bootstrapUrl).then(function (payload) {
+            fetchJson(root.dataset.messageUpdateUrl, {
+                method: "POST",
+                body: formData
+            }).then(function (payload) {
                 syncOverview(payload.overview);
-                if (state.chatOpen && !isMobileLayout() && !state.activeType) {
-                    var firstItem = pickDefaultThread(payload.overview || {});
-                    if (firstItem) {
-                        setActiveTab(getTabForThread(firstItem.type, firstItem.tab));
-                        loadThread(firstItem.type, firstItem.target, {
-                            scrollToBottom: true,
-                            tab: firstItem.tab,
-                            switchMobileView: false,
-                            mode: "replace"
-                        }).catch(function () {
-                            return;
-                        });
-                        return;
-                    }
-                }
+                return refreshCurrentThread();
+            }).then(function () {
+                setComposeStatus("Message updated.", "success");
                 setSyncState("synced");
-            }).catch(function () {
+            }).catch(function (error) {
+                setComposeStatus(error.message || "Unable to update the message.", "error");
                 setSyncState("error");
-                return;
             });
         }
 
-        refs.tabButtons.forEach(function (button) {
-            button.addEventListener("click", function () {
-                if (button.dataset.chatTab === "channels" || button.dataset.chatTab === "roles") {
-                    setPanelMode("channels");
-                } else if (button.dataset.chatTab === "directs" || button.dataset.chatTab === "users") {
-                    setPanelMode("messages");
-                }
-                setActiveTab(button.dataset.chatTab);
-                if (isMobileLayout()) {
-                    setMobileView("browse");
-                    scrollTabListToTop(button.dataset.chatTab);
-                }
-                if (typeof button.blur === "function") {
-                    button.blur();
-                }
+        function handleMessageDelete(messageId) {
+            var message = findMessageById(messageId);
+            if (!message || !message.can_delete) {
+                return;
+            }
+            if (!window.confirm("Delete this message?")) {
+                return;
+            }
+            var formData = new FormData();
+            formData.append("message_id", String(message.id));
+            setSyncState("syncing");
+            fetchJson(root.dataset.messageDeleteUrl, {
+                method: "POST",
+                body: formData
+            }).then(function (payload) {
+                syncOverview(payload.overview);
+                return refreshCurrentThread();
+            }).then(function () {
+                setComposeStatus("Message deleted.", "success");
+                setSyncState("synced");
+            }).catch(function (error) {
+                setComposeStatus(error.message || "Unable to delete the message.", "error");
+                setSyncState("error");
             });
-        });
+        }
 
-        refs.modeButtons.forEach(function (button) {
-            button.addEventListener("click", function () {
-                var mode = button.dataset.chatMode === "channels"
-                    ? "channels"
-                    : (button.dataset.chatMode === "messages" ? "messages" : "chat");
-                setPanelMode(mode);
-                ensureTabForCurrentMode();
-                if (mode !== "chat" && isMobileLayout()) {
-                    setMobileView("browse");
-                }
-                if (mode === "chat" && !state.activeType && state.overview) {
-                    var firstItem = pickDefaultThread(state.overview);
-                    if (firstItem) {
-                        setActiveTab(getTabForThread(firstItem.type, firstItem.tab));
-                        loadThread(firstItem.type, firstItem.target, {
-                            scrollToBottom: true,
-                            tab: firstItem.tab,
-                            switchMobileView: false,
-                            mode: "replace"
-                        }).catch(function () {
-                            return;
-                        });
-                    }
-                }
+        function setSending(isSending) {
+            state.sending = !!isSending;
+            if (refs.compose) {
+                refs.compose.classList.toggle("is-sending", state.sending);
+            }
+            updateComposerAvailability();
+            syncComposerState();
+        }
+
+        function handleLayoutChange() {
+            syncAppShellLayout();
+            syncOpenState();
+            autoResizeComposer();
+            syncComposerState();
+            if (state.activeThread) {
+                applyThreadHeader(state.activeThread);
+            }
+        }
+
+        if (refs.chatTrigger) {
+            refs.chatTrigger.addEventListener("click", function (event) {
+                event.stopPropagation();
+                setChatOpen(!state.chatOpen);
             });
-        });
+        }
 
         refs.filterButtons.forEach(function (button) {
             button.addEventListener("click", function () {
@@ -2070,58 +1974,32 @@
                 refs.filterButtons.forEach(function (item) {
                     item.classList.toggle("is-active", item === button);
                 });
-                syncOverview(state.overview || {});
+                renderUnifiedList();
             });
         });
 
         if (refs.chatSearch) {
             refs.chatSearch.addEventListener("input", function () {
                 state.searchTerm = normalizeSearch(refs.chatSearch.value);
-                syncOverview(state.overview || {});
+                renderUnifiedList();
             });
         }
 
-        if (refs.onlineSearch) {
-            refs.onlineSearch.addEventListener("input", function () {
-                state.onlineSearchTerm = normalizeSearch(refs.onlineSearch.value);
-                renderOnlineUsers(state.overview || { users: [] });
+        if (refs.back) {
+            refs.back.addEventListener("click", function () {
+                setView("list");
+                if (refs.chatSearch) {
+                    refs.chatSearch.focus();
+                }
             });
         }
-
-        Array.prototype.slice.call(document.querySelectorAll("[data-profile-chat-search-input]")).forEach(function (input) {
-            input.addEventListener("input", function () {
-                renderProfileSearchPanels();
-            });
-        });
-
-        refs.onlineTrigger.addEventListener("click", function (event) {
-            event.stopPropagation();
-            setOnlineOpen(!state.onlineOpen);
-        });
-
-        if (refs.onlineClose) {
-            refs.onlineClose.addEventListener("click", function () {
-                setOnlineOpen(false);
-            });
-        }
-
-        refs.chatTrigger.addEventListener("click", function (event) {
-            event.stopPropagation();
-            setChatOpen(!state.chatOpen);
-        });
-
-        refs.close.addEventListener("click", function () {
-            setChatOpen(false);
-        });
 
         if (refs.refresh) {
             refs.refresh.addEventListener("click", function () {
-                if (state.chatOpen && state.activeType && state.activeTarget) {
+                if (state.activeType && state.activeTarget) {
                     loadThread(state.activeType, state.activeTarget, {
-                        scrollToBottom: false,
-                        tab: state.activeTab,
-                        switchMobileView: false,
-                        mode: "replace"
+                        mode: "replace",
+                        scrollToBottom: false
                     }).catch(function () {
                         return;
                     });
@@ -2131,231 +2009,184 @@
             });
         }
 
-        if (refs.mobileBrowse) {
-            refs.mobileBrowse.addEventListener("click", function () {
-                if (state.activeType === "channel" || state.activeType === "role") {
-                    setPanelMode("channels");
-                } else {
-                    setPanelMode("messages");
-                }
-                ensureTabForCurrentMode();
-                setMobileView("browse");
-                if (isMobileLayout() && state.activeTab === "users") {
-                    scrollTabListToTop("users");
-                }
+        if (refs.editToggle) {
+            refs.editToggle.addEventListener("click", function () {
+                setSettingsOpen(!state.settingsOpen);
             });
         }
 
-        if (refs.mobileBack) {
-            refs.mobileBack.addEventListener("click", function () {
-                if (state.activeType === "channel" || state.activeType === "role") {
-                    setPanelMode("channels");
-                } else {
-                    setPanelMode("messages");
-                }
-                ensureTabForCurrentMode();
-                setMobileView("browse");
-                if (isMobileLayout() && state.activeTab === "users") {
-                    scrollTabListToTop("users");
-                }
-            });
-        }
-
-        if (refs.scrim) {
-            refs.scrim.addEventListener("click", function () {
-                closePanels();
-            });
-        }
-
-        document.addEventListener("click", function (event) {
-            if (!root.contains(event.target)) {
-                closePanels();
-            }
-        });
-
-        document.addEventListener("keydown", function (event) {
-            if (event.key === "Escape") {
-                closePanels();
-            }
-        });
-
-        refs.editToggle.addEventListener("click", function () {
-            setSettingsOpen(!state.settingsOpen);
-        });
-
-        refs.editCancel.addEventListener("click", function () {
-            setSettingsOpen(false);
-        });
-
-        refs.channelForm.addEventListener("submit", function (event) {
-            event.preventDefault();
-            var formData = new FormData(refs.channelForm);
-            setSyncState("syncing");
-            fetchJson(root.dataset.channelUpdateUrl, {
-                method: "POST",
-                body: formData
-            }).then(function (payload) {
+        if (refs.editCancel) {
+            refs.editCancel.addEventListener("click", function () {
                 setSettingsOpen(false);
-                syncOverview(payload.overview);
-                if (state.activeType && state.activeTarget) {
-                    loadThread(state.activeType, state.activeTarget, {
-                        scrollToBottom: false,
-                        tab: state.activeTab,
-                        switchMobileView: false,
-                        mode: "replace"
-                    }).catch(function () {
-                        return;
-                    });
-                } else {
-                    setSyncState("synced");
-                }
-            }).catch(function () {
-                setSyncState("error");
-                return;
             });
-        });
+        }
 
-        refs.fileTrigger.addEventListener("click", function () {
-            if (refs.fileInput.disabled) {
-                return;
-            }
-            if (refs.fileTrigger.tagName === "BUTTON") {
-                refs.fileInput.click();
-            }
-        });
+        if (refs.channelForm) {
+            refs.channelForm.addEventListener("submit", function (event) {
+                event.preventDefault();
+                var formData = new FormData(refs.channelForm);
+                setSyncState("syncing");
+                fetchJson(root.dataset.channelUpdateUrl, {
+                    method: "POST",
+                    body: formData
+                }).then(function (payload) {
+                    setSettingsOpen(false);
+                    syncOverview(payload.overview);
+                    if (state.activeType && state.activeTarget) {
+                        return loadThread(state.activeType, state.activeTarget, {
+                            mode: "replace",
+                            scrollToBottom: false
+                        });
+                    }
+                    setSyncState("synced");
+                    return null;
+                }).catch(function () {
+                    setSyncState("error");
+                    return;
+                });
+            });
+        }
 
-        refs.fileInput.addEventListener("change", function () {
-            var file = refs.fileInput.files && refs.fileInput.files.length ? refs.fileInput.files[0] : null;
-            if (file && file.size > maxAttachmentSizeBytes) {
-                refs.fileInput.value = "";
+        if (refs.fileInput) {
+            refs.fileInput.addEventListener("change", function () {
+                var file = refs.fileInput.files && refs.fileInput.files.length ? refs.fileInput.files[0] : null;
+                if (file && file.size > maxAttachmentSizeBytes) {
+                    refs.fileInput.value = "";
+                    updateFilePreview();
+                    setComposeStatus("Attachments must be 15 MB or smaller.", "error");
+                    return;
+                }
                 updateFilePreview();
-                setComposeStatus("Attachments must be 15 MB or smaller.", "error");
-                return;
-            }
-            updateFilePreview();
-            setComposeStatus(file ? "Attachment ready to send." : "");
-        });
+                setComposeStatus(file ? "Attachment ready to send." : "");
+            });
+        }
 
         if (refs.fileClear) {
             refs.fileClear.addEventListener("click", function () {
-                refs.fileInput.value = "";
+                if (refs.fileInput) {
+                    refs.fileInput.value = "";
+                }
                 updateFilePreview();
-                if (!String(refs.composeInput.value || "").trim()) {
+                if (!String((refs.composeInput && refs.composeInput.value) || "").trim()) {
                     setComposeStatus("");
                 }
             });
         }
 
-        refs.composeInput.addEventListener("input", function () {
-            saveCurrentDraft();
-            autoResizeComposer();
-            if (refs.composeStatus.classList.contains("is-error")) {
-                setComposeStatus("");
-            }
-        });
-
-        refs.composeInput.addEventListener("keydown", function (event) {
-            if (isMobileLayout()) {
-                return;
-            }
-            if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                event.preventDefault();
-                if (typeof refs.compose.requestSubmit === "function") {
-                    refs.compose.requestSubmit();
-                } else {
-                    refs.compose.dispatchEvent(new Event("submit", {
-                        bubbles: true,
-                        cancelable: true
-                    }));
+        if (refs.composeInput) {
+            refs.composeInput.addEventListener("input", function () {
+                saveCurrentDraft();
+                autoResizeComposer();
+                syncComposerState();
+                if (refs.composeStatus && refs.composeStatus.classList.contains("is-error")) {
+                    setComposeStatus("");
                 }
-            }
-        });
+            });
 
-        refs.compose.addEventListener("submit", function (event) {
-            event.preventDefault();
-            if (!refs.composeType.value || !refs.composeTarget.value) {
-                setComposeStatus("Select a conversation first.", "error");
-                return;
-            }
-
-            if (state.sending) {
-                return;
-            }
-
-            var hasMessage = !!String(refs.composeInput.value || "").trim();
-            var hasFile = !!(refs.fileInput.files && refs.fileInput.files.length);
-            if (!hasMessage && !hasFile) {
-                setComposeStatus("Enter a message or attach a file.", "error");
-                return;
-            }
-
-            var formData = new FormData(refs.compose);
-            setSending(true);
-            setComposeStatus("Sending...", "success");
-            setSyncState("syncing");
-            fetchJson(root.dataset.sendUrl, {
-                method: "POST",
-                body: formData
-            }).then(function (payload) {
-                clearComposer();
-                syncOverview(payload.overview);
-                applyThreadPayload(payload, "append");
+            refs.composeInput.addEventListener("keydown", function (event) {
                 if (isMobileLayout()) {
-                    setMobileView("thread");
-                } else {
-                    refs.composeInput.focus();
+                    return;
                 }
+                if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                    event.preventDefault();
+                    if (refs.compose && typeof refs.compose.requestSubmit === "function") {
+                        refs.compose.requestSubmit();
+                    } else if (refs.compose) {
+                        refs.compose.dispatchEvent(new Event("submit", {
+                            bubbles: true,
+                            cancelable: true
+                        }));
+                    }
+                }
+            });
+        }
+
+        if (refs.compose) {
+            refs.compose.addEventListener("focusin", function () {
+                syncComposerState();
+            });
+
+            refs.compose.addEventListener("focusout", function () {
+                window.setTimeout(syncComposerState, 0);
+            });
+
+            refs.compose.addEventListener("submit", function (event) {
+                event.preventDefault();
+                if (!refs.composeType || !refs.composeTarget || !refs.composeType.value || !refs.composeTarget.value) {
+                    setComposeStatus("Select a conversation first.", "error");
+                    return;
+                }
+                if (state.sending) {
+                    return;
+                }
+
+                var hasMessage = !!String((refs.composeInput && refs.composeInput.value) || "").trim();
+                var hasFile = !!(refs.fileInput && refs.fileInput.files && refs.fileInput.files.length);
+                if (!hasMessage && !hasFile) {
+                    setComposeStatus("Enter a message or attach a file.", "error");
+                    return;
+                }
+
+                var formData = new FormData(refs.compose);
+                setSending(true);
+                setComposeStatus("Sending...", "success");
+                setSyncState("syncing");
+
+                fetchJson(root.dataset.sendUrl, {
+                    method: "POST",
+                    body: formData
+                }).then(function (payload) {
+                    clearComposer();
+                    syncOverview(payload.overview);
+                    applyThreadPayload(payload, "append");
+                    setView("thread");
+                    scrollFeedToBottom();
+                    state.unseenCount = 0;
+                    setComposeStatus("Message sent.", "success");
+                    setSyncState("synced");
+                    if (!isMobileLayout() && refs.composeInput) {
+                        refs.composeInput.focus();
+                    }
+                }).catch(function (error) {
+                    setComposeStatus(error.message || "Unable to send message or attachment.", "error");
+                    setSyncState("error");
+                }).then(function () {
+                    setSending(false);
+                }, function () {
+                    setSending(false);
+                });
+            });
+        }
+
+        if (refs.feed) {
+            refs.feed.addEventListener("scroll", function () {
+                syncJumpLatestVisibility();
+            });
+        }
+
+        if (refs.loadOlder) {
+            refs.loadOlder.addEventListener("click", function () {
+                loadOlderMessages();
+            });
+        }
+
+        if (refs.jumpLatest) {
+            refs.jumpLatest.addEventListener("click", function () {
                 scrollFeedToBottom();
-                setComposeStatus("Message sent.", "success");
-                setSyncState("synced");
-            }).catch(function (error) {
-                setComposeStatus((error && error.message) || "Unable to send message or attachment.", "error");
-                setSyncState("error");
-            }).then(function () {
-                setSending(false);
-            }, function () {
-                setSending(false);
+                state.unseenCount = 0;
+                syncJumpLatestVisibility();
+            });
+        }
+
+        Array.prototype.slice.call(document.querySelectorAll("[data-profile-chat-search-input]")).forEach(function (input) {
+            input.addEventListener("input", function () {
+                renderProfileSearchPanels();
             });
         });
 
-        refs.feed.addEventListener("scroll", function () {
-            syncJumpLatestVisibility();
-        });
-
-        refs.loadOlder.addEventListener("click", function () {
-            loadOlderMessages();
-        });
-
-        refs.jumpLatest.addEventListener("click", function () {
-            scrollFeedToBottom();
-            syncJumpLatestVisibility();
-        });
-
-        function handleLayoutChange() {
-            syncMobileControls();
-            autoResizeComposer();
-            if (!isMobileLayout() && state.chatOpen && !state.activeType && state.overview) {
-                var firstItem = pickDefaultThread(state.overview);
-                if (firstItem) {
-                    setActiveTab(getTabForThread(firstItem.type, firstItem.tab));
-                    loadThread(firstItem.type, firstItem.target, {
-                        scrollToBottom: true,
-                        tab: firstItem.tab,
-                        switchMobileView: false,
-                        mode: "replace"
-                    }).catch(function () {
-                        return;
-                    });
-                }
-            }
-            if (state.activeThread) {
-                applyThreadHeader(state.activeThread);
-            }
-        }
-
-        document.addEventListener("visibilitychange", function () {
-            if (!document.hidden) {
-                refreshOverview();
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && state.chatOpen) {
+                setChatOpen(false);
             }
         });
 
@@ -2363,7 +2194,7 @@
             var openTrigger = event.target.closest("[data-chat-open-user]");
             if (openTrigger) {
                 event.preventDefault();
-                openDirectConversation(openTrigger.getAttribute("data-chat-open-user"), "directs").catch(function (error) {
+                openDirectConversation(openTrigger.getAttribute("data-chat-open-user")).catch(function (error) {
                     setComposeStatus(error.message, "error");
                 });
                 return;
@@ -2377,22 +2208,27 @@
                 toggleFavorite(targetUsername, shouldFavorite, favoriteTrigger).catch(function () {
                     return;
                 });
+                return;
+            }
+
+            var editTrigger = event.target.closest("[data-chat-edit-message]");
+            if (editTrigger) {
+                event.preventDefault();
+                handleMessageEdit(editTrigger.getAttribute("data-chat-edit-message"));
+                return;
+            }
+
+            var deleteTrigger = event.target.closest("[data-chat-delete-message]");
+            if (deleteTrigger) {
+                event.preventDefault();
+                handleMessageDelete(deleteTrigger.getAttribute("data-chat-delete-message"));
             }
         });
 
-        fetchJson(root.dataset.bootstrapUrl).then(function (payload) {
-            syncOverview(payload.overview);
-            applyThreadHeader(null);
-            syncMobileControls();
-            setPanelMode("messages");
-            ensureTabForCurrentMode();
-            autoResizeComposer();
-            setSyncState("synced");
-        }).catch(function () {
-            setPanelMode("messages");
-            ensureTabForCurrentMode();
-            setSyncState("error");
-            return;
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) {
+                refreshOverview();
+            }
         });
 
         if (mobileQuery.addEventListener) {
@@ -2401,10 +2237,22 @@
             mobileQuery.addListener(handleLayoutChange);
         }
 
-        syncMobileControls();
-        setPanelMode("messages");
-        ensureTabForCurrentMode();
+        fetchJson(root.dataset.bootstrapUrl).then(function (payload) {
+            syncOverview(payload.overview);
+            applyThreadHeader(null);
+            updateComposerAvailability();
+            autoResizeComposer();
+            setSyncState("synced");
+        }).catch(function () {
+            applyThreadHeader(null);
+            updateComposerAvailability();
+            setSyncState("error");
+            return;
+        });
+
         autoResizeComposer();
+        syncComposerState();
+        syncOpenState();
         renderSyncStatus();
         state.pollHandle = window.setInterval(refreshOverview, Number(root.dataset.pollMs || 15000));
     }

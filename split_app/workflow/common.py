@@ -48,6 +48,7 @@ FIELD_TYPES = {
     "long_text",
     "number",
     "date",
+    "calendar",
     "dropdown",
     "checkbox",
     "image_upload",
@@ -189,6 +190,19 @@ def _notify_users(connection, usernames, title, message, link_url="", style_key=
                 now,
             ),
         )
+    if clean_usernames:
+        try:
+            from split_app.workflow.smtp import send_email_to_usernames
+
+            send_email_to_usernames(
+                clean_usernames,
+                title,
+                message,
+                link_url=link_url,
+                sender_name=sender_name,
+            )
+        except Exception:
+            pass
 
 
 def _build_preview(value, limit=140):
@@ -256,6 +270,8 @@ def ensure_form_workflow_schema(connection):
             current_stage_index INTEGER NOT NULL DEFAULT 0,
             current_task_order INTEGER NOT NULL DEFAULT 0,
             cancel_reason TEXT,
+            reject_reason TEXT,
+            acceptance_note TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             submitted_at TEXT,
@@ -270,8 +286,11 @@ def ensure_form_workflow_schema(connection):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             submission_id INTEGER NOT NULL,
             field_key TEXT NOT NULL,
-            file_name TEXT NOT NULL,
-            file_path TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            stored_name TEXT NOT NULL,
+            file_ext TEXT NOT NULL,
+            mime_type TEXT,
+            file_size_bytes INTEGER NOT NULL DEFAULT 0,
             file_kind TEXT NOT NULL,
             uploaded_by_username TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -288,12 +307,12 @@ def ensure_form_workflow_schema(connection):
             reviewer_type TEXT NOT NULL,
             reviewer_value TEXT NOT NULL,
             task_status TEXT NOT NULL DEFAULT 'pending',
-            note TEXT,
-            acted_by_username TEXT,
-            acted_at TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
+            acted_at TEXT,
+            acted_by_username TEXT,
+            action_note TEXT,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT
         )
         """
     )
@@ -357,7 +376,12 @@ def ensure_form_workflow_schema(connection):
             username TEXT,
             password_obfuscated TEXT,
             from_email TEXT,
+            from_name TEXT,
             use_tls INTEGER NOT NULL DEFAULT 1,
+            use_ssl INTEGER NOT NULL DEFAULT 0,
+            is_enabled INTEGER NOT NULL DEFAULT 0,
+            last_tested_at TEXT,
+            last_error TEXT,
             updated_by_username TEXT,
             updated_at TEXT NOT NULL
         )
@@ -377,6 +401,63 @@ def ensure_form_workflow_schema(connection):
             """,
             (timestamp_now(),),
         )
+
+    cursor.execute("PRAGMA table_info(smtp_settings)")
+    smtp_columns = {row["name"] for row in cursor.fetchall()}
+    if "from_name" not in smtp_columns:
+        cursor.execute("ALTER TABLE smtp_settings ADD COLUMN from_name TEXT")
+    if "use_ssl" not in smtp_columns:
+        cursor.execute("ALTER TABLE smtp_settings ADD COLUMN use_ssl INTEGER NOT NULL DEFAULT 0")
+    if "is_enabled" not in smtp_columns:
+        cursor.execute("ALTER TABLE smtp_settings ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 0")
+    if "last_tested_at" not in smtp_columns:
+        cursor.execute("ALTER TABLE smtp_settings ADD COLUMN last_tested_at TEXT")
+    if "last_error" not in smtp_columns:
+        cursor.execute("ALTER TABLE smtp_settings ADD COLUMN last_error TEXT")
+
+    cursor.execute("PRAGMA table_info(form_submissions)")
+    form_submission_columns = {row["name"] for row in cursor.fetchall()}
+    if "reject_reason" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN reject_reason TEXT")
+    if "acceptance_note" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN acceptance_note TEXT")
+
+    cursor.execute("PRAGMA table_info(form_submission_files)")
+    form_file_columns = {row["name"] for row in cursor.fetchall()}
+    if "original_name" not in form_file_columns:
+        cursor.execute("ALTER TABLE form_submission_files ADD COLUMN original_name TEXT")
+    if "stored_name" not in form_file_columns:
+        cursor.execute("ALTER TABLE form_submission_files ADD COLUMN stored_name TEXT")
+    if "file_ext" not in form_file_columns:
+        cursor.execute("ALTER TABLE form_submission_files ADD COLUMN file_ext TEXT")
+    if "mime_type" not in form_file_columns:
+        cursor.execute("ALTER TABLE form_submission_files ADD COLUMN mime_type TEXT")
+    if "file_size_bytes" not in form_file_columns:
+        cursor.execute("ALTER TABLE form_submission_files ADD COLUMN file_size_bytes INTEGER NOT NULL DEFAULT 0")
+    if {"file_name", "file_path"} & form_file_columns:
+        original_expr = "COALESCE(original_name, file_name)" if "file_name" in form_file_columns else "COALESCE(original_name, '')"
+        stored_expr = "COALESCE(stored_name, file_path)" if "file_path" in form_file_columns else "COALESCE(stored_name, '')"
+        cursor.execute(
+            f"""
+            UPDATE form_submission_files
+            SET
+                original_name = {original_expr},
+                stored_name = {stored_expr},
+                file_ext = COALESCE(file_ext, ''),
+                file_size_bytes = COALESCE(file_size_bytes, 0)
+            WHERE
+                (original_name IS NULL OR original_name = '')
+                OR (stored_name IS NULL OR stored_name = '')
+                OR file_ext IS NULL
+            """
+        )
+
+    cursor.execute("PRAGMA table_info(form_review_tasks)")
+    form_task_columns = {row["name"] for row in cursor.fetchall()}
+    if "action_note" not in form_task_columns:
+        cursor.execute("ALTER TABLE form_review_tasks ADD COLUMN action_note TEXT")
+    if "updated_at" not in form_task_columns:
+        cursor.execute("ALTER TABLE form_review_tasks ADD COLUMN updated_at TEXT")
 
     connection.commit()
 

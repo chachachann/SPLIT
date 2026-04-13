@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ form.title }}</title>
+    <title>{{ form.title }} Preview</title>
 
     <script>
         (function () {
@@ -33,21 +33,23 @@
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
     <div class="app-shell">
-        {% set workflow_sidebar_active = 'form_home' %}
-        {% set workflow_sidebar_show_form_home = true %}
-        {% set workflow_sidebar_form_key = form.form_key %}
-        {% include '_workflow_sidebar.html' %}
+        {% set form_admin_sidebar_brand = 'Form Preview' %}
+        {% set form_admin_sidebar_nav_label = 'Preview tools' %}
+        {% set form_admin_sidebar_active = 'forms_manage' %}
+        {% set form_admin_sidebar_back_href = url_for('forms_builder', form_key=form.form_key) %}
+        {% set form_admin_sidebar_back_label = 'Back to Builder' %}
+        {% include '_form_admin_sidebar.html' %}
 
         <main class="main">
             {% set topbar_title = form.title %}
-            {% set topbar_subtitle %}{{ form.form_key }} &#8226; {{ fullname }}{% endset %}
+            {% set topbar_subtitle %}{{ form.form_key }} &#8226; Saved preview and submitted viewer{% endset %}
             {% set topbar_logout_class = 'manager-link-btn' %}
             {% include '_app_topbar.html' %}
 
             <section class="announcement-bar" aria-label="Announcements">
                 <div class="announcement-track">
                     <div class="announcement-marquee">
-                        <span class="marquee">Published form changes go live for future submissions, while your existing requests keep their original version snapshot.</span>
+                        <span class="marquee">This preview reflects the current saved form version. Submitted requests below stay tied to their own saved schema snapshots.</span>
                     </div>
                 </div>
             </section>
@@ -67,8 +69,8 @@
                     <section class="panel">
                         <div class="panel-header">
                             <div class="workflow-panel-copy">
-                                <h2>Form Rules</h2>
-                                <p>Quick summary of this workflow before you create a draft.</p>
+                                <h2>Preview Summary</h2>
+                                <p>Metadata and access rules for the saved form version.</p>
                             </div>
                         </div>
                         <div class="panel-body">
@@ -90,22 +92,30 @@
 
                             <div class="workflow-field-stack">
                                 <div class="workflow-meta-row">
+                                    <span>Status</span>
+                                    <strong>{{ form.status|replace('_', ' ')|title }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
                                     <span>Tracking Prefix</span>
                                     <strong>{{ form.tracking_prefix }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Fields</span>
+                                    <strong>{{ form.schema|length }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
                                     <span>Review Stages</span>
                                     <strong>{{ form.review_stages|length }}</strong>
                                 </div>
-                                <div class="workflow-meta-row">
-                                    <span>Cancel Allowed</span>
-                                    <strong>{{ 'Yes' if form.allow_cancel else 'No' }}</strong>
-                                </div>
-                                <div class="workflow-meta-row">
-                                    <span>Multiple Active</span>
-                                    <strong>{{ 'Allowed' if form.allow_multiple_active else 'One open request at a time' }}</strong>
-                                </div>
                             </div>
+
+                            {% if form.access_roles %}
+                                <div class="workflow-pill-list">
+                                    {% for role in form.access_roles %}
+                                        <span class="workflow-pill">{{ role }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                         </div>
                     </section>
                 </div>
@@ -114,23 +124,74 @@
                     <section class="panel">
                         <div class="panel-header">
                             <div class="workflow-panel-copy">
-                                <h2>Start New Request</h2>
-                                <p>Create a new draft for this form. If you already have an unfinished draft, it will reopen instead of creating a duplicate.</p>
+                                <h2>Form Preview</h2>
+                                <p>Read-only rendering of the current saved form, including default values and temporary hint text.</p>
+                            </div>
+                            <div class="workflow-inline-actions">
+                                <a class="workflow-action-btn" href="{{ url_for('forms_builder', form_key=form.form_key) }}">Open Builder</a>
                             </div>
                         </div>
                         <div class="panel-body">
-                            <form method="POST" class="workflow-inline-actions">
-                                <button type="submit" class="btn-primary">Create Draft</button>
-                                <a href="{{ url_for('my_requests') }}" class="workflow-action-btn">View All Requests</a>
-                            </form>
+                            {% if visible_preview_fields %}
+                                <div class="workflow-field-stack">
+                                    {% for field in visible_preview_fields %}
+                                        {% set current_value = preview_values.get(field.key, '') %}
+                                        <div class="workflow-field-block">
+                                            <label class="workflow-field-label" for="preview__{{ field.key }}">
+                                                <span>{{ field.label }}</span>
+                                                {% if field.required %}
+                                                    <span class="workflow-field-required">*</span>
+                                                {% endif %}
+                                            </label>
+
+                                            {% if field.help_text %}
+                                                <div class="workflow-field-help">{{ field.help_text }}</div>
+                                            {% endif %}
+
+                                            {% if field.type == 'short_text' %}
+                                                <input id="preview__{{ field.key }}" type="text" value="{{ current_value }}" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %} disabled>
+                                            {% elif field.type == 'long_text' %}
+                                                <textarea id="preview__{{ field.key }}" class="workflow-textarea" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %} disabled>{{ current_value }}</textarea>
+                                            {% elif field.type == 'number' %}
+                                                <input id="preview__{{ field.key }}" type="number" value="{{ current_value }}" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %} disabled>
+                                            {% elif field.type in ['date', 'calendar'] %}
+                                                <div class="workflow-date-input">
+                                                    <input id="preview__{{ field.key }}" type="date" value="{{ current_value }}" disabled>
+                                                    <button type="button" class="workflow-muted-btn workflow-calendar-trigger" disabled>Calendar</button>
+                                                </div>
+                                            {% elif field.type == 'dropdown' %}
+                                                <select id="preview__{{ field.key }}" class="workflow-select" disabled>
+                                                    <option value="">{{ field.placeholder or 'Select an option' }}</option>
+                                                    {% for option in field.options %}
+                                                        <option value="{{ option }}" {% if option == current_value %}selected{% endif %}>{{ option }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% elif field.type == 'checkbox' %}
+                                                <label class="role-option-pill workflow-checkbox-row" for="preview__{{ field.key }}">
+                                                    <input id="preview__{{ field.key }}" type="checkbox" {% if current_value %}checked{% endif %} disabled>
+                                                    <span class="role-option-name">Checked</span>
+                                                </label>
+                                            {% elif field.type == 'image_upload' %}
+                                                <input id="preview__{{ field.key }}" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.heic,.heif" disabled>
+                                                <div class="workflow-input-note">Image upload field preview.</div>
+                                            {% elif field.type == 'file_upload' %}
+                                                <input id="preview__{{ field.key }}" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" disabled>
+                                                <div class="workflow-input-note">Document upload field preview.</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No visible fields are configured for this form yet.</div>
+                            {% endif %}
                         </div>
                     </section>
 
                     <section class="panel">
                         <div class="panel-header">
                             <div class="workflow-panel-copy">
-                                <h2>Request Viewer</h2>
-                                <p>Saved drafts and submitted requests stay collapsed here until you expand them for full details.</p>
+                                <h2>Preview Submitted Forms</h2>
+                                <p>Recent requests stay collapsed by default. Expand any entry to inspect the full saved field snapshot.</p>
                             </div>
                         </div>
                         <div class="panel-body">
@@ -141,7 +202,10 @@
                                             <summary class="workflow-viewer-summary">
                                                 <div class="workflow-viewer-summary-copy">
                                                     <strong>{{ item.tracking_number or ('Draft #' ~ item.id) }}</strong>
-                                                    <div class="workflow-card-meta">Created {{ item.created_at }} &#8226; Updated {{ item.updated_at }}</div>
+                                                    <div class="workflow-card-meta">
+                                                        {{ item.owner_display_name or item.owner_username }} &#8226;
+                                                        Updated {{ item.updated_at }}
+                                                    </div>
                                                     {% if item.preview_rows %}
                                                         <div class="workflow-viewer-preview-list">
                                                             {% for row in item.preview_rows %}
@@ -158,8 +222,12 @@
                                             <div class="workflow-viewer-body">
                                                 <div class="workflow-meta-grid">
                                                     <div class="workflow-meta-row">
-                                                        <span>Created</span>
-                                                        <strong>{{ item.created_at }}</strong>
+                                                        <span>Owner</span>
+                                                        <strong>{{ item.owner_display_name or item.owner_username }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Requester</span>
+                                                        <strong>{{ item.requester_display_name or item.requester_username }}</strong>
                                                     </div>
                                                     <div class="workflow-meta-row">
                                                         <span>Submitted</span>
@@ -168,10 +236,6 @@
                                                     <div class="workflow-meta-row">
                                                         <span>Schema Version</span>
                                                         <strong>{{ 'v' ~ item.schema_version_number if item.schema_version_number else 'Current' }}</strong>
-                                                    </div>
-                                                    <div class="workflow-meta-row">
-                                                        <span>Status</span>
-                                                        <strong>{{ item.status|replace('_', ' ')|title }}</strong>
                                                     </div>
                                                 </div>
 
@@ -197,21 +261,15 @@
                                                             </div>
                                                         {% endfor %}
                                                     </div>
+                                                {% else %}
+                                                    <div class="workflow-empty">This request does not have saved field data yet.</div>
                                                 {% endif %}
-
-                                                <div class="workflow-card-actions">
-                                                    {% if item.status == 'draft' %}
-                                                        <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
-                                                    {% else %}
-                                                        <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
-                                                    {% endif %}
-                                                </div>
                                             </div>
                                         </details>
                                     {% endfor %}
                                 </div>
                             {% else %}
-                                <div class="workflow-empty">You do not have any requests for this form yet.</div>
+                                <div class="workflow-empty">No requests have been created for this form yet.</div>
                             {% endif %}
                         </div>
                     </section>
@@ -222,5 +280,6 @@
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='forms.js') }}"></script>
 </body>
 </html>

@@ -80,10 +80,10 @@
                                 <div class="workflow-inline-actions">
                                     <a
                                         class="workflow-action-btn"
-                                        href="{{ url_for('form_home', form_key=form.form_key) if form.status == 'published' else url_for('forms_manage') }}"
-                                        title="{{ 'Open the published form as an end user.' if form.status == 'published' else 'Return to the form listing.' }}"
+                                        href="{{ url_for('form_preview', form_key=form.form_key) }}"
+                                        title="Preview the saved form and recent submitted requests."
                                     >
-                                        {{ 'Open User View' if form.status == 'published' else 'Back to Manager' }}
+                                        Preview Form
                                     </a>
                                 </div>
                             </div>
@@ -232,7 +232,7 @@
                             <div class="panel-header">
                                 <div class="workflow-panel-copy">
                                     <h2>Fields</h2>
-                                    <p>Add fields, required rules, dropdown options, validation bounds, and conditional visibility JSON.</p>
+                                    <p>Add fields, default starting values, temporary hint text, validation bounds, and conditional visibility JSON.</p>
                                 </div>
                                 <button type="button" class="workflow-action-btn" data-add-field title="Add a new form field definition.">Add Field</button>
                             </div>

@@ -133,6 +133,76 @@
                     <section class="panel" aria-labelledby="role-group-heading">
                         <div class="panel-header">
                             <div>
+                                <h2 id="channel-heading">Public Channels</h2>
+                                <p>Control the shared channels from one place instead of editing them ad hoc in the chat drawer.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-body">
+                            {% if channels %}
+                                <div class="account-list">
+                                    {% for channel in channels %}
+                                        <article class="account-card">
+                                            <div class="account-summary">
+                                                <div class="account-summary-copy">
+                                                    <div class="account-card-title-row">
+                                                        <h3>{{ channel.title }}</h3>
+                                                    </div>
+                                                    <p>{{ channel.room_key }} &#8226; {{ 'Enabled' if channel.is_enabled else 'Disabled' }}</p>
+                                                </div>
+                                                <div class="account-summary-meta">
+                                                    <span class="account-last-mod-label">Updated</span>
+                                                    <strong class="account-last-mod-value">{{ channel.updated_at }}</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="account-body" style="display:block;">
+                                                <form method="POST" class="account-form account-form-edit">
+                                                    <input type="hidden" name="action" value="update-channel">
+                                                    <input type="hidden" name="room_key" value="{{ channel.room_key }}">
+
+                                                    <div class="field-grid">
+                                                        <label class="field">
+                                                            <span class="field-label">Display Name</span>
+                                                            <input type="text" name="title" value="{{ channel.title }}" required>
+                                                        </label>
+
+                                                        <label class="field">
+                                                            <span class="field-label">Channel Key</span>
+                                                            <input type="text" value="{{ channel.room_key }}" readonly>
+                                                        </label>
+
+                                                        <label class="field field-full">
+                                                            <span class="field-label">Description</span>
+                                                            <input type="text" name="description" value="{{ channel.description or '' }}" placeholder="Short channel description">
+                                                        </label>
+
+                                                        <label class="field field-full">
+                                                            <span class="field-label">Availability</span>
+                                                            <span class="role-option-pill" style="justify-content:flex-start; gap:12px;">
+                                                                <input type="checkbox" name="is_enabled" value="1" {% if channel.is_enabled %}checked{% endif %}>
+                                                                <span class="role-option-name">Enable this channel</span>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="form-actions">
+                                                        <button type="submit" class="btn-secondary">Save Channel</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state">No public channels are configured yet.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="panel" aria-labelledby="role-group-heading">
+                        <div class="panel-header">
+                            <div>
                                 <h2 id="role-group-heading">Role Group Rooms</h2>
                                 <p>Adjust the chat display name, description, and visibility of each role-based room.</p>
                             </div>

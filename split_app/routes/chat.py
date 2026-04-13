@@ -4,11 +4,13 @@ from flask import jsonify, request, session
 
 from split_app.services.chat_auth import (
     create_chat_message,
+    delete_chat_message,
     get_chat_overview,
     get_chat_thread_messages,
     mark_user_presence,
     move_chat_favorite,
     set_chat_favorite,
+    update_chat_message,
     update_chat_channel,
 )
 from split_app.support import get_current_roles, save_chat_attachment
@@ -128,6 +130,37 @@ def chat_channel_update():
 
     mark_user_presence(session.get("user"), source="channel-update")
     ok, message = update_chat_channel(room_key, title, description, session.get("user"))
+    status_code = 200 if ok else 400
+    return jsonify(
+        {
+            "ok": ok,
+            "message": message,
+            "overview": get_chat_overview(session.get("user"), current_roles),
+        }
+    ), status_code
+
+
+def chat_message_update():
+    current_roles = get_current_roles()
+    message_id = request.form.get("message_id")
+    body = request.form.get("body")
+    mark_user_presence(session.get("user"), source="message-update")
+    ok, message = update_chat_message(message_id, session.get("user"), current_roles, body)
+    status_code = 200 if ok else 400
+    return jsonify(
+        {
+            "ok": ok,
+            "message": message,
+            "overview": get_chat_overview(session.get("user"), current_roles),
+        }
+    ), status_code
+
+
+def chat_message_delete():
+    current_roles = get_current_roles()
+    message_id = request.form.get("message_id")
+    mark_user_presence(session.get("user"), source="message-delete")
+    ok, message = delete_chat_message(message_id, session.get("user"), current_roles)
     status_code = 200 if ok else 400
     return jsonify(
         {

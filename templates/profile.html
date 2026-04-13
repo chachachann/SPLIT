@@ -40,10 +40,6 @@
             </div>
 
             <nav class="menu" aria-label="Dashboard sections">
-                <a class="menu-btn" href="{{ url_for('dashboard') }}">
-                    <span class="menu-icon">&#8962;</span>
-                    <span class="label">Dashboard</span>
-                </a>
                 <a class="menu-btn active" href="{{ url_for('profile') }}" aria-current="page">
                     <span class="menu-icon">&#128100;</span>
                     <span class="label">Profile</span>
@@ -263,18 +259,19 @@
                                 <label class="profile-password-row">
                                     <span>New Password</span>
                                     <div class="profile-password-control">
-                                        <input id="profile-new-password" type="password" name="new_password" required>
+                                        <input id="profile-new-password" type="password" name="new_password" minlength="8" required>
                                         <button type="button" class="profile-password-toggle" data-password-toggle="#profile-new-password">Show</button>
                                     </div>
                                 </label>
                                 <label class="profile-password-row">
                                     <span>Confirm Password</span>
                                     <div class="profile-password-control">
-                                        <input id="profile-confirm-password" type="password" name="confirm_password" required>
+                                        <input id="profile-confirm-password" type="password" name="confirm_password" minlength="8" required>
                                         <button type="button" class="profile-password-toggle" data-password-toggle="#profile-confirm-password">Show</button>
                                     </div>
                                 </label>
                             </div>
+                            <p class="profile-avatar-note">Use at least 8 characters with uppercase, lowercase, and a number.</p>
                             <div class="profile-action-bar profile-action-bar-compact">
                                 <button type="submit" class="profile-primary-btn">Submit Request</button>
                             </div>

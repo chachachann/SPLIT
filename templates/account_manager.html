@@ -53,13 +53,6 @@
                     <span class="label">Accounts</span>
                 </a>
 
-                {% if is_superadmin or is_developer %}
-                    <a class="menu-btn" href="{{ url_for('settings') }}">
-                        <span class="menu-icon">&#9881;</span>
-                        <span class="label">Configuration</span>
-                    </a>
-                {% endif %}
-
                 <a class="menu-btn menu-btn-back" href="{{ url_for('dashboard') }}">
                     <span class="menu-icon" aria-hidden="true">&#8592;</span>
                     <span class="label">Back to Dashboard</span>
@@ -157,7 +150,7 @@
 
                                     <label class="field">
                                         <span class="field-label">Password</span>
-                                        <input type="text" name="password" placeholder="Temporary or assigned password" required>
+                                        <input type="password" name="password" placeholder="Temporary or assigned password" minlength="8" required>
                                     </label>
 
                                     <div class="field field-full">
@@ -262,7 +255,7 @@
 
                                                         <label class="field">
                                                             <span class="field-label">New Password</span>
-                                                            <input type="text" name="password" placeholder="Leave blank to keep the current password">
+                                                            <input type="password" name="password" placeholder="Leave blank to keep the current password" minlength="8">
                                                         </label>
 
                                                         <div class="field field-full">

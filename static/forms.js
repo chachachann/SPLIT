@@ -21,18 +21,20 @@
             "</div>",
             '<div class="field-grid">',
             '<label class="field"><span class="field-label">Label</span><input type="text" data-field-prop="label"></label>',
-            '<label class="field" title="Stable unique field identifier used in saved data, conditional logic, and future integrations."><span class="field-label">Key</span><input type="text" data-field-prop="key" placeholder="applicant_name" title="Stable unique field identifier used in saved data, conditional logic, and future integrations."></label>',
+            '<label class="field" title="Stable unique field identifier used in saved data, conditional logic, and future integrations."><span class="field-label">Key</span><input type="text" data-field-prop="key" placeholder="applicant_name (For logic purposes later on)" title="Stable unique field identifier used in saved data, conditional logic, and future integrations."></label>',
             '<label class="field"><span class="field-label">Type</span><select class="workflow-select" data-field-prop="type">',
             '<option value="short_text">Short Text</option>',
             '<option value="long_text">Long Text</option>',
             '<option value="number">Number</option>',
             '<option value="date">Date</option>',
+            '<option value="calendar">Calendar</option>',
             '<option value="dropdown">Dropdown</option>',
             '<option value="checkbox">Checkbox</option>',
             '<option value="image_upload">Image Upload</option>',
             '<option value="file_upload">File Upload</option>',
             '</select></label>',
-            '<label class="field"><span class="field-label">Default</span><input type="text" data-field-prop="default_value"></label>',
+            '<label class="field" title="Prefills the starting value when a new draft opens."><span class="field-label">Default Value</span><input type="text" data-field-prop="default_value" placeholder="Auto-filled starting value"></label>',
+            '<label class="field" title="Temporary guide text shown before the user types anything."><span class="field-label">Temporary Text</span><input type="text" data-field-prop="placeholder" placeholder="Shown as a hint inside the field"></label>',
             '<label class="field field-full"><span class="field-label">Help Text</span><textarea class="workflow-textarea" data-field-prop="help_text"></textarea></label>',
             '<label class="field field-full"><span class="field-label">Dropdown Options</span><textarea class="workflow-textarea" data-field-prop="options_text" placeholder="One option per line"></textarea></label>',
             '<label class="field"><span class="field-label">Min Length / Value</span><input type="text" data-field-prop="min_value"></label>',
@@ -47,6 +49,7 @@
         item.querySelector('[data-field-prop="key"]').value = field.key || "";
         item.querySelector('[data-field-prop="type"]').value = field.type || "short_text";
         item.querySelector('[data-field-prop="default_value"]').value = field.default_value || "";
+        item.querySelector('[data-field-prop="placeholder"]').value = field.placeholder || "";
         item.querySelector('[data-field-prop="help_text"]').value = field.help_text || "";
         item.querySelector('[data-field-prop="options_text"]').value = (field.options || []).join("\n");
         item.querySelector('[data-field-prop="min_value"]').value = (field.validation && (field.validation.min_length || field.validation.min)) || "";
@@ -142,6 +145,7 @@
             key: item.querySelector('[data-field-prop="key"]').value.trim(),
             type: type,
             default_value: item.querySelector('[data-field-prop="default_value"]').value.trim(),
+            placeholder: item.querySelector('[data-field-prop="placeholder"]').value.trim(),
             help_text: item.querySelector('[data-field-prop="help_text"]').value.trim(),
             options: item.querySelector('[data-field-prop="options_text"]').value.split(/\r?\n/).map(function (value) {
                 return value.trim();
@@ -551,9 +555,29 @@
         });
     }
 
+    function setupDatePickers() {
+        Array.prototype.slice.call(document.querySelectorAll("[data-calendar-trigger]")).forEach(function (button) {
+            var inputId = button.getAttribute("data-calendar-trigger");
+            var input = inputId ? document.getElementById(inputId) : null;
+            if (!input) {
+                return;
+            }
+
+            button.addEventListener("click", function () {
+                if (typeof input.showPicker === "function") {
+                    input.showPicker();
+                    return;
+                }
+                input.focus();
+                input.click();
+            });
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         setupBuilder();
         setupConditionalFields();
         setupAutosave();
+        setupDatePickers();
     });
 })();

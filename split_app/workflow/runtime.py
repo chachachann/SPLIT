@@ -1,4 +1,5 @@
 import os
+import re
 
 from werkzeug.utils import secure_filename
 
@@ -25,6 +26,9 @@ from split_app.workflow.common import (
     ensure_form_workflow_folders,
 )
 from split_app.workflow.templates import _form_row_to_dict, _user_matches_form_access
+
+
+DATE_FIELD_TYPES = {"date", "calendar"}
 
 
 def _get_form_by_key(connection, form_key):
@@ -72,7 +76,7 @@ def _get_submission(connection, submission_id):
     cursor.execute(
         """
         SELECT *
-        FROM form_submission_comments
+        FROM form_comments
         WHERE submission_id = ?
         ORDER BY datetime(created_at), id
         """,
@@ -138,6 +142,134 @@ def _get_submission(connection, submission_id):
             or "System"
         )
     return item
+
+
+def _get_form_map(connection, form_ids):
+    clean_ids = sorted({int(form_id) for form_id in (form_ids or []) if form_id})
+    if not clean_ids:
+        return {}
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _ in clean_ids)
+    cursor.execute(f"SELECT * FROM forms WHERE id IN ({placeholders})", tuple(clean_ids))
+    return {row["id"]: _form_row_to_dict(connection, row) for row in cursor.fetchall()}
+
+
+def _get_form_version_map(connection, form_version_ids):
+    clean_ids = sorted({int(version_id) for version_id in (form_version_ids or []) if version_id})
+    if not clean_ids:
+        return {}
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _ in clean_ids)
+    cursor.execute(
+        f"""
+        SELECT id, version_number, schema_json, created_by_username, created_at
+        FROM form_versions
+        WHERE id IN ({placeholders})
+        """,
+        tuple(clean_ids),
+    )
+    versions = {}
+    for row in cursor.fetchall():
+        item = dict(row)
+        item["schema"] = _json_loads(item.get("schema_json"), [])
+        versions[item["id"]] = item
+    return versions
+
+
+def _get_submission_file_map(connection, submission_ids):
+    clean_ids = sorted({int(submission_id) for submission_id in (submission_ids or []) if submission_id})
+    if not clean_ids:
+        return {}
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _ in clean_ids)
+    cursor.execute(
+        f"""
+        SELECT *
+        FROM form_submission_files
+        WHERE submission_id IN ({placeholders})
+        ORDER BY created_at, id
+        """,
+        tuple(clean_ids),
+    )
+    file_map = {}
+    for row in cursor.fetchall():
+        file_map.setdefault(row["submission_id"], []).append(dict(row))
+    return file_map
+
+
+def _resolve_submission_schema(form, submission, version_map=None):
+    version = (version_map or {}).get(submission.get("form_version_id"))
+    if version:
+        return version.get("schema") or [], version
+    current_version = form.get("current_version") or {}
+    if current_version and current_version.get("id") == submission.get("form_version_id"):
+        return form.get("schema") or [], current_version
+    return form.get("schema") or [], current_version or None
+
+
+def _get_submission_schema(connection, form, submission):
+    version_map = _get_form_version_map(connection, [submission.get("form_version_id")])
+    return _resolve_submission_schema(form, submission, version_map)
+
+
+def _preview_text(value, limit=72):
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _format_submission_field_value(field, value, files=None):
+    field_type = field.get("type")
+    if field_type in {"image_upload", "file_upload"}:
+        total = len(files or [])
+        if total <= 0:
+            return ""
+        noun = "image" if field_type == "image_upload" else "file"
+        return f"{total} {noun}{'' if total == 1 else 's'}"
+    if field_type == "checkbox":
+        return "Yes" if value else ""
+    return str(value or "").strip()
+
+
+def _build_submission_preview_rows(schema, values, file_groups, limit=3):
+    detail_rows = []
+    for field in _visible_fields(schema, values):
+        files = file_groups.get(field["key"]) or []
+        display_value = _format_submission_field_value(field, values.get(field["key"]), files)
+        if not display_value and not files:
+            continue
+        detail_rows.append(
+            {
+                "label": field.get("label") or field.get("key") or "Field",
+                "value": display_value,
+                "preview_value": _preview_text(display_value, limit=60),
+                "field_type": field.get("type") or "short_text",
+                "is_multiline": field.get("type") == "long_text",
+                "files": files,
+            }
+        )
+    return detail_rows[:limit], detail_rows
+
+
+def _enrich_submission_rows(connection, submission_rows):
+    if not submission_rows:
+        return []
+    form_map = _get_form_map(connection, [item.get("form_id") for item in submission_rows])
+    version_map = _get_form_version_map(connection, [item.get("form_version_id") for item in submission_rows])
+    file_map = _get_submission_file_map(connection, [item.get("id") for item in submission_rows])
+    for item in submission_rows:
+        item["data"] = _json_loads(item.get("data_json"), {})
+        item["files"] = file_map.get(item["id"], [])
+        item["file_groups"] = _submission_file_groups(item["files"])
+        form = form_map.get(item.get("form_id")) or {"schema": [], "current_version": None}
+        schema, schema_version = _resolve_submission_schema(form, item, version_map)
+        preview_rows, detail_rows = _build_submission_preview_rows(schema, item["data"], item["file_groups"])
+        item["preview_rows"] = preview_rows
+        item["detail_rows"] = detail_rows
+        item["schema_version"] = schema_version
+        item["schema_version_number"] = (schema_version or {}).get("version_number")
+    return submission_rows
 
 
 def _submission_is_visible(form, submission, username, role_names):
@@ -348,6 +480,9 @@ def _validate_visible_fields(schema, values, files_by_field):
             options = field.get("options") or []
             if options and value not in options:
                 errors.append(f"{field['label']} contains an unsupported option.")
+        if field_type in DATE_FIELD_TYPES and value not in (None, ""):
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(value)):
+                errors.append(f"{field['label']} must use YYYY-MM-DD.")
     return errors
 
 
@@ -399,15 +534,32 @@ def get_form_home_context(form_key, username, role_names):
     cursor = connection.cursor()
     cursor.execute(
         """
-        SELECT id, tracking_number, status, submitted_at, updated_at, created_at
+        SELECT
+            id,
+            form_id,
+            form_version_id,
+            tracking_number,
+            status,
+            data_json,
+            submitted_at,
+            updated_at,
+            created_at
         FROM form_submissions
         WHERE form_id = ?
           AND (owner_username = ? OR requester_username = ?)
-        ORDER BY datetime(updated_at) DESC, id DESC
+        ORDER BY
+            CASE status
+                WHEN 'draft' THEN 0
+                WHEN 'pending' THEN 1
+                ELSE 2
+            END,
+            datetime(updated_at) DESC,
+            id DESC
         """,
         (form["id"], username, username),
     )
     submissions = [dict(row) for row in cursor.fetchall()]
+    _enrich_submission_rows(connection, submissions)
     connection.close()
     return True, "", {"form": form, "submissions": submissions}
 
@@ -422,16 +574,33 @@ def start_form_draft(form_key, username, role_names):
         connection.close()
         return False, "You do not have access to this form.", None
 
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT id
+        FROM form_submissions
+        WHERE form_id = ?
+          AND owner_username = ?
+          AND status = 'draft'
+        ORDER BY datetime(updated_at) DESC, id DESC
+        LIMIT 1
+        """,
+        (form["id"], username),
+    )
+    existing_draft = cursor.fetchone()
+    if existing_draft:
+        connection.close()
+        return True, "Existing draft opened.", existing_draft["id"]
+
     if not form["allow_multiple_active"]:
-        cursor = connection.cursor()
         cursor.execute(
             """
             SELECT id
             FROM form_submissions
             WHERE form_id = ?
               AND owner_username = ?
-              AND status IN ('draft', 'pending')
-            ORDER BY id DESC
+              AND status = 'pending'
+            ORDER BY datetime(updated_at) DESC, id DESC
             LIMIT 1
             """,
             (form["id"], username),
@@ -442,7 +611,6 @@ def start_form_draft(form_key, username, role_names):
             return True, "Existing submission opened.", existing["id"]
 
     now = timestamp_now()
-    cursor = connection.cursor()
     cursor.execute(
         """
         INSERT INTO form_submissions (
@@ -475,12 +643,13 @@ def get_submission_editor_context(submission_id, username, role_names):
     if not _submission_can_edit(submission, username):
         connection.close()
         return False, "This submission is no longer editable.", None
-    schema = form.get("schema") or []
+    schema, schema_version = _get_submission_schema(connection, form, submission)
     data = submission.get("data") or {}
     payload = {
         "form": form,
         "submission": submission,
         "schema": schema,
+        "schema_version": schema_version,
         "visible_fields": _visible_fields(schema, data),
         "file_groups": _submission_file_groups(submission.get("files")),
     }
@@ -497,7 +666,7 @@ def save_submission_draft(submission_id, username, role_names, form_data, form_f
     if not _submission_can_edit(submission, username):
         connection.close()
         return False, "This submission is no longer editable.", None
-    schema = form.get("schema") or []
+    schema, _schema_version = _get_submission_schema(connection, form, submission)
     values = submission.get("data") or {}
     values.update(_extract_field_values(schema, form_data))
 
@@ -719,13 +888,13 @@ def submit_submission(submission_id, username, role_names, form_data, form_files
     if not form:
         connection.close()
         return False, access_message, None
-    schema = form.get("schema") or []
+    schema, _schema_version = _get_submission_schema(connection, form, submission)
     files_by_field = _submission_file_groups(submission.get("files"))
     values = submission.get("data") or {}
     errors = _validate_visible_fields(schema, values, files_by_field)
     if errors:
         connection.close()
-        return False, errors[0], None
+        return False, " ".join(errors[:3]), None
 
     stages = form.get("review_stages") or []
     if not stages:
@@ -807,6 +976,7 @@ def get_my_requests(username, role_names, form_filter=""):
     items = []
     identity_map = {}
     fetched_rows = [dict(row) for row in cursor.fetchall()]
+    _enrich_submission_rows(connection, fetched_rows)
     if fetched_rows:
         identity_map = get_profile_identity_map(
             connection,
@@ -901,7 +1071,7 @@ def get_submission_detail_context(submission_id, username, role_names):
     if not form:
         connection.close()
         return False, message, None
-    schema = form.get("schema") or []
+    schema, schema_version = _get_submission_schema(connection, form, submission)
     file_groups = _submission_file_groups(submission.get("files"))
     active_task_ids = set()
     actionable_task_ids = set()
@@ -921,6 +1091,7 @@ def get_submission_detail_context(submission_id, username, role_names):
         "form": form,
         "submission": submission,
         "schema": schema,
+        "schema_version": schema_version,
         "visible_fields": _visible_fields(schema, submission.get("data") or {}),
         "file_groups": file_groups,
         "active_task_ids": active_task_ids,
@@ -946,6 +1117,69 @@ def get_submission_detail_context(submission_id, username, role_names):
     return True, "", payload
 
 
+def get_manager_form_preview_context(form_key):
+    connection = connect_db()
+    form = _get_form_by_key(connection, form_key)
+    if not form:
+        connection.close()
+        return False, "Form not found.", None
+
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT
+            s.id,
+            s.form_id,
+            s.form_version_id,
+            s.owner_username,
+            s.requester_username,
+            s.tracking_number,
+            s.status,
+            s.data_json,
+            s.created_at,
+            s.updated_at,
+            s.submitted_at,
+            s.completed_at
+        FROM form_submissions s
+        WHERE s.form_id = ?
+        ORDER BY datetime(s.updated_at) DESC, s.id DESC
+        LIMIT 25
+        """,
+        (form["id"],),
+    )
+    submissions = [dict(row) for row in cursor.fetchall()]
+    _enrich_submission_rows(connection, submissions)
+
+    if submissions:
+        identity_map = get_profile_identity_map(
+            connection,
+            [item["owner_username"] for item in submissions] + [item["requester_username"] for item in submissions],
+            viewer_username=form.get("created_by_username") or "",
+        )
+        for item in submissions:
+            owner_identity = identity_map.get((item.get("owner_username") or "").casefold())
+            requester_identity = identity_map.get((item.get("requester_username") or "").casefold())
+            item["owner_display_name"] = (owner_identity.get("display_name") if owner_identity else "") or item.get("owner_username")
+            item["requester_display_name"] = (requester_identity.get("display_name") if requester_identity else "") or item.get("requester_username")
+
+    preview_values = {}
+    for field in form.get("schema") or []:
+        default_value = field.get("default_value")
+        if field.get("type") == "checkbox":
+            preview_values[field["key"]] = default_value if isinstance(default_value, bool) else _is_truthy(default_value)
+        else:
+            preview_values[field["key"]] = "" if default_value is None else str(default_value)
+
+    payload = {
+        "form": form,
+        "submissions": submissions,
+        "preview_values": preview_values,
+        "visible_preview_fields": _visible_fields(form.get("schema") or [], preview_values),
+    }
+    connection.close()
+    return True, "", payload
+
+
 def add_submission_comment(submission_id, username, fullname, role_names, body):
     body = str(body or "").strip()
     if not body:
@@ -960,7 +1194,7 @@ def add_submission_comment(submission_id, username, fullname, role_names, body):
         return False, "Comments are read-only until your review stage is active."
     connection.execute(
         """
-        INSERT INTO form_submission_comments (
+        INSERT INTO form_comments (
             submission_id,
             author_username,
             author_fullname_snapshot,
@@ -1077,7 +1311,7 @@ def delete_draft_submission(submission_id, username, role_names):
             os.remove(path)
     _audit(connection, "submission.draft-deleted", username, "submission", submission_id)
     connection.execute("DELETE FROM form_submission_files WHERE submission_id = ?", (submission_id,))
-    connection.execute("DELETE FROM form_submission_comments WHERE submission_id = ?", (submission_id,))
+    connection.execute("DELETE FROM form_comments WHERE submission_id = ?", (submission_id,))
     connection.execute("DELETE FROM form_audit_log WHERE entity_type = 'submission' AND entity_id = ?", (submission_id,))
     connection.execute("DELETE FROM form_submissions WHERE id = ?", (submission_id,))
     connection.commit()
@@ -1141,7 +1375,7 @@ def review_submission_action(submission_id, task_id, username, fullname, role_na
     if note:
         connection.execute(
             """
-            INSERT INTO form_submission_comments (
+            INSERT INTO form_comments (
                 submission_id,
                 author_username,
                 author_fullname_snapshot,

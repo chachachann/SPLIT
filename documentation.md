@@ -24,6 +24,7 @@ The application is a monolith with server-rendered Jinja templates, browser-side
 ```text
 Browser
   -> main.py thin launcher
+  -> wsgi.py alternate launcher / WSGI entrypoint
     -> split_app.create_app()
       -> packaged Flask composition layer in split_app/web.py
         -> shared web helpers in split_app/support.py
@@ -44,7 +45,7 @@ Browser
 
 | Layer | Primary files | Responsibility |
 | --- | --- | --- |
-| Launcher | `main.py` | thin runtime entry point that initializes the database and starts the app |
+| Launcher | `main.py`, `wsgi.py` | runtime entry points that initialize the database; both can start the dev server when run directly |
 | App bootstrap | `split_app/__init__.py`, `split_app/config.py` | app factory and packaged runtime configuration |
 | Web composition layer | `split_app/web.py` | Flask app object and URL registration |
 | Shared web helpers | `split_app/support.py` | session helpers, decorators, notification aggregation, chat upload handling |
@@ -70,6 +71,9 @@ Browser
   - acts as a thin launcher
   - calls `create_app()`
   - initializes the database before starting the dev server
+- `wsgi.py`
+  - exposes the WSGI app object for deployment
+  - also mirrors the local dev-server run behavior when executed directly
 - `split_app/__init__.py`
   - exposes `create_app()`
   - loads packaged configuration into the Flask app
@@ -832,12 +836,13 @@ The source request listed `System Index` twice. This document uses section 7 for
 
 | Setting | Current value/source | Notes |
 | --- | --- | --- |
-| Flask secret key | `Config.SECRET_KEY = "supersecretkey"` | currently hardcoded in `split_app/config.py` |
+| Flask secret key | `SPLIT_SECRET_KEY` or generated random token | `Config.SECRET_KEY`; no longer hardcoded |
 | Session lifetime | `7 days` | `Config.PERMANENT_SESSION_LIFETIME` |
 | Max request payload | `50 MB` | `Config.MAX_CONTENT_LENGTH` |
 | Dev server port | `777` | `Config.PORT` |
-| Dev host | `0.0.0.0` | `Config.HOST` |
-| Dev mode | `True` | `Config.DEBUG`; used by `main.py` run block |
+| Dev host | `0.0.0.0` | `Config.HOST`; LAN-accessible by default |
+| Dev mode | `False` | `Config.DEBUG`; used by `main.py` and `wsgi.py` run blocks |
+| Public base URL | `SPLIT_PUBLIC_BASE_URL` | used by workflow email/link generation; set this to the LAN URL when hosting to the network |
 
 ### Storage paths
 
@@ -888,9 +893,7 @@ The source request listed `System Index` twice. This document uses section 7 for
 
 ## 11. Known Issues / Limitations
 
-- The Flask secret key is hardcoded to `supersecretkey`, which is not suitable for production.
 - The database path is hardcoded to `C:\SPLIT\db\database.db`, so the app is not portable without code changes.
-- The built-in Flask development server is started with `debug=True` in the main run path.
 - There is no visible CSRF protection for the many POST forms and JSON mutation endpoints.
 - The access helper `admin_or_developer_required` is misnamed; it allows `SuperAdmin` and `Developer`, not `Admin`.
 - The schema does not declare SQL foreign key constraints, so referential integrity is enforced only in application logic.
@@ -898,7 +901,7 @@ The source request listed `System Index` twice. This document uses section 7 for
 - Chat directory search is client-side against the bootstrap payload, which is simple but may become inefficient with a much larger user base.
 - Uploaded files are stored under `static/uploads`, which makes them directly web-served once the path is known.
 - The application is tightly coupled to SQLite and local disk storage; there is no abstraction for alternate backends.
-- Runtime configuration is only partially modularized; values are still hardcoded and not environment-driven.
+- Runtime configuration is improved but still incomplete; core values are now environment-driven, while deployment remains centered on the built-in Flask server and SQLite.
 - `logic.py` is still a compatibility-heavy module; bootstrap/schema coordination and legacy compatibility exports remain centralized there.
 - `forms_workflow.py` is now mostly a compatibility facade; legacy import paths remain in place for backward compatibility.
 - There is now light smoke and chat-favorite endpoint coverage, but there is still no broad behavioral or end-to-end regression coverage.
@@ -927,7 +930,7 @@ The source request listed `System Index` twice. This document uses section 7 for
 ### Current release
 
 - Project: `SPLIT (DAR NIR)`
-- Version: `0.04.0a`
+- Version: `0.05.1a`
 - Release date: `2026-04-13`
 
 ### Versioning scheme
@@ -938,6 +941,23 @@ The source request listed `System Index` twice. This document uses section 7 for
 - Suffixes: `a = alpha`, `b = beta`
 
 ### Changelog
+
+#### [0.05.1a] - 2026-04-13
+
+Added:
+
+- direct-run support in `wsgi.py` so the alternate entrypoint also starts the local dev server
+- smoke-test database isolation via a temporary `SPLIT_DB_PATH`
+
+Improved:
+
+- default local hosting behavior by binding the dev server to `0.0.0.0` for LAN access
+- configuration documentation to reflect environment-driven secret/debug/host settings and `SPLIT_PUBLIC_BASE_URL`
+
+Fixed:
+
+- `RO_Admin` login regressions caused by smoke tests mutating the live SQLite database
+- release/runtime confusion between `main.py`, `wsgi.py`, localhost-only hosting, and network hosting
 
 #### [0.04.0a] - 2026-04-13
 

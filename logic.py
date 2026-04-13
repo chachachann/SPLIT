@@ -152,6 +152,7 @@ from split_app.services.chat_auth import (
     ensure_direct_thread,
     ensure_member_record,
     ensure_thread_memberships_for_user,
+    get_channel_settings,
     get_chat_favorite_map,
     get_chat_overview,
     get_chat_thread_messages,
@@ -159,6 +160,9 @@ from split_app.services.chat_auth import (
     get_role_group_settings,
     is_chat_favorite,
     move_chat_favorite,
+    update_channel_settings,
+    update_chat_message,
+    delete_chat_message,
     get_user_identity,
     get_user_roles_by_username,
     hash_remember_token,
@@ -539,6 +543,19 @@ def init_db():
         cursor.execute("ALTER TABLE chat_threads ADD COLUMN created_by_username TEXT")
     if "updated_by_username" not in chat_thread_columns:
         cursor.execute("ALTER TABLE chat_threads ADD COLUMN updated_by_username TEXT")
+
+    cursor.execute("PRAGMA table_info(chat_messages)")
+    chat_message_columns = {row["name"] for row in cursor.fetchall()}
+    if "edited_at" not in chat_message_columns:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN edited_at TEXT")
+    if "edited_by_username" not in chat_message_columns:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN edited_by_username TEXT")
+    if "is_deleted" not in chat_message_columns:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+    if "deleted_at" not in chat_message_columns:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN deleted_at TEXT")
+    if "deleted_by_username" not in chat_message_columns:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN deleted_by_username TEXT")
 
     cursor.execute("PRAGMA table_info(user_profiles)")
     user_profile_columns = {row["name"] for row in cursor.fetchall()}
