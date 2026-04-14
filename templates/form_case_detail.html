@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ submission.tracking_number or ('Submission #' ~ submission.id) }}</title>
+    <title>{{ case.tracking_number }}</title>
 
     <script>
         (function () {
@@ -33,21 +33,20 @@
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
     <div class="app-shell">
-        {% set workflow_sidebar_brand = 'Submission' %}
-        {% set workflow_sidebar_show_form_home = true %}
-        {% set workflow_sidebar_form_key = form.form_key %}
+        {% set workflow_sidebar_brand = 'Workflow Case' %}
+        {% set workflow_sidebar_active = 'form_library' %}
         {% include '_workflow_sidebar.html' %}
 
         <main class="main">
-            {% set topbar_title = submission.tracking_number or ('Draft #' ~ submission.id) %}
-            {% set topbar_subtitle %}{{ form.title }} &#8226; {{ submission.status|replace('_', ' ')|title }}{% endset %}
+            {% set topbar_title = case.tracking_number %}
+            {% set topbar_subtitle %}{{ case.summary_status_label }} &#8226; {{ tabs|length }} visible tab{{ '' if tabs|length == 1 else 's' }}{% endset %}
             {% set topbar_logout_class = 'manager-link-btn' %}
             {% include '_app_topbar.html' %}
 
             <section class="announcement-bar" aria-label="Announcements">
                 <div class="announcement-track">
                     <div class="announcement-marquee">
-                        <span class="marquee">This page combines submission values, attachments, review steps, comments, and audit history for a single workflow record.</span>
+                        <span class="marquee">This case groups every filed form under one tracking number while keeping each tab on its own workflow path.</span>
                     </div>
                 </div>
             </section>
@@ -67,10 +66,11 @@
                     <section class="panel">
                         <div class="panel-header">
                             <div class="workflow-panel-copy">
-                                <h2>Submission Summary</h2>
-                                <p>Current lifecycle state and available actions for this submission.</p>
+                                <h2>Case Summary</h2>
+                                <p>Tracking-number level status, archive state, and currently selected filed form.</p>
                             </div>
                             <div class="workflow-card-actions">
+                                <a class="workflow-action-btn" href="{{ url_for('form_submission_detail', submission_id=submission.id) }}">Open Single Record</a>
                                 {% if can_edit %}
                                     <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=submission.id) }}">{{ 'Continue Work' if submission.status == 'assigned' else 'Continue Draft' }}</a>
                                 {% endif %}
@@ -79,39 +79,43 @@
                         <div class="panel-body">
                             <div class="workflow-summary-grid">
                                 <div class="workflow-metric">
-                                    <strong>{{ submission.status|replace('_', ' ')|title }}</strong>
-                                    <span>Status</span>
+                                    <strong>{{ case.summary_status_label or 'Unknown' }}</strong>
+                                    <span>Case Status</span>
                                 </div>
                                 <div class="workflow-metric">
-                                    <strong>{{ submission.current_stage_index + 1 if submission.status == 'pending' else '-' }}</strong>
-                                    <span>Current Stage</span>
+                                    <strong>{{ tabs|length }}</strong>
+                                    <span>Visible Tabs</span>
                                 </div>
                                 <div class="workflow-metric">
-                                    <strong>{{ form.review_stages|length if form.requires_review else 0 }}</strong>
-                                    <span>Total Stages</span>
+                                    <strong>{{ 'Archived' if case.archived_at else 'Active' }}</strong>
+                                    <span>Archive State</span>
                                 </div>
                             </div>
 
                             <div class="workflow-meta-grid">
                                 <div class="workflow-meta-row">
                                     <span>Tracking Number</span>
-                                    <strong>{{ submission.tracking_number or 'Generated on submit' }}</strong>
+                                    <strong>{{ case.tracking_number }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
-                                    <span>Owner</span>
-                                    <strong><a href="{{ submission.owner_profile_url }}">{{ submission.owner_display_name }}</a></strong>
+                                    <span>Case Created</span>
+                                    <strong>{{ case.created_at or 'Not available' }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
-                                    <span>Submitted</span>
-                                    <strong>{{ submission.submitted_at or 'Not yet submitted' }}</strong>
+                                    <span>Case Updated</span>
+                                    <strong>{{ case.updated_at or submission.updated_at }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
-                                    <span>Updated</span>
-                                    <strong>{{ submission.updated_at }}</strong>
+                                    <span>Requester</span>
+                                    <strong><a href="{{ submission.requester_profile_url }}">{{ submission.requester_display_name }}</a></strong>
                                 </div>
                                 <div class="workflow-meta-row">
-                                    <span>Schema Version</span>
-                                    <strong>{{ 'v' ~ schema_version.version_number if schema_version else 'Current' }}</strong>
+                                    <span>Selected Tab</span>
+                                    <strong>{{ form.title }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Selected Status</span>
+                                    <strong>{{ submission.status|replace('_', ' ')|title }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
                                     <span>Deadline</span>
@@ -134,44 +138,6 @@
                                     </div>
                                 {% endif %}
                             </div>
-
-                            {% if submission.reject_reason %}
-                                <div class="workflow-note-box workflow-note-danger">
-                                    <strong>Rejection Reason</strong>
-                                    <p>{{ submission.reject_reason }}</p>
-                                </div>
-                            {% endif %}
-                            {% if submission.cancel_reason %}
-                                <div class="workflow-note-box workflow-note-warning">
-                                    <strong>Cancellation Reason</strong>
-                                    <p>{{ submission.cancel_reason }}</p>
-                                </div>
-                            {% endif %}
-                            {% if submission.acceptance_note %}
-                                <div class="workflow-note-box">
-                                    <strong>Acceptance Note</strong>
-                                    <p>{{ submission.acceptance_note }}</p>
-                                </div>
-                            {% endif %}
-                            {% if submission.lineage_label %}
-                                <div class="workflow-note-box">
-                                    <strong>Workflow Path</strong>
-                                    <p>{{ submission.lineage_label }}</p>
-                                </div>
-                            {% endif %}
-                            {% if submission.promoted_to_submission_id %}
-                                <div class="workflow-note-box">
-                                    <strong>Promoted To</strong>
-                                    <p>
-                                        <a href="{{ url_for('form_submission_detail', submission_id=submission.promoted_to_submission_id) }}">
-                                            {{ submission.promoted_to_tracking_number or ('Submission #' ~ submission.promoted_to_submission_id) }}
-                                        </a>
-                                        {% if submission.promoted_to_form_title %}
-                                            &#8226; {{ submission.promoted_to_form_title }}
-                                        {% endif %}
-                                    </p>
-                                </div>
-                            {% endif %}
 
                             <div class="workflow-card-actions">
                                 {% if can_take_submission %}
@@ -216,13 +182,13 @@
 
                                 {% if can_archive_submission %}
                                     <form method="POST" action="{{ url_for('form_submission_archive', submission_id=submission.id) }}">
-                                        <button type="submit" class="workflow-action-btn" onclick="return confirm('Archive this submission?');">Archive Submission</button>
+                                        <button type="submit" class="workflow-action-btn" onclick="return confirm('Archive this case?');">Archive Case</button>
                                     </form>
                                 {% endif %}
 
                                 {% if can_delete_archived_submission %}
                                     <form method="POST" action="{{ url_for('form_submission_delete_archived', submission_id=submission.id) }}">
-                                        <button type="submit" class="workflow-danger-btn" onclick="return confirm('Delete this archived submission permanently?');">Delete Archived Submission</button>
+                                        <button type="submit" class="workflow-danger-btn" onclick="return confirm('Delete this archived case permanently?');">Delete Archived Case</button>
                                     </form>
                                 {% endif %}
 
@@ -242,12 +208,118 @@
                         </div>
                     </section>
 
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Case Tabs</h2>
+                                <p>Each tab is a filed form under the same tracking number. Hidden tabs are not listed here.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-tab-nav">
+                                {% for tab in tabs %}
+                                    <a
+                                        class="workflow-tab-link{% if tab.submission_id == selected_tab_id %} is-active{% endif %}"
+                                        href="{{ url_for('form_case_detail', case_tracking_number=case.tracking_number, tab=tab.submission_id) }}"
+                                    >
+                                        <span>{{ tab.form_title }}</span>
+                                        <small>{{ tab.status|replace('_', ' ')|title }}</small>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Selected Tab Summary</h2>
+                                <p>Current lifecycle state and actions for the active filed form tab.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-summary-grid">
+                                <div class="workflow-metric">
+                                    <strong>{{ submission.status|replace('_', ' ')|title }}</strong>
+                                    <span>Status</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ submission.current_stage_index + 1 if submission.status == 'pending' else '-' }}</strong>
+                                    <span>Current Stage</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ form.review_stages|length if form.requires_review else 0 }}</strong>
+                                    <span>Total Stages</span>
+                                </div>
+                            </div>
+
+                            <div class="workflow-meta-grid">
+                                <div class="workflow-meta-row">
+                                    <span>Tab Tracking Number</span>
+                                    <strong>{{ submission.tracking_number or 'Generated on submit' }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Owner</span>
+                                    <strong><a href="{{ submission.owner_profile_url }}">{{ submission.owner_display_name }}</a></strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Submitted</span>
+                                    <strong>{{ submission.submitted_at or 'Not yet submitted' }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Updated</span>
+                                    <strong>{{ submission.updated_at }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Schema Version</span>
+                                    <strong>{{ 'v' ~ schema_version.version_number if schema_version else 'Current' }}</strong>
+                                </div>
+                                <div class="workflow-meta-row">
+                                    <span>Workflow Path</span>
+                                    <strong>{{ submission.lineage_label or form.title }}</strong>
+                                </div>
+                            </div>
+
+                            {% if submission.reject_reason %}
+                                <div class="workflow-note-box workflow-note-danger">
+                                    <strong>Rejection Reason</strong>
+                                    <p>{{ submission.reject_reason }}</p>
+                                </div>
+                            {% endif %}
+                            {% if submission.cancel_reason %}
+                                <div class="workflow-note-box workflow-note-warning">
+                                    <strong>Cancellation Reason</strong>
+                                    <p>{{ submission.cancel_reason }}</p>
+                                </div>
+                            {% endif %}
+                            {% if submission.acceptance_note %}
+                                <div class="workflow-note-box">
+                                    <strong>Acceptance Note</strong>
+                                    <p>{{ submission.acceptance_note }}</p>
+                                </div>
+                            {% endif %}
+                            {% if submission.promoted_to_submission_id %}
+                                <div class="workflow-note-box">
+                                    <strong>Promoted To</strong>
+                                    <p>
+                                        <a href="{{ url_for('form_case_detail', case_tracking_number=case.tracking_number, tab=submission.promoted_to_submission_id) }}">
+                                            {{ submission.promoted_to_form_title or ('Submission #' ~ submission.promoted_to_submission_id) }}
+                                        </a>
+                                        {% if submission.promoted_to_tracking_number %}
+                                            &#8226; {{ submission.promoted_to_tracking_number }}
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </section>
+
                     <div class="workflow-detail-grid">
                         <section class="panel">
                             <div class="panel-header">
                                 <div class="workflow-panel-copy">
                                     <h2>Field Values</h2>
-                                    <p>Snapshot of the submission data tied to this form version.</p>
+                                    <p>Snapshot of the filed form data tied to this form version.</p>
                                 </div>
                             </div>
                             <div class="panel-body">
@@ -273,7 +345,7 @@
                                     </div>
                                 {% else %}
                                     <div class="workflow-empty">
-                                        {{ 'No visible fields are available for your current access.' if not can_view_private_fields else 'No saved field values are available for this submission.' }}
+                                        {{ 'No visible fields are available for your current access.' if not can_view_private_fields else 'No saved field values are available for this filed form.' }}
                                     </div>
                                 {% endif %}
                             </div>
@@ -347,7 +419,7 @@
                             <div class="panel-header">
                                 <div class="workflow-panel-copy">
                                     <h2>Comments</h2>
-                                    <p>Shared discussion thread visible to everyone who can see this submission.</p>
+                                    <p>Shared discussion thread visible to everyone who can see this filed form tab.</p>
                                 </div>
                             </div>
                             <div class="panel-body">
@@ -404,9 +476,9 @@
                                             {% endfor %}
                                         </div>
                                     {% elif submission.files and not can_view_private_fields %}
-                                        <div class="workflow-empty">Attachments exist on this submission but are hidden by private field visibility.</div>
+                                        <div class="workflow-empty">Attachments exist on this filed form but are hidden by private field visibility.</div>
                                     {% else %}
-                                        <div class="workflow-empty">No attachments were uploaded for this submission.</div>
+                                        <div class="workflow-empty">No attachments were uploaded for this filed form.</div>
                                     {% endif %}
                                 </div>
                             </section>
@@ -415,7 +487,7 @@
                                 <div class="panel-header">
                                     <div class="workflow-panel-copy">
                                         <h2>Audit Trail</h2>
-                                        <p>Immutable workflow events captured for this submission.</p>
+                                        <p>Immutable workflow events captured for this filed form.</p>
                                     </div>
                                 </div>
                                 <div class="panel-body">

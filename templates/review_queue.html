@@ -124,32 +124,61 @@
                                                     </div>
                                                 </div>
                                                 <span class="workflow-status-pill {% if item.is_actionable %}status-pending{% else %}status-draft{% endif %}">
-                                                    {{ 'Action Required' if item.is_actionable else 'Read Only' }}
+                                                    {% if item.queue_kind == 'assignment' %}Assignment{% else %}{{ 'Action Required' if item.is_actionable else 'Read Only' }}{% endif %}
                                                 </span>
                                             </div>
 
                                             <div class="workflow-meta-grid">
+                                                {% if item.queue_kind == 'assignment' %}
+                                                    <div class="workflow-meta-row">
+                                                        <span>Claimed By</span>
+                                                        <strong>{{ item.assignment_requested_by_display_name }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Assignment Status</span>
+                                                        <strong>{{ item.submission_status|replace('_', ' ')|title }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Requester</span>
+                                                        <strong>{{ item.requester_display_name }}</strong>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="workflow-meta-row">
+                                                        <span>Stage</span>
+                                                        <strong>{{ item.stage_index + 1 }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Sequence</span>
+                                                        <strong>{{ item.task_order }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Reviewer</span>
+                                                        <strong>{{ item.reviewer_type|title }}: {{ item.reviewer_value }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Task Status</span>
+                                                        <strong>{{ item.task_status|title }}</strong>
+                                                    </div>
+                                                {% endif %}
                                                 <div class="workflow-meta-row">
-                                                    <span>Stage</span>
-                                                    <strong>{{ item.stage_index + 1 }}</strong>
+                                                    <span>Deadline</span>
+                                                    <strong>{{ item.deadline_at or 'Not set' }}</strong>
                                                 </div>
                                                 <div class="workflow-meta-row">
-                                                    <span>Sequence</span>
-                                                    <strong>{{ item.task_order }}</strong>
-                                                </div>
-                                                <div class="workflow-meta-row">
-                                                    <span>Reviewer</span>
-                                                    <strong>{{ item.reviewer_type|title }}: {{ item.reviewer_value }}</strong>
-                                                </div>
-                                                <div class="workflow-meta-row">
-                                                    <span>Task Status</span>
-                                                    <strong>{{ item.task_status|title }}</strong>
+                                                    <span>Deadline State</span>
+                                                    <strong>{{ item.deadline_state_label or 'None' }}</strong>
                                                 </div>
                                             </div>
 
                                             <div class="workflow-card-actions">
                                                 <a class="btn-primary" href="{{ url_for('form_submission_detail', submission_id=item.submission_id) }}">Open Submission</a>
-                                                {% if not item.is_actionable %}
+                                                {% if item.queue_kind == 'assignment' %}
+                                                    <form method="POST" action="{{ url_for('form_submission_review_assignment', submission_id=item.submission_id) }}" class="workflow-inline-form">
+                                                        <textarea class="workflow-textarea workflow-textarea-compact" name="note" placeholder="Optional assignment note"></textarea>
+                                                        <button type="submit" class="btn-primary" name="assignment_action" value="approve">Approve Assignment</button>
+                                                        <button type="submit" class="workflow-danger-btn" name="assignment_action" value="reject">Reject Assignment</button>
+                                                    </form>
+                                                {% elif not item.is_actionable %}
                                                     <span class="workflow-inline-note">Visible for awareness only until prior workflow steps complete.</span>
                                                 {% endif %}
                                             </div>

@@ -35,6 +35,10 @@ MAX_FORM_DOCUMENT_COUNT = 20
 FORM_STATUSES = {"draft", "published", "archived"}
 SUBMISSION_STATUSES = {
     "draft",
+    "open",
+    "pending_assignment",
+    "assigned",
+    "in_review",
     "pending",
     "accepted",
     "rejected",
@@ -231,8 +235,15 @@ def ensure_form_workflow_schema(connection):
             status TEXT NOT NULL DEFAULT 'draft',
             allow_cancel INTEGER NOT NULL DEFAULT 1,
             allow_multiple_active INTEGER NOT NULL DEFAULT 1,
+            requires_review INTEGER NOT NULL DEFAULT 1,
+            deadline_days INTEGER,
+            next_form_id INTEGER,
+            assignment_review_type TEXT,
+            assignment_review_value TEXT,
             access_roles_json TEXT NOT NULL DEFAULT '[]',
             access_users_json TEXT NOT NULL DEFAULT '[]',
+            library_roles_json TEXT NOT NULL DEFAULT '[]',
+            library_users_json TEXT NOT NULL DEFAULT '[]',
             review_stages_json TEXT NOT NULL DEFAULT '[]',
             current_version_id INTEGER,
             created_by_username TEXT NOT NULL,
@@ -257,24 +268,64 @@ def ensure_form_workflow_schema(connection):
     )
     cursor.execute(
         """
+        CREATE TABLE IF NOT EXISTS form_promotion_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_form_id INTEGER NOT NULL,
+            target_form_id INTEGER NOT NULL,
+            rule_order INTEGER NOT NULL DEFAULT 1,
+            spawn_mode TEXT NOT NULL DEFAULT 'automatic',
+            default_deadline_days INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workflow_cases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tracking_number TEXT NOT NULL UNIQUE,
+            owner_username TEXT NOT NULL,
+            requester_username TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            archived_at TEXT
+        )
+        """
+    )
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS form_submissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER,
             form_id INTEGER NOT NULL,
             form_version_id INTEGER NOT NULL,
             owner_username TEXT NOT NULL,
             requester_username TEXT NOT NULL,
+            parent_submission_id INTEGER,
+            root_submission_id INTEGER,
             tracking_number TEXT UNIQUE,
             tracking_prefix TEXT,
             status TEXT NOT NULL DEFAULT 'draft',
             data_json TEXT NOT NULL DEFAULT '{}',
             current_stage_index INTEGER NOT NULL DEFAULT 0,
             current_task_order INTEGER NOT NULL DEFAULT 0,
+            promoted_to_submission_id INTEGER,
             cancel_reason TEXT,
             reject_reason TEXT,
             acceptance_note TEXT,
+            assigned_to_username TEXT,
+            assignment_requested_by_username TEXT,
+            assignment_requested_at TEXT,
+            assignment_note TEXT,
+            pool_roles_json TEXT NOT NULL DEFAULT '[]',
+            pool_users_json TEXT NOT NULL DEFAULT '[]',
+            assignment_review_type TEXT,
+            assignment_review_value TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             submitted_at TEXT,
+            deadline_at TEXT,
             completed_at TEXT,
             archived_at TEXT
         )
@@ -415,12 +466,69 @@ def ensure_form_workflow_schema(connection):
     if "last_error" not in smtp_columns:
         cursor.execute("ALTER TABLE smtp_settings ADD COLUMN last_error TEXT")
 
+    cursor.execute("PRAGMA table_info(forms)")
+    form_columns = {row["name"] for row in cursor.fetchall()}
+    if "requires_review" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN requires_review INTEGER NOT NULL DEFAULT 1")
+    if "deadline_days" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN deadline_days INTEGER")
+    if "next_form_id" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN next_form_id INTEGER")
+    if "assignment_review_type" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN assignment_review_type TEXT")
+    if "assignment_review_value" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN assignment_review_value TEXT")
+    if "library_roles_json" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN library_roles_json TEXT NOT NULL DEFAULT '[]'")
+    if "library_users_json" not in form_columns:
+        cursor.execute("ALTER TABLE forms ADD COLUMN library_users_json TEXT NOT NULL DEFAULT '[]'")
+    cursor.execute(
+        """
+        UPDATE forms
+        SET
+            library_roles_json = CASE
+                WHEN COALESCE(trim(library_roles_json), '') IN ('', '[]') THEN access_roles_json
+                ELSE library_roles_json
+            END,
+            library_users_json = CASE
+                WHEN COALESCE(trim(library_users_json), '') IN ('', '[]') THEN access_users_json
+                ELSE library_users_json
+            END
+        """
+    )
+
     cursor.execute("PRAGMA table_info(form_submissions)")
     form_submission_columns = {row["name"] for row in cursor.fetchall()}
+    if "case_id" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN case_id INTEGER")
+    if "parent_submission_id" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN parent_submission_id INTEGER")
+    if "root_submission_id" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN root_submission_id INTEGER")
+    if "promoted_to_submission_id" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN promoted_to_submission_id INTEGER")
     if "reject_reason" not in form_submission_columns:
         cursor.execute("ALTER TABLE form_submissions ADD COLUMN reject_reason TEXT")
     if "acceptance_note" not in form_submission_columns:
         cursor.execute("ALTER TABLE form_submissions ADD COLUMN acceptance_note TEXT")
+    if "deadline_at" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN deadline_at TEXT")
+    if "assigned_to_username" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN assigned_to_username TEXT")
+    if "assignment_requested_by_username" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN assignment_requested_by_username TEXT")
+    if "assignment_requested_at" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN assignment_requested_at TEXT")
+    if "assignment_note" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN assignment_note TEXT")
+    if "pool_roles_json" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN pool_roles_json TEXT NOT NULL DEFAULT '[]'")
+    if "pool_users_json" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN pool_users_json TEXT NOT NULL DEFAULT '[]'")
+    if "assignment_review_type" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN assignment_review_type TEXT")
+    if "assignment_review_value" not in form_submission_columns:
+        cursor.execute("ALTER TABLE form_submissions ADD COLUMN assignment_review_value TEXT")
 
     cursor.execute("PRAGMA table_info(form_submission_files)")
     form_file_columns = {row["name"] for row in cursor.fetchall()}
@@ -458,6 +566,99 @@ def ensure_form_workflow_schema(connection):
         cursor.execute("ALTER TABLE form_review_tasks ADD COLUMN action_note TEXT")
     if "updated_at" not in form_task_columns:
         cursor.execute("ALTER TABLE form_review_tasks ADD COLUMN updated_at TEXT")
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            case_id,
+            root_submission_id,
+            tracking_number,
+            owner_username,
+            requester_username,
+            status,
+            created_at,
+            submitted_at,
+            archived_at
+        FROM form_submissions
+        WHERE case_id IS NULL
+          AND status != 'draft'
+        ORDER BY COALESCE(root_submission_id, id), id
+        """
+    )
+    orphaned_submissions = [dict(row) for row in cursor.fetchall()]
+    case_map = {}
+    for row in orphaned_submissions:
+        root_id = row["root_submission_id"] or row["id"]
+        case_id = case_map.get(root_id)
+        if not case_id:
+            tracking_number = (row.get("tracking_number") or f"CASE-{root_id}").strip()
+            cursor.execute("SELECT id FROM workflow_cases WHERE tracking_number = ?", (tracking_number,))
+            existing_case = cursor.fetchone()
+            if existing_case:
+                case_id = existing_case["id"]
+            else:
+                created_at = row.get("submitted_at") or row.get("created_at") or timestamp_now()
+                updated_at = row.get("archived_at") or row.get("submitted_at") or row.get("created_at") or created_at
+                cursor.execute(
+                    """
+                    INSERT INTO workflow_cases (
+                        tracking_number,
+                        owner_username,
+                        requester_username,
+                        created_at,
+                        updated_at,
+                        archived_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        tracking_number,
+                        row["owner_username"],
+                        row["requester_username"],
+                        created_at,
+                        updated_at,
+                        row.get("archived_at"),
+                    ),
+                )
+                case_id = cursor.lastrowid
+            case_map[root_id] = case_id
+        cursor.execute("UPDATE form_submissions SET case_id = ? WHERE id = ?", (case_id, row["id"]))
+
+    cursor.execute(
+        """
+        SELECT id, next_form_id
+        FROM forms
+        WHERE next_form_id IS NOT NULL
+        """
+    )
+    for row in cursor.fetchall():
+        cursor.execute(
+            """
+            SELECT id
+            FROM form_promotion_rules
+            WHERE source_form_id = ? AND target_form_id = ?
+            """,
+            (row["id"], row["next_form_id"]),
+        )
+        if cursor.fetchone():
+            continue
+        now = timestamp_now()
+        cursor.execute(
+            """
+            INSERT INTO form_promotion_rules (
+                source_form_id,
+                target_form_id,
+                rule_order,
+                spawn_mode,
+                default_deadline_days,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, 1, 'automatic', NULL, ?, ?)
+            """,
+            (row["id"], row["next_form_id"], now, now),
+        )
 
     connection.commit()
 

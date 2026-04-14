@@ -8,6 +8,7 @@ from logic import (
     set_profile_notification_state,
 )
 from forms_workflow import list_dashboard_forms, set_form_notification_state
+from split_app.workflow.runtime import get_quick_access_work_items
 from split_app.support import get_combined_workflow_counts, get_current_roles, get_topbar_notifications
 
 
@@ -20,6 +21,7 @@ def dashboard():
     notifications, unread_notifications = get_topbar_notifications()
     workflow_counts = get_combined_workflow_counts(current_roles)
     workflow_forms = list_dashboard_forms(session.get("user"), current_roles)
+    workflow_work_items = get_quick_access_work_items(session.get("user"), current_roles)
 
     return render_template(
         "dashboard.html",
@@ -33,6 +35,7 @@ def dashboard():
         unread_notifications=unread_notifications,
         workflow_counts=workflow_counts,
         workflow_forms=workflow_forms,
+        workflow_work_items=workflow_work_items,
         is_superadmin=any(role.casefold() == "superadmin" for role in current_roles),
         is_developer=any(role.casefold() == "developer" for role in current_roles),
     )

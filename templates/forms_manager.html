@@ -76,10 +76,11 @@
                                 <input type="hidden" name="action" value="create-form">
                                 <label class="field">
                                     <span class="field-label">Form Title</span>
-                                    <input type="text" name="title" placeholder="Example: Land Inspection Intake" required>
+                                    <input type="text" name="title" placeholder="Enter form title" required>
                                 </label>
                                 <div class="form-actions">
                                     <button type="submit" class="btn-primary">Create Form</button>
+                                    <a class="workflow-action-btn" href="{{ url_for('form_library') }}">Open Form Library</a>
                                 </div>
                             </form>
                         </div>
@@ -124,6 +125,7 @@
                                 <a class="workflow-action-btn" href="{{ url_for('forms_manage', status='published') }}">Published</a>
                                 <a class="workflow-action-btn" href="{{ url_for('forms_manage', status='draft') }}">Draft</a>
                                 <a class="workflow-action-btn" href="{{ url_for('forms_manage', status='archived') }}">Archived</a>
+                                <a class="workflow-action-btn" href="{{ url_for('form_library') }}">Library</a>
                             </div>
                         </div>
 
@@ -141,6 +143,13 @@
                                             </div>
 
                                             <div class="workflow-pill-list">
+                                                <span class="workflow-pill">{{ 'Review Required' if form.requires_review else 'Direct Complete' }}</span>
+                                                {% if form.deadline_days %}
+                                                    <span class="workflow-pill">Deadline {{ form.deadline_days }}d</span>
+                                                {% endif %}
+                                                {% if form.next_form_title %}
+                                                    <span class="workflow-pill">Promotes to {{ form.next_form_title }}</span>
+                                                {% endif %}
                                                 {% for role in form.access_roles %}
                                                     <span class="workflow-pill">{{ role }}</span>
                                                 {% endfor %}
@@ -149,6 +158,19 @@
                                             <div class="workflow-card-actions">
                                                 <a class="btn-secondary" href="{{ url_for('forms_builder', form_key=form.form_key) }}">Open Builder</a>
                                                 <a class="workflow-action-btn" href="{{ url_for('form_preview', form_key=form.form_key) }}">Preview Form</a>
+                                                <form method="POST" action="{{ url_for('forms_manage', status=status_filter) }}" class="workflow-inline-form">
+                                                    <input type="hidden" name="action" value="force-delete-form">
+                                                    <input type="hidden" name="form_key" value="{{ form.form_key }}">
+                                                    <input type="hidden" name="force_delete_confirm" value="" data-force-delete-confirm>
+                                                    <button
+                                                        type="submit"
+                                                        class="workflow-danger-btn"
+                                                        formnovalidate
+                                                        onclick="var value = window.prompt('Type DELETE to force delete this form template and all related filed forms.'); if (!value) { return false; } this.form.querySelector('[data-force-delete-confirm]').value = value;"
+                                                    >
+                                                        Force Delete
+                                                    </button>
+                                                </form>
                                             </div>
                                         </article>
                                     {% endfor %}

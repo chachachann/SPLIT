@@ -95,7 +95,7 @@
                                 </div>
                                 <div class="workflow-meta-row">
                                     <span>Review Stages</span>
-                                    <strong>{{ form.review_stages|length }}</strong>
+                                    <strong>{{ form.review_stages|length if form.requires_review else 'Direct Complete' }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
                                     <span>Cancel Allowed</span>
@@ -105,6 +105,18 @@
                                     <span>Multiple Active</span>
                                     <strong>{{ 'Allowed' if form.allow_multiple_active else 'One open request at a time' }}</strong>
                                 </div>
+                                {% if form.deadline_days %}
+                                    <div class="workflow-meta-row">
+                                        <span>Deadline</span>
+                                        <strong>{{ form.deadline_days }} day{{ '' if form.deadline_days == 1 else 's' }}</strong>
+                                    </div>
+                                {% endif %}
+                                {% if form.next_form_title %}
+                                    <div class="workflow-meta-row">
+                                        <span>Promotes To</span>
+                                        <strong>{{ form.next_form_title }}</strong>
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
                     </section>
@@ -170,10 +182,22 @@
                                                         <strong>{{ 'v' ~ item.schema_version_number if item.schema_version_number else 'Current' }}</strong>
                                                     </div>
                                                     <div class="workflow-meta-row">
+                                                        <span>Deadline</span>
+                                                        <strong>{{ item.deadline_at or 'Not set' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Deadline State</span>
+                                                        <strong>{{ item.deadline_state_label or 'None' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
                                                         <span>Status</span>
                                                         <strong>{{ item.status|replace('_', ' ')|title }}</strong>
                                                     </div>
                                                 </div>
+
+                                                {% if item.lineage_label %}
+                                                    <div class="workflow-inline-note">Workflow path: {{ item.lineage_label }}</div>
+                                                {% endif %}
 
                                                 {% if item.detail_rows %}
                                                     <div class="workflow-field-stack">
@@ -200,8 +224,8 @@
                                                 {% endif %}
 
                                                 <div class="workflow-card-actions">
-                                                    {% if item.status == 'draft' %}
-                                                        <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
+                                                    {% if item.is_editable %}
+                                                        <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">{{ 'Continue Work' if item.status == 'assigned' else 'Continue Draft' }}</a>
                                                     {% else %}
                                                         <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
                                                     {% endif %}

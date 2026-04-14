@@ -61,6 +61,11 @@
                     <span class="label">Profile</span>
                 </a>
 
+                <a class="menu-btn" href="{{ url_for('form_library') }}">
+                    <span class="menu-icon">&#128194;</span>
+                    <span class="label">Form Library</span>
+                </a>
+
                 {% if is_superadmin or is_developer %}
                     <a class="menu-btn" href="{{ url_for('account_manager') }}">
                         <span class="menu-icon menu-icon-account-manager" aria-hidden="true">
@@ -181,7 +186,25 @@
 
                     <div class="panel-body">
                         <div class="quick-grid">
-                            {% if workflow_forms %}
+                            {% if workflow_work_items or workflow_forms %}
+                                {% for item in workflow_work_items %}
+                                    <a
+                                        class="quick-card quick-card-form quick-card-tone-{{ item.quick_card_style.tone or 'mint' }}"
+                                        href="{{ item.href }}"
+                                        style="--quick-accent: {{ item.quick_card_style.accent or '#43e493' }}"
+                                    >
+                                        <span class="quick-icon quick-icon-form">
+                                            {% if item.quick_icon_type == 'image' and item.quick_icon_value %}
+                                                <img src="{{ url_for('static', filename=item.quick_icon_value) }}" alt="" />
+                                            {% else %}
+                                                {{ item.quick_icon_value or item.quick_label[:2] }}
+                                            {% endif %}
+                                        </span>
+                                        <span class="quick-title">{{ item.quick_label }}</span>
+                                        <span class="quick-note">{{ item.title }}</span>
+                                        <span class="quick-note">{{ item.note }}</span>
+                                    </a>
+                                {% endfor %}
                                 {% for form in workflow_forms %}
                                     <a
                                         class="quick-card quick-card-form quick-card-tone-{{ form.quick_card_style.tone or 'mint' }}"

@@ -4,8 +4,13 @@ from split_app.services.profiles import get_password_change_requests_for_user, g
 from split_app.workflow.common import get_form_notifications_for_user
 from split_app.workflow.runtime import (
     add_submission_comment,
+    admin_delete_pending_submission,
+    archive_submission,
     cancel_submission,
     delete_draft_submission,
+    developer_delete_archived_submission,
+    get_case_detail_context,
+    get_case_library,
     get_form_home_context,
     get_manager_form_preview_context,
     get_my_requests,
@@ -13,15 +18,20 @@ from split_app.workflow.runtime import (
     get_submission_detail_context,
     get_submission_editor_context,
     reopen_submission,
+    reopen_submission_to_pool,
+    reassign_submission,
+    review_assignment_request,
     review_submission_action,
     save_submission_draft,
     start_form_draft,
     submit_submission,
+    take_submission,
 )
 from split_app.workflow.smtp import get_smtp_settings, save_smtp_settings, send_test_email
 from split_app.workflow.templates import (
     create_form_template,
     delete_form_template,
+    force_delete_form_template,
     get_form_template,
     list_forms_for_manager,
     save_form_definition,
@@ -38,6 +48,15 @@ def forms_manage():
             if ok and form_key:
                 return redirect(url_for("forms_builder", form_key=form_key))
             return redirect(url_for("forms_manage"))
+        if action == "force-delete-form":
+            form_key = (request.form.get("form_key") or "").strip()
+            confirmation = " ".join((request.form.get("force_delete_confirm") or "").split()).strip().upper()
+            if confirmation != "DELETE":
+                flash("Type DELETE to confirm force deletion.", "error")
+            else:
+                ok, message = force_delete_form_template(form_key, session.get("user"))
+                flash(message, "success" if ok else "error")
+            return redirect(url_for("forms_manage", status=(request.args.get("status") or "all").strip().lower()))
         flash("Unsupported form manager action.", "error")
         return redirect(url_for("forms_manage"))
 
@@ -68,10 +87,18 @@ def forms_builder(form_key):
                 "status": request.form.get("status"),
                 "allow_cancel": bool(request.form.get("allow_cancel")),
                 "allow_multiple_active": bool(request.form.get("allow_multiple_active")),
+                "requires_review": bool(request.form.get("requires_review")),
+                "deadline_days": request.form.get("deadline_days"),
+                "next_form_id": request.form.get("next_form_id"),
+                "assignment_review_type": request.form.get("assignment_review_type"),
+                "assignment_review_value": request.form.get("assignment_review_value"),
                 "access_roles": request.form.getlist("access_roles"),
                 "access_users": request.form.getlist("access_users"),
+                "library_roles": request.form.getlist("library_roles"),
+                "library_users": request.form.getlist("library_users"),
                 "schema_json": request.form.get("schema_json"),
                 "review_stages_json": request.form.get("review_stages_json"),
+                "promotion_rules_json": request.form.get("promotion_rules_json"),
                 "quick_icon_type": request.form.get("quick_icon_type"),
                 "quick_icon_value": request.form.get("quick_icon_value"),
                 "card_accent": request.form.get("card_accent"),
@@ -82,6 +109,15 @@ def forms_builder(form_key):
             ok, message = delete_form_template(form_key, session.get("user"))
             flash(message, "success" if ok else "error")
             return redirect(url_for("forms_manage"))
+        elif action == "force-delete-form":
+            confirmation = " ".join((request.form.get("force_delete_confirm") or "").split()).strip().upper()
+            if confirmation != "DELETE":
+                ok, message = False, "Type DELETE to confirm force deletion."
+            else:
+                ok, message = force_delete_form_template(form_key, session.get("user"))
+                flash(message, "success" if ok else "error")
+                if ok:
+                    return redirect(url_for("forms_manage"))
         else:
             ok, message = False, "Unsupported form action."
 
@@ -100,6 +136,77 @@ def forms_builder(form_key):
         unread_notifications=unread_notifications,
         workflow_counts=get_combined_workflow_counts(get_current_roles()),
         form=form,
+    )
+
+
+def form_library():
+    current_roles = get_current_roles()
+    view_filter = (request.args.get("view") or "active").strip().lower()
+    can_view_archived = any(role.casefold() in {"admin", "superadmin", "developer"} for role in current_roles)
+    if view_filter == "archived" and not can_view_archived:
+        view_filter = "active"
+    topbar_notifications, unread_notifications = get_topbar_notifications()
+    return render_template(
+        "form_library.html",
+        username=session.get("user"),
+        fullname=session.get("fullname"),
+        topbar_notifications=topbar_notifications,
+        unread_notifications=unread_notifications,
+        workflow_counts=get_combined_workflow_counts(current_roles),
+        cases=get_case_library(
+            session.get("user"),
+            current_roles,
+            status_filter=view_filter,
+            template_filter=(request.args.get("form") or "").strip(),
+            sort_by=(request.args.get("sort") or "updated").strip().lower(),
+        ),
+        view_filter=view_filter,
+        form_filter=(request.args.get("form") or "").strip(),
+        sort_filter=(request.args.get("sort") or "updated").strip().lower(),
+        can_view_archived=can_view_archived,
+    )
+
+
+def form_case_detail(case_tracking_number):
+    current_roles = get_current_roles()
+    selected_tab = (request.args.get("tab") or "").strip()
+    ok, message, payload = get_case_detail_context(case_tracking_number, session.get("user"), current_roles, selected_submission_id=selected_tab or None)
+    if not ok:
+        flash(message, "error")
+        return redirect(url_for("form_library"))
+    topbar_notifications, unread_notifications = get_topbar_notifications()
+    return render_template(
+        "form_case_detail.html",
+        username=session.get("user"),
+        fullname=session.get("fullname"),
+        topbar_notifications=topbar_notifications,
+        unread_notifications=unread_notifications,
+        workflow_counts=get_combined_workflow_counts(current_roles),
+        case=payload["case"],
+        tabs=payload["tabs"],
+        selected_tab_id=payload["selected_tab_id"],
+        form=payload["form"],
+        submission=payload["submission"],
+        schema=payload["schema"],
+        schema_version=payload["schema_version"],
+        visible_fields=payload["visible_fields"],
+        file_groups=payload["file_groups"],
+        can_view_private_fields=payload["can_view_private_fields"],
+        active_task_ids=payload["active_task_ids"],
+        actionable_task_ids=payload["actionable_task_ids"],
+        can_cancel=payload["can_cancel"],
+        can_reopen=payload["can_reopen"],
+        can_delete_draft=payload["can_delete_draft"],
+        can_admin_delete_pending=payload["can_admin_delete_pending"],
+        can_archive_submission=payload["can_archive_submission"],
+        can_delete_archived_submission=payload["can_delete_archived_submission"],
+        can_edit=payload["can_edit"],
+        can_comment=payload["can_comment"],
+        can_take_submission=payload["can_take_submission"],
+        can_review_assignment=payload["can_review_assignment"],
+        can_reopen_to_pool=payload["can_reopen_to_pool"],
+        can_reassign_submission=payload["can_reassign_submission"],
+        promotion_rules=payload["promotion_rules"],
     )
 
 
@@ -295,13 +402,22 @@ def form_submission_detail(submission_id):
         schema_version=payload["schema_version"],
         visible_fields=payload["visible_fields"],
         file_groups=payload["file_groups"],
+        can_view_private_fields=payload["can_view_private_fields"],
         active_task_ids=payload["active_task_ids"],
         actionable_task_ids=payload["actionable_task_ids"],
         can_cancel=payload["can_cancel"],
         can_reopen=payload["can_reopen"],
         can_delete_draft=payload["can_delete_draft"],
+        can_admin_delete_pending=payload["can_admin_delete_pending"],
+        can_archive_submission=payload["can_archive_submission"],
+        can_delete_archived_submission=payload["can_delete_archived_submission"],
         can_edit=payload["can_edit"],
         can_comment=payload["can_comment"],
+        can_take_submission=payload["can_take_submission"],
+        can_review_assignment=payload["can_review_assignment"],
+        can_reopen_to_pool=payload["can_reopen_to_pool"],
+        can_reassign_submission=payload["can_reassign_submission"],
+        promotion_rules=payload["promotion_rules"],
     )
 
 
@@ -340,6 +456,24 @@ def form_submission_delete_draft(submission_id):
     return redirect(url_for("my_requests"))
 
 
+def form_submission_delete_pending(submission_id):
+    ok, message = admin_delete_pending_submission(submission_id, session.get("user"), get_current_roles())
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_library"))
+
+
+def form_submission_archive(submission_id):
+    ok, message = archive_submission(submission_id, session.get("user"), get_current_roles())
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_library"))
+
+
+def form_submission_delete_archived(submission_id):
+    ok, message = developer_delete_archived_submission(submission_id, session.get("user"), get_current_roles())
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_library"))
+
+
 def form_submission_review(submission_id):
     ok, message = review_submission_action(
         submission_id,
@@ -349,6 +483,52 @@ def form_submission_review(submission_id):
         get_current_roles(),
         request.form.get("review_action"),
         request.form.get("note"),
+        selected_promotion_rule_ids=request.form.getlist("promotion_rule_ids"),
+    )
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_submission_detail", submission_id=submission_id))
+
+
+def form_submission_take(submission_id):
+    ok, message = take_submission(
+        submission_id,
+        session.get("user"),
+        get_current_roles(),
+        request.form.get("note"),
+    )
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_submission_detail", submission_id=submission_id))
+
+
+def form_submission_review_assignment(submission_id):
+    ok, message = review_assignment_request(
+        submission_id,
+        session.get("user"),
+        session.get("fullname"),
+        get_current_roles(),
+        request.form.get("assignment_action"),
+        request.form.get("note"),
+    )
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_submission_detail", submission_id=submission_id))
+
+
+def form_submission_reopen_pool(submission_id):
+    ok, message = reopen_submission_to_pool(
+        submission_id,
+        session.get("user"),
+        get_current_roles(),
+    )
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("form_submission_detail", submission_id=submission_id))
+
+
+def form_submission_reassign(submission_id):
+    ok, message = reassign_submission(
+        submission_id,
+        session.get("user"),
+        get_current_roles(),
+        request.form.get("assignee_username"),
     )
     flash(message, "success" if ok else "error")
     return redirect(url_for("form_submission_detail", submission_id=submission_id))

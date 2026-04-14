@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Library</title>
+
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem("split-theme");
+                var fallbackTheme = "{{ current_theme }}";
+                var resolvedTheme = (savedTheme === "light" || savedTheme === "dark")
+                    ? savedTheme
+                    : (fallbackTheme === "light" ? "light" : "dark");
+                document.documentElement.dataset.theme = resolvedTheme;
+                document.documentElement.style.colorScheme = resolvedTheme;
+            } catch (error) {
+                document.documentElement.dataset.theme = "{{ current_theme }}";
+                document.documentElement.style.colorScheme = "{{ current_theme }}";
+            }
+        })();
+    </script>
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+</head>
+<body>
+    <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
+    {% set counts = namespace(total=cases|length, unfinished=0, late=0, promoted=0) %}
+    {% for item in cases %}
+        {% if item.deadline_state == 'unfinished' %}
+            {% set counts.unfinished = counts.unfinished + 1 %}
+        {% elif item.deadline_state == 'late' %}
+            {% set counts.late = counts.late + 1 %}
+        {% endif %}
+        {% if item.summary_status == 'promoted' %}
+            {% set counts.promoted = counts.promoted + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="app-shell">
+        {% set workflow_sidebar_brand = 'Form Library' %}
+        {% set workflow_sidebar_active = 'form_library' %}
+        {% include '_workflow_sidebar.html' %}
+
+        <main class="main">
+            {% set topbar_title = 'Form Library' %}
+            {% set topbar_subtitle %}{{ fullname }} &#8226; Case tracker, sorter, viewer, and archive lookup{% endset %}
+            {% set topbar_logout_class = 'manager-link-btn' %}
+            {% include '_app_topbar.html' %}
+
+            <section class="announcement-bar" aria-label="Announcements">
+                <div class="announcement-track">
+                    <div class="announcement-marquee">
+                        <span class="marquee">Every submitted request stays visible here, including promoted records, no-review completions, and archived history.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="notice-stack manager-full-span">
+                            {% for category, message in messages %}
+                                <div class="notice notice-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="manager-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Library Health</h2>
+                                <p>Unfinished means the deadline has passed without reaching a resolved state.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="workflow-metric-grid">
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.total }}</strong>
+                                    <span>Visible</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.unfinished }}</strong>
+                                    <span>Unfinished</span>
+                                </div>
+                                <div class="workflow-metric">
+                                    <strong>{{ counts.late + counts.promoted }}</strong>
+                                    <span>Late or Promoted</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="manager-main-column">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div class="workflow-panel-copy">
+                                <h2>Case Library</h2>
+                                <p>Use the filters to sort active requests, promoted chains, and archived history by tracking number.</p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <form method="GET" class="workflow-toolbar workflow-toolbar-form">
+                                <label class="field workflow-toolbar-field">
+                                    <span class="field-label">Template Search</span>
+                                    <input type="text" name="form" value="{{ form_filter }}" placeholder="Search by form key or title">
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">View</span>
+                                    <select class="workflow-select" name="view">
+                                        <option value="active" {% if view_filter == 'active' %}selected{% endif %}>Active</option>
+                                        <option value="all" {% if view_filter == 'all' %}selected{% endif %}>All</option>
+                                        {% if can_view_archived %}
+                                            <option value="archived" {% if view_filter == 'archived' %}selected{% endif %}>Archived</option>
+                                        {% endif %}
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Sort By</span>
+                                    <select class="workflow-select" name="sort">
+                                        <option value="updated" {% if sort_filter == 'updated' %}selected{% endif %}>Updated</option>
+                                        <option value="submitted" {% if sort_filter == 'submitted' %}selected{% endif %}>Submitted</option>
+                                        <option value="deadline" {% if sort_filter == 'deadline' %}selected{% endif %}>Deadline</option>
+                                        <option value="status" {% if sort_filter == 'status' %}selected{% endif %}>Status</option>
+                                    </select>
+                                </label>
+                                <div class="workflow-inline-actions">
+                                    <button type="submit" class="btn-primary">Apply</button>
+                                    <a class="workflow-action-btn" href="{{ url_for('form_library') }}">Reset</a>
+                                </div>
+                            </form>
+
+                            {% if cases %}
+                                <div class="workflow-card-list">
+                                    {% for item in cases %}
+                                        <article class="workflow-card">
+                                            <div class="workflow-card-head">
+                                                <div>
+                                                    <h3>{{ item.tracking_number }}</h3>
+                                                    <div class="workflow-card-meta">
+                                                        {{ item.template_summary or 'Workflow Case' }} &#8226;
+                                                        {{ item.requester_display_name }} &#8226;
+                                                        Updated {{ item.updated_at }}
+                                                    </div>
+                                                </div>
+                                                <span class="workflow-status-pill status-{{ item.summary_status }}">{{ item.summary_status_label }}</span>
+                                            </div>
+
+                                            <div class="workflow-pill-list">
+                                                <span class="workflow-pill">{{ item.tab_count }} Tab{{ '' if item.tab_count == 1 else 's' }}</span>
+                                                {% if item.pool_label %}
+                                                    <span class="workflow-pill">Latest Pool: {{ item.pool_label }}</span>
+                                                {% endif %}
+                                                {% if item.deadline_state_label %}
+                                                    <span class="workflow-pill workflow-pill-{{ item.deadline_state }}">{{ item.deadline_state_label }}</span>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="workflow-meta-grid">
+                                                <div class="workflow-meta-row">
+                                                    <span>Case Created</span>
+                                                    <strong>{{ item.created_at or 'Not available' }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Nearest Deadline</span>
+                                                    <strong>{{ item.deadline_at or 'Not set' }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Requester</span>
+                                                    <strong>{{ item.requester_display_name }}</strong>
+                                                </div>
+                                                <div class="workflow-meta-row">
+                                                    <span>Templates</span>
+                                                    <strong>{{ item.template_summary or 'Case' }}</strong>
+                                                </div>
+                                            </div>
+
+                                            {% if item.lineage_label %}
+                                                <div class="workflow-inline-note">Latest workflow path: {{ item.lineage_label }}</div>
+                                            {% endif %}
+
+                                            {% if item.tabs %}
+                                                <div class="workflow-viewer-preview-list">
+                                                    {% for tab in item.tabs %}
+                                                        <span class="workflow-viewer-preview-pill">{{ tab.form_title }}: {{ tab.status|replace('_', ' ')|title }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+
+                                            {% if item.preview_rows %}
+                                                <div class="workflow-viewer-preview-list">
+                                                    {% for row in item.preview_rows %}
+                                                        <span class="workflow-viewer-preview-pill">{{ row.label }}: {{ row.preview_value }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% elif item.tab_count %}
+                                                <div class="workflow-inline-note">No field previews are visible for your current access.</div>
+                                            {% endif %}
+
+                                            <div class="workflow-card-actions">
+                                                <a class="btn-primary" href="{{ url_for('form_case_detail', case_tracking_number=item.tracking_number) }}">Open Case</a>
+                                                {% if item.can_archive_case %}
+                                                    <form method="POST" action="{{ url_for('form_submission_archive', submission_id=item.primary_submission_id) }}">
+                                                        <button type="submit" class="workflow-action-btn" onclick="return confirm('Archive this case?');">Archive Case</button>
+                                                    </form>
+                                                {% endif %}
+                                                {% if item.can_delete_archived_case %}
+                                                    <form method="POST" action="{{ url_for('form_submission_delete_archived', submission_id=item.primary_submission_id) }}">
+                                                        <button type="submit" class="workflow-danger-btn" onclick="return confirm('Delete this archived case permanently?');">Delete Archived Case</button>
+                                                    </form>
+                                                {% endif %}
+                                                {% if item.primary_submission_id and item.summary_status == 'pending' %}
+                                                    <form method="POST" action="{{ url_for('form_submission_delete_pending', submission_id=item.primary_submission_id) }}">
+                                                        <button type="submit" class="workflow-danger-btn" onclick="return confirm('Delete this pending submission permanently?');">Delete Pending</button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="workflow-empty">No workflow cases matched the current library filters.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

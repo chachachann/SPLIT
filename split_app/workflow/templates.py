@@ -7,6 +7,7 @@ from logic import connect_db, get_profile_identity_map, normalize_role_names, ti
 from split_app.workflow.common import (
     ALLOWED_FORM_IMAGE_EXTENSIONS,
     FIELD_TYPES,
+    FORM_FILE_DIR,
     FORM_ICON_DIR,
     FORM_STATUSES,
     STAGE_MODES,
@@ -18,6 +19,8 @@ from split_app.workflow.common import (
     _normalize_username_list,
     _slugify,
 )
+
+PROMOTION_SPAWN_MODES = {"automatic", "reviewer_choice"}
 
 
 def _parse_field_schema(schema_json):
@@ -52,6 +55,7 @@ def _parse_field_schema(schema_json):
                 "validation": validation,
                 "options": [str(option).strip() for option in options if str(option).strip()],
                 "conditional_logic": conditional_logic,
+                "is_private": bool(raw_field.get("is_private") or raw_field.get("private")),
                 "hide_on_promotion": bool(raw_field.get("hide_on_promotion")),
             }
         )
@@ -108,15 +112,162 @@ def _normalize_card_accent(value, fallback="#43e493"):
     return fallback
 
 
+def _normalize_deadline_days(value):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+    try:
+        deadline_days = int(raw_value)
+    except (TypeError, ValueError):
+        raise ValueError("Deadline days must be a whole number.")
+    if deadline_days <= 0:
+        raise ValueError("Deadline days must be greater than zero.")
+    if deadline_days > 3650:
+        raise ValueError("Deadline days must be 3650 days or fewer.")
+    return deadline_days
+
+
+def _parse_assignment_reviewer(reviewer_type, reviewer_value):
+    clean_type = str(reviewer_type or "").strip().lower()
+    clean_value = " ".join(str(reviewer_value or "").split()).strip()
+    if not clean_type and not clean_value:
+        return "", ""
+    if clean_type not in {"role", "user"}:
+        raise ValueError("Assignment claim reviewer must be a role or user.")
+    if not clean_value:
+        raise ValueError("Assignment claim reviewer value is required.")
+    return clean_type, clean_value
+
+
+def _parse_promotion_rules(rules_json):
+    rules = _json_loads(rules_json, [])
+    parsed = []
+    seen_targets = set()
+    for index, raw_rule in enumerate(rules, start=1):
+        if not isinstance(raw_rule, dict):
+            continue
+        raw_target = str(raw_rule.get("target_form_id") or "").strip()
+        if not raw_target:
+            continue
+        if not raw_target.isdigit():
+            raise ValueError(f"Promotion rule {index} must target a valid form.")
+        target_form_id = int(raw_target)
+        if target_form_id in seen_targets:
+            raise ValueError("A promotion target can only appear once per form.")
+        seen_targets.add(target_form_id)
+        spawn_mode = str(raw_rule.get("spawn_mode") or "automatic").strip().lower() or "automatic"
+        if spawn_mode not in PROMOTION_SPAWN_MODES:
+            raise ValueError(f"Promotion rule {index} has an unsupported spawn mode.")
+        parsed.append(
+            {
+                "target_form_id": target_form_id,
+                "spawn_mode": spawn_mode,
+                "default_deadline_days": _normalize_deadline_days(raw_rule.get("default_deadline_days")),
+            }
+        )
+    return parsed
+
+
+def _load_promotion_rules(connection, form_id):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT
+            r.*,
+            f.form_key AS target_form_key,
+            f.title AS target_form_title,
+            f.status AS target_form_status
+        FROM form_promotion_rules r
+        INNER JOIN forms f ON f.id = r.target_form_id
+        WHERE r.source_form_id = ?
+        ORDER BY r.rule_order, r.id
+        """,
+        (form_id,),
+    )
+    rules = []
+    for row in cursor.fetchall():
+        item = dict(row)
+        item["target_form_id"] = int(item["target_form_id"])
+        item["default_deadline_days"] = (
+            int(item["default_deadline_days"]) if item.get("default_deadline_days") not in (None, "") else None
+        )
+        rules.append(item)
+    return rules
+
+
+def _load_rule_targets(connection, form_id):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT target_form_id
+        FROM form_promotion_rules
+        WHERE source_form_id = ?
+        ORDER BY rule_order, id
+        """,
+        (form_id,),
+    )
+    return [int(row["target_form_id"]) for row in cursor.fetchall()]
+
+
+def _validate_promotion_chain(connection, form_id, promotion_rules):
+    source_form_id = int(form_id)
+    pending_targets = [int(rule["target_form_id"]) for rule in (promotion_rules or [])]
+
+    def walk(current_form_id, visited):
+        targets = pending_targets if current_form_id == source_form_id else _load_rule_targets(connection, current_form_id)
+        for target_form_id in targets:
+            if target_form_id == source_form_id:
+                raise ValueError("Promotion chain cannot loop back to this form.")
+            if target_form_id in visited:
+                continue
+            walk(target_form_id, visited | {target_form_id})
+
+    walk(source_form_id, {source_form_id})
+
+
 def _form_row_to_dict(connection, row, include_version=True):
     item = dict(row)
     item["access_roles"] = _json_loads(item.get("access_roles_json"), [])
     item["access_users"] = _json_loads(item.get("access_users_json"), [])
+    item["library_roles"] = _json_loads(item.get("library_roles_json"), [])
+    item["library_users"] = _json_loads(item.get("library_users_json"), [])
     item["review_stages"] = _json_loads(item.get("review_stages_json"), [])
     item["quick_card_style"] = _json_loads(item.get("quick_card_style_json"), {})
+    item["assignment_review_type"] = str(item.get("assignment_review_type") or "").strip().lower()
+    item["assignment_review_value"] = str(item.get("assignment_review_value") or "").strip()
     item["allow_cancel"] = bool(item.get("allow_cancel"))
     item["allow_multiple_active"] = bool(item.get("allow_multiple_active"))
+    item["requires_review"] = bool(item.get("requires_review", 1))
+    item["deadline_days"] = int(item["deadline_days"]) if item.get("deadline_days") not in (None, "") else None
+    item["next_form_id"] = int(item["next_form_id"]) if item.get("next_form_id") not in (None, "") else None
+    item["next_form"] = None
+    item["next_form_title"] = ""
+    item["promotion_rules"] = _load_promotion_rules(connection, item["id"])
     item["schema"] = []
+    if item["promotion_rules"]:
+        first_rule = item["promotion_rules"][0]
+        item["next_form_id"] = first_rule["target_form_id"]
+        item["next_form"] = {
+            "id": first_rule["target_form_id"],
+            "form_key": first_rule.get("target_form_key") or "",
+            "title": first_rule.get("target_form_title") or "",
+            "status": first_rule.get("target_form_status") or "",
+        }
+        item["next_form_title"] = first_rule.get("target_form_title") or ""
+    elif item.get("next_form_id"):
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, form_key, title, status
+            FROM forms
+            WHERE id = ?
+            """,
+            (item["next_form_id"],),
+        )
+        next_form_row = cursor.fetchone()
+        if next_form_row:
+            item["next_form"] = dict(next_form_row)
+            item["next_form_title"] = next_form_row["title"]
     if include_version and item.get("current_version_id"):
         cursor = connection.cursor()
         cursor.execute(
@@ -219,6 +370,16 @@ def get_form_template(form_key):
     form["available_roles"] = [row["name"] for row in cursor.fetchall()]
     cursor.execute(
         """
+        SELECT id, form_key, title, status
+        FROM forms
+        WHERE id != ?
+        ORDER BY title COLLATE NOCASE
+        """,
+        (form["id"],),
+    )
+    form["available_forms"] = [dict(row) for row in cursor.fetchall()]
+    cursor.execute(
+        """
         SELECT COUNT(*) AS total
         FROM form_submissions
         WHERE form_id = ?
@@ -262,13 +423,15 @@ def create_form_template(title, actor_username):
             allow_multiple_active,
             access_roles_json,
             access_users_json,
+            library_roles_json,
+            library_users_json,
             review_stages_json,
             created_by_username,
             updated_by_username,
             created_at,
             updated_at
         )
-        VALUES (?, ?, '', ?, 'emoji', ?, ?, ?, 'draft', 1, 1, '[]', '[]', '[]', ?, ?, ?, ?)
+        VALUES (?, ?, '', ?, 'emoji', ?, ?, ?, 'draft', 1, 1, '[]', '[]', '[]', '[]', '[]', ?, ?, ?, ?)
         """,
         (
             candidate,
@@ -344,10 +507,19 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
 
     access_roles = normalize_role_names(payload.get("access_roles") or [])
     access_users = _normalize_username_list(payload.get("access_users") or [])
+    library_roles = normalize_role_names(payload.get("library_roles") or [])
+    library_users = _normalize_username_list(payload.get("library_users") or [])
+    requires_review = True if payload.get("requires_review") is None else bool(payload.get("requires_review"))
 
     try:
         schema = _parse_field_schema(payload.get("schema_json") or "[]")
         review_stages = _parse_review_stages(payload.get("review_stages_json") or "[]")
+        deadline_days = _normalize_deadline_days(payload.get("deadline_days"))
+        assignment_review_type, assignment_review_value = _parse_assignment_reviewer(
+            payload.get("assignment_review_type"),
+            payload.get("assignment_review_value"),
+        )
+        promotion_rules = _parse_promotion_rules(payload.get("promotion_rules_json") or "[]")
     except ValueError as error:
         return False, str(error)
 
@@ -356,7 +528,7 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
             return False, "Published forms must contain at least one field."
         if not access_roles:
             return False, "Published forms must have at least one access role."
-        if not review_stages:
+        if requires_review and not review_stages:
             return False, "Published forms must have at least one review stage."
 
     icon_type = str(payload.get("quick_icon_type") or "emoji").strip().lower() or "emoji"
@@ -388,6 +560,48 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
         connection.close()
         return False, "Form not found."
     current_form = _form_row_to_dict(connection, row)
+    if not promotion_rules:
+        raw_next_form_id = str(payload.get("next_form_id") or "").strip()
+        if raw_next_form_id:
+            if not raw_next_form_id.isdigit():
+                connection.close()
+                return False, "Select a valid promotion target."
+            promotion_rules = [
+                {
+                    "target_form_id": int(raw_next_form_id),
+                    "spawn_mode": "automatic",
+                    "default_deadline_days": None,
+                }
+            ]
+
+    next_form_row = None
+    for rule in promotion_rules:
+        if rule["target_form_id"] == current_form["id"]:
+            connection.close()
+            return False, "A form cannot promote to itself."
+        cursor.execute(
+            """
+            SELECT id, form_key, title, status
+            FROM forms
+            WHERE id = ?
+            """,
+            (rule["target_form_id"],),
+        )
+        target_form_row = cursor.fetchone()
+        if not target_form_row:
+            connection.close()
+            return False, "One of the promotion targets was not found."
+        if status == "published" and target_form_row["status"] != "published":
+            connection.close()
+            return False, "Published forms can only promote into another published form."
+        if next_form_row is None:
+            next_form_row = target_form_row
+    try:
+        _validate_promotion_chain(connection, current_form["id"], promotion_rules)
+    except ValueError as error:
+        connection.close()
+        return False, str(error)
+    next_form_id = promotion_rules[0]["target_form_id"] if promotion_rules else None
     current_schema_json = _json_dumps(current_form.get("schema") or [])
     next_schema_json = _json_dumps(schema)
     version_id = current_form.get("current_version_id")
@@ -422,8 +636,15 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
             status = ?,
             allow_cancel = ?,
             allow_multiple_active = ?,
+            requires_review = ?,
+            deadline_days = ?,
+            next_form_id = ?,
+            assignment_review_type = ?,
+            assignment_review_value = ?,
             access_roles_json = ?,
             access_users_json = ?,
+            library_roles_json = ?,
+            library_users_json = ?,
             review_stages_json = ?,
             current_version_id = ?,
             updated_by_username = ?,
@@ -442,8 +663,15 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
             status,
             1 if allow_cancel else 0,
             1 if allow_multiple_active else 0,
+            1 if requires_review else 0,
+            deadline_days,
+            next_form_id,
+            assignment_review_type or None,
+            assignment_review_value or None,
             _json_dumps(access_roles),
             _json_dumps(access_users),
+            _json_dumps(library_roles),
+            _json_dumps(library_users),
             _json_dumps(review_stages),
             version_id,
             actor_username,
@@ -453,6 +681,31 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
             current_form["id"],
         ),
     )
+    cursor.execute("DELETE FROM form_promotion_rules WHERE source_form_id = ?", (current_form["id"],))
+    for order, rule in enumerate(promotion_rules, start=1):
+        cursor.execute(
+            """
+            INSERT INTO form_promotion_rules (
+                source_form_id,
+                target_form_id,
+                rule_order,
+                spawn_mode,
+                default_deadline_days,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                current_form["id"],
+                rule["target_form_id"],
+                order,
+                rule["spawn_mode"],
+                rule["default_deadline_days"],
+                timestamp_now(),
+                timestamp_now(),
+            ),
+        )
     _audit(
         connection,
         "form.updated",
@@ -464,6 +717,15 @@ def save_form_definition(form_key, payload, actor_username, icon_upload=None):
             "title": title,
             "access_roles": access_roles,
             "access_users": access_users,
+            "library_roles": library_roles,
+            "library_users": library_users,
+            "requires_review": requires_review,
+            "deadline_days": deadline_days,
+            "next_form_id": next_form_id,
+            "next_form_title": next_form_row["title"] if next_form_row else "",
+            "assignment_review_type": assignment_review_type,
+            "assignment_review_value": assignment_review_value,
+            "promotion_rule_count": len(promotion_rules),
             "review_stage_count": len(review_stages),
             "field_count": len(schema),
         },
@@ -492,6 +754,76 @@ def delete_form_template(form_key, actor_username):
     connection.commit()
     connection.close()
     return True, "Form deleted."
+
+
+def force_delete_form_template(form_key, actor_username):
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM forms WHERE form_key = ?", ((form_key or "").strip(),))
+    row = cursor.fetchone()
+    if not row:
+        connection.close()
+        return False, "Form not found."
+
+    form = _form_row_to_dict(connection, row, include_version=False)
+    form_id = form["id"]
+
+    cursor.execute("SELECT id, stored_name FROM form_submission_files WHERE submission_id IN (SELECT id FROM form_submissions WHERE form_id = ?)", (form_id,))
+    file_rows = [dict(item) for item in cursor.fetchall()]
+    stored_names = sorted({item.get("stored_name") for item in file_rows if item.get("stored_name")})
+
+    cursor.execute("SELECT id FROM form_submissions WHERE form_id = ?", (form_id,))
+    submission_ids = [row["id"] for row in cursor.fetchall()]
+    if submission_ids:
+        placeholders = ", ".join("?" for _ in submission_ids)
+        cursor.execute(f"DELETE FROM form_review_tasks WHERE submission_id IN ({placeholders})", tuple(submission_ids))
+        cursor.execute(f"DELETE FROM form_comments WHERE submission_id IN ({placeholders})", tuple(submission_ids))
+        cursor.execute(f"DELETE FROM form_submission_files WHERE submission_id IN ({placeholders})", tuple(submission_ids))
+        cursor.execute(
+            f"DELETE FROM form_audit_log WHERE entity_type = 'submission' AND entity_id IN ({placeholders})",
+            tuple(submission_ids),
+        )
+        cursor.execute(f"DELETE FROM form_submissions WHERE id IN ({placeholders})", tuple(submission_ids))
+
+    cursor.execute("DELETE FROM form_promotion_rules WHERE source_form_id = ? OR target_form_id = ?", (form_id, form_id))
+    cursor.execute("UPDATE forms SET next_form_id = NULL WHERE next_form_id = ?", (form_id,))
+    cursor.execute("DELETE FROM form_versions WHERE form_id = ?", (form_id,))
+    cursor.execute("DELETE FROM form_audit_log WHERE entity_type = 'form' AND entity_id = ?", (form_id,))
+    cursor.execute("DELETE FROM forms WHERE id = ?", (form_id,))
+
+    cursor.execute(
+        """
+        DELETE FROM workflow_cases
+        WHERE id IN (
+            SELECT wc.id
+            FROM workflow_cases wc
+            LEFT JOIN form_submissions s ON s.case_id = wc.id
+            GROUP BY wc.id
+            HAVING COUNT(s.id) = 0
+        )
+        """
+    )
+
+    icon_value = str(form.get("quick_icon_value") or "").strip()
+    icon_path = ""
+    if form.get("quick_icon_type") == "image" and icon_value:
+        icon_path = os.path.join(os.path.dirname(FORM_ICON_DIR), os.path.basename(icon_value)) if "\\" not in icon_value and "/" not in icon_value else ""
+        if not icon_path:
+            normalized = icon_value.replace("/", os.sep).replace("\\", os.sep)
+            root_dir = os.path.dirname(os.path.dirname(FORM_ICON_DIR))
+            icon_path = os.path.join(root_dir, normalized)
+
+    _audit(connection, "form.force-deleted", actor_username, "form", form_id, payload={"form_key": form_key, "submission_count": len(submission_ids)})
+    connection.commit()
+    connection.close()
+
+    for stored_name in stored_names:
+        path = os.path.join(FORM_FILE_DIR, stored_name)
+        if os.path.exists(path):
+            os.remove(path)
+    if icon_path and os.path.exists(icon_path):
+        os.remove(icon_path)
+    return True, "Form force deleted."
 
 
 def get_workflow_topbar_counts(username, role_names):
@@ -539,8 +871,26 @@ def get_workflow_topbar_counts(username, role_names):
             (username,),
         )
     review_queue = cursor.fetchone()["total"]
+    cursor.execute(
+        """
+        SELECT assignment_review_type, assignment_review_value
+        FROM form_submissions
+        WHERE status = 'pending_assignment'
+        """
+    )
+    assignment_queue = 0
+    for row in cursor.fetchall():
+        reviewer_type = str(row["assignment_review_type"] or "").strip().lower()
+        reviewer_value = str(row["assignment_review_value"] or "").strip().casefold()
+        if {"admin", "superadmin", "developer"} & normalized_roles:
+            assignment_queue += 1
+            continue
+        if reviewer_type == "user" and reviewer_value == username.casefold():
+            assignment_queue += 1
+        elif reviewer_type == "role" and reviewer_value in normalized_roles:
+            assignment_queue += 1
     connection.close()
-    return {"my_requests": my_requests, "review_queue": review_queue}
+    return {"my_requests": my_requests, "review_queue": review_queue + assignment_queue}
 
 
 def _user_matches_form_access(form, username, role_names):
@@ -554,6 +904,22 @@ def _user_matches_form_access(form, username, role_names):
     if access_users and (username or "").casefold() not in access_users:
         return False
     return True
+
+
+def _user_matches_form_submit_access(form, username, role_names):
+    return _user_matches_form_access(form, username, role_names)
+
+
+def _user_matches_form_library_access(form, username, role_names):
+    library_roles = {role.casefold() for role in (form.get("library_roles") or [])}
+    library_users = {item.casefold() for item in (form.get("library_users") or [])}
+    current_roles = {role.casefold() for role in (role_names or [])}
+    username_key = (username or "").casefold()
+    if library_users and username_key in library_users:
+        return True
+    if library_roles and library_roles & current_roles:
+        return True
+    return False
 
 
 def list_dashboard_forms(username, role_names):

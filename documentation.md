@@ -1,6 +1,6 @@
 # SPLIT System Documentation
 
-Generated from the current codebase and live SQLite schema on 2026-04-13.
+Generated from the current codebase and live SQLite schema on 2026-04-14 for release `v0.06.0a`.
 
 ## 1. System Overview
 
@@ -110,17 +110,17 @@ Browser
   - manages schema creation, workflow notifications, auditing, reviewer resolution, and shared helpers/constants
 - `split_app/workflow/templates.py`
   - holds workflow template-management logic
-  - manages form template CRUD, form schema parsing, review-stage parsing, dashboard form filtering, and workflow topbar counts
+  - manages form template CRUD, form schema parsing, submit access, library visibility, review-stage parsing, dashboard form filtering, and workflow topbar counts
 - `split_app/workflow/runtime.py`
   - holds workflow runtime logic
-  - manages drafts, submissions, review access, comments, file uploads, state transitions, and review actions
+  - manages cases, tabbed filed forms, pooled promoted work, assignment review, comments, file uploads, field privacy masking, state transitions, and review actions
 - `split_app/workflow/smtp.py`
   - holds workflow SMTP/settings logic
   - manages SMTP configuration retrieval and persistence
 - `logic.py`
   - owns the base database path and core schema initialization
   - now acts partly as a compatibility facade over shared core, content, account, profile, and chat/auth services
-  - seeds roles, default buttons, default marquee items, default admin account
+  - seeds roles, default buttons, and default marquee items
   - now mainly owns schema/bootstrap coordination and compatibility exports
 - `forms_workflow.py`
   - now acts as the workflow compatibility module
@@ -862,7 +862,6 @@ The source request listed `System Index` twice. This document uses section 7 for
 | `REMEMBER_ME_DAYS` | `7` |
 | `REMEMBER_COOKIE_NAME` | `split_remember` |
 | default seeded roles | `SuperAdmin`, `Admin`, `Staff`, `Developer` |
-| default seeded admin user | `RO_Admin` |
 
 ### Chat configuration
 
@@ -956,7 +955,7 @@ Improved:
 
 Fixed:
 
-- `RO_Admin` login regressions caused by smoke tests mutating the live SQLite database
+- historical smoke-test runs created temporary `codex_*` accounts in development databases; these should not be kept in live data
 - release/runtime confusion between `main.py`, `wsgi.py`, localhost-only hosting, and network hosting
 
 #### [0.04.0a] - 2026-04-13

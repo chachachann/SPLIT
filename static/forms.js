@@ -11,6 +11,109 @@
         }
     }
 
+    function escapeHtml(value) {
+        return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function previewDefaultValue(field) {
+        if (field.type === "checkbox") {
+            return field.default_value === true || String(field.default_value || "").toLowerCase() === "true";
+        }
+        return field.default_value || "";
+    }
+
+    function buildPreviewFieldMarkup(field, value) {
+        var safeId = "builder_preview__" + (field.key || "field");
+        var label = escapeHtml(field.label || field.key || "Field");
+        var helpText = field.help_text ? '<div class="workflow-field-help">' + escapeHtml(field.help_text) + "</div>" : "";
+        var required = field.required ? '<span class="workflow-field-required">*</span>' : "";
+        if (field.type === "long_text") {
+            return [
+                '<div class="workflow-field-block">',
+                '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
+                helpText,
+                '<textarea id="' + safeId + '" class="workflow-textarea" data-builder-preview-input="' + escapeHtml(field.key) + '"',
+                field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "",
+                ">" + escapeHtml(value) + "</textarea>",
+                "</div>"
+            ].join("");
+        }
+        if (field.type === "number") {
+            return [
+                '<div class="workflow-field-block">',
+                '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
+                helpText,
+                '<input id="' + safeId + '" type="number" data-builder-preview-input="' + escapeHtml(field.key) + '" value="' + escapeHtml(value) + '"',
+                field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "",
+                ">",
+                "</div>"
+            ].join("");
+        }
+        if (field.type === "date" || field.type === "calendar") {
+            return [
+                '<div class="workflow-field-block">',
+                '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
+                helpText,
+                '<div class="workflow-date-input">',
+                '<input id="' + safeId + '" type="date" data-builder-preview-input="' + escapeHtml(field.key) + '" value="' + escapeHtml(value) + '">',
+                '<button type="button" class="workflow-muted-btn workflow-calendar-trigger" disabled>Calendar</button>',
+                "</div>",
+                "</div>"
+            ].join("");
+        }
+        if (field.type === "dropdown") {
+            return [
+                '<div class="workflow-field-block">',
+                '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
+                helpText,
+                '<select id="' + safeId + '" class="workflow-select" data-builder-preview-input="' + escapeHtml(field.key) + '">',
+                '<option value="">' + escapeHtml(field.placeholder || "Select an option") + "</option>",
+                (field.options || []).map(function (option) {
+                    var selected = String(option) === String(value) ? ' selected' : "";
+                    return '<option value="' + escapeHtml(option) + '"' + selected + ">" + escapeHtml(option) + "</option>";
+                }).join(""),
+                "</select>",
+                "</div>"
+            ].join("");
+        }
+        if (field.type === "checkbox") {
+            return [
+                '<div class="workflow-field-block">',
+                '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
+                helpText,
+                '<label class="role-option-pill workflow-checkbox-row" for="' + safeId + '">',
+                '<input id="' + safeId + '" type="checkbox" data-builder-preview-input="' + escapeHtml(field.key) + '"' + (value ? " checked" : "") + ">",
+                '<span class="role-option-name">Checked</span>',
+                "</label>",
+                "</div>"
+            ].join("");
+        }
+        if (field.type === "image_upload" || field.type === "file_upload") {
+            return [
+                '<div class="workflow-field-block">',
+                '<label class="workflow-field-label"><span>' + label + "</span>" + required + "</label>",
+                helpText,
+                '<input type="file" disabled>',
+                '<div class="workflow-input-note">' + escapeHtml(field.type === "image_upload" ? "Image upload field preview." : "Document upload field preview.") + "</div>",
+                "</div>"
+            ].join("");
+        }
+        return [
+            '<div class="workflow-field-block">',
+            '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
+            helpText,
+            '<input id="' + safeId + '" type="text" data-builder-preview-input="' + escapeHtml(field.key) + '" value="' + escapeHtml(value) + '"',
+            field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "",
+            ">",
+            "</div>"
+        ].join("");
+    }
+
     function buildFieldRow(field) {
         var item = document.createElement("div");
         item.className = "workflow-repeater-item";
@@ -41,6 +144,7 @@
             '<label class="field"><span class="field-label">Max Length / Value</span><input type="text" data-field-prop="max_value"></label>',
             '<label class="field field-full" title="JSON rules that control when this field is visible."><span class="field-label">Conditional Logic JSON</span><textarea class="workflow-json" data-field-prop="conditional_logic_text" placeholder=\'{"logic":"all","rules":[{"field":"sample","op":"equals","value":"yes"}]}\' title="JSON rules that control when this field is visible."></textarea></label>',
             '<label class="field workflow-bool-field" title="Require this field before the form can be submitted."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="required"><span class="field-label">Required</span></span></label>',
+            '<label class="field workflow-bool-field" title="Hide this field from read-only library viewers unless they are part of the active workflow, the requester, or an elevated admin user."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="is_private"><span class="field-label">Private Field</span></span></label>',
             '<label class="field workflow-bool-field" title="Hide this field after the submission is promoted to later workflow stages."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="hide_on_promotion"><span class="field-label">Hide After Promotion</span></span></label>',
             "</div>"
         ].join("");
@@ -56,6 +160,7 @@
         item.querySelector('[data-field-prop="max_value"]').value = (field.validation && (field.validation.max_length || field.validation.max)) || "";
         item.querySelector('[data-field-prop="conditional_logic_text"]').value = field.conditional_logic ? JSON.stringify(field.conditional_logic, null, 2) : "";
         item.querySelector('[data-field-prop="required"]').checked = !!field.required;
+        item.querySelector('[data-field-prop="is_private"]').checked = !!(field.is_private || field.private);
         item.querySelector('[data-field-prop="hide_on_promotion"]').checked = !!field.hide_on_promotion;
         return item;
     }
@@ -106,6 +211,32 @@
         return item;
     }
 
+    function buildPromotionRow(rule, availableForms) {
+        var item = document.createElement("div");
+        item.className = "workflow-repeater-item";
+        item.innerHTML = [
+            '<div class="workflow-repeater-head">',
+            '<div class="workflow-repeater-title">Promotion Rule</div>',
+            '<button type="button" class="workflow-danger-btn" data-remove-item title="Remove this promotion target.">Remove</button>',
+            "</div>",
+            '<div class="field-grid">',
+            '<label class="field field-full"><span class="field-label">Target Form</span><select class="workflow-select" data-promotion-prop="target_form_id"></select></label>',
+            '<label class="field"><span class="field-label">Spawn Mode</span><select class="workflow-select" data-promotion-prop="spawn_mode"><option value="automatic">Automatic</option><option value="reviewer_choice">Reviewer Choice</option></select></label>',
+            '<label class="field"><span class="field-label">Default Deadline Days</span><input type="number" min="1" max="3650" data-promotion-prop="default_deadline_days" placeholder="Optional"></label>',
+            "</div>"
+        ].join("");
+
+        var targetSelect = item.querySelector('[data-promotion-prop="target_form_id"]');
+        targetSelect.innerHTML = ['<option value="">Select a target form</option>'].concat((availableForms || []).map(function (form) {
+            var suffix = form.status && form.status !== "published" ? " - " + form.status.charAt(0).toUpperCase() + form.status.slice(1) : "";
+            return '<option value="' + String(form.id) + '">' + escapeHtml(form.title + " (" + form.form_key + ")" + suffix) + "</option>";
+        })).join("");
+        targetSelect.value = rule.target_form_id ? String(rule.target_form_id) : "";
+        item.querySelector('[data-promotion-prop="spawn_mode"]').value = rule.spawn_mode || "automatic";
+        item.querySelector('[data-promotion-prop="default_deadline_days"]').value = rule.default_deadline_days || "";
+        return item;
+    }
+
     function serializeFieldRow(item, errors) {
         var type = item.querySelector('[data-field-prop="type"]').value;
         var minValue = item.querySelector('[data-field-prop="min_value"]').value.trim();
@@ -153,6 +284,7 @@
             validation: validation,
             conditional_logic: conditionalLogic,
             required: item.querySelector('[data-field-prop="required"]').checked,
+            is_private: item.querySelector('[data-field-prop="is_private"]').checked,
             hide_on_promotion: item.querySelector('[data-field-prop="hide_on_promotion"]').checked
         };
     }
@@ -170,6 +302,14 @@
             name: item.querySelector('[data-stage-prop="name"]').value.trim(),
             mode: item.querySelector('[data-stage-prop="mode"]').value,
             reviewers: reviewers
+        };
+    }
+
+    function serializePromotionRow(item) {
+        return {
+            target_form_id: item.querySelector('[data-promotion-prop="target_form_id"]').value,
+            spawn_mode: item.querySelector('[data-promotion-prop="spawn_mode"]').value,
+            default_deadline_days: item.querySelector('[data-promotion-prop="default_deadline_days"]').value.trim()
         };
     }
 
@@ -204,11 +344,129 @@
         }
         var schemaField = root.querySelector('[name="schema_json"]');
         var stagesField = root.querySelector('[name="review_stages_json"]');
+        var promotionRulesField = root.querySelector('[name="promotion_rules_json"]');
         var fieldList = root.querySelector("[data-field-list]");
         var stageList = root.querySelector("[data-stage-list]");
+        var promotionList = root.querySelector("[data-promotion-list]");
         var errorBox = root.querySelector("[data-builder-error]");
         var initialSchema = parseJsonScript("initial-form-schema") || [];
         var initialStages = parseJsonScript("initial-review-stages") || [];
+        var initialPromotions = parseJsonScript("initial-promotion-rules") || [];
+        var availableBuilderForms = parseJsonScript("available-builder-forms") || [];
+        var previewCard = root.querySelector("[data-builder-preview-card]");
+        var previewSummary = root.querySelector("[data-builder-preview-summary]");
+        var previewForm = root.querySelector("[data-builder-preview-form]");
+        var previewState = {};
+
+        function selectedOptionLabel(selectName) {
+            var select = root.querySelector('[name="' + selectName + '"]');
+            if (!select || !select.options || select.selectedIndex < 0) {
+                return "";
+            }
+            return select.options[select.selectedIndex].textContent || "";
+        }
+
+        function availablePromotionLabel(targetFormId) {
+            var targetId = String(targetFormId || "");
+            var match = availableBuilderForms.find(function (form) {
+                return String(form.id) === targetId;
+            });
+            return match ? match.title : "";
+        }
+
+        function collectPreviewMetadata(schema, stages, promotions) {
+            var accessRoles = root.querySelector('[name="access_roles"]');
+            var selectedRoleCount = accessRoles ? Array.prototype.slice.call(accessRoles.options).filter(function (option) {
+                return option.selected;
+            }).length : 0;
+            var libraryRoles = root.querySelector('[name="library_roles"]');
+            var selectedLibraryRoleCount = libraryRoles ? Array.prototype.slice.call(libraryRoles.options).filter(function (option) {
+                return option.selected;
+            }).length : 0;
+            var promotionLabels = (promotions || []).map(function (rule) {
+                return availablePromotionLabel(rule.target_form_id);
+            }).filter(Boolean);
+            return {
+                title: (root.querySelector('[name="title"]') || {}).value || "Untitled Form",
+                quickLabel: (root.querySelector('[name="quick_label"]') || {}).value || "Form",
+                description: (root.querySelector('[name="description"]') || {}).value || "",
+                trackingPrefix: (root.querySelector('[name="tracking_prefix"]') || {}).value || "",
+                cardAccent: normalizeHexColor((root.querySelector('[name="card_accent"]') || {}).value) || "#43e493",
+                iconType: ((root.querySelector('[name="quick_icon_type"]') || {}).value || "emoji").toLowerCase(),
+                iconValue: (root.querySelector('[name="quick_icon_value"]') || {}).value || "",
+                allowCancel: !!(root.querySelector('[name="allow_cancel"]') || {}).checked,
+                allowMultiple: !!(root.querySelector('[name="allow_multiple_active"]') || {}).checked,
+                requiresReview: !!(root.querySelector('[name="requires_review"]') || {}).checked,
+                deadlineDays: ((root.querySelector('[name="deadline_days"]') || {}).value || "").trim(),
+                promotionLabels: promotionLabels,
+                fieldCount: schema.length,
+                stageCount: stages.length,
+                selectedRoleCount: selectedRoleCount,
+                selectedLibraryRoleCount: selectedLibraryRoleCount,
+                privateFieldCount: schema.filter(function (field) {
+                    return !!field.is_private;
+                }).length,
+                promotionCount: promotionLabels.length
+            };
+        }
+
+        function renderLivePreview(schema, stages, promotions) {
+            if (!previewCard || !previewSummary || !previewForm) {
+                return;
+            }
+            var metadata = collectPreviewMetadata(schema, stages, promotions);
+            schema.forEach(function (field) {
+                if (!field.key) {
+                    return;
+                }
+                if (!(field.key in previewState)) {
+                    previewState[field.key] = previewDefaultValue(field);
+                }
+            });
+            Object.keys(previewState).forEach(function (key) {
+                if (!schema.some(function (field) { return field.key === key; })) {
+                    delete previewState[key];
+                }
+            });
+
+            var visibleFields = schema.filter(function (field) {
+                return evaluateGroup(field.conditional_logic, previewState);
+            });
+
+            previewCard.style.setProperty("--quick-accent", metadata.cardAccent);
+            previewCard.innerHTML = [
+                '<div class="workflow-form-hero">',
+                '<span class="quick-icon quick-icon-form">' + escapeHtml(metadata.iconValue || metadata.quickLabel.slice(0, 2) || "FM") + "</span>",
+                "<div>",
+                "<strong>" + escapeHtml(metadata.quickLabel || metadata.title) + "</strong>",
+                '<div class="workflow-card-meta">' + escapeHtml(metadata.description || "Live quick-access preview.") + "</div>",
+                "</div>",
+                "</div>",
+                '<div class="workflow-builder-preview-meta">',
+                '<span class="workflow-pill">Prefix: ' + escapeHtml(metadata.trackingPrefix || "FORM") + "</span>",
+                '<span class="workflow-pill">' + escapeHtml(metadata.requiresReview ? ("Review x" + String(metadata.stageCount || 0)) : "Direct Complete") + "</span>",
+                metadata.deadlineDays ? '<span class="workflow-pill">Deadline ' + escapeHtml(metadata.deadlineDays) + "d</span>" : "",
+                metadata.promotionLabels.length ? '<span class="workflow-pill">Promotes: ' + escapeHtml(metadata.promotionLabels.slice(0, 2).join(", ")) + (metadata.promotionLabels.length > 2 ? " +" + String(metadata.promotionLabels.length - 2) : "") + "</span>" : "",
+                "</div>"
+            ].join("");
+
+            previewSummary.innerHTML = [
+                '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(String(metadata.fieldCount)) + '</strong><span>Fields</span></div>',
+                '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(String(metadata.selectedRoleCount)) + '</strong><span>Access Roles</span></div>',
+                '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(String(metadata.selectedLibraryRoleCount)) + '</strong><span>Library Roles</span></div>',
+                '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(String(metadata.privateFieldCount)) + '</strong><span>Private Fields</span></div>',
+                '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(String(metadata.promotionCount)) + '</strong><span>Promotions</span></div>',
+                '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(metadata.allowCancel ? "Yes" : "No") + '</strong><span>Cancel</span></div>'
+            ].join("");
+
+            if (!visibleFields.length) {
+                previewForm.innerHTML = '<div class="workflow-empty">No visible fields are configured for this preview state yet.</div>';
+                return;
+            }
+            previewForm.innerHTML = visibleFields.map(function (field) {
+                return buildPreviewFieldMarkup(field, previewState[field.key]);
+            }).join("");
+        }
 
         function bindColorControls() {
             Array.prototype.slice.call(root.querySelectorAll("[data-color-control]")).forEach(function (control) {
@@ -324,10 +582,18 @@
 
         function syncHiddenFields() {
             var errors = [];
-            schemaField.value = JSON.stringify(Array.prototype.slice.call(fieldList.children).map(function (item) {
+            var schema = Array.prototype.slice.call(fieldList.children).map(function (item) {
                 return serializeFieldRow(item, errors);
-            }));
-            stagesField.value = JSON.stringify(Array.prototype.slice.call(stageList.children).map(serializeStageRow));
+            });
+            var stages = Array.prototype.slice.call(stageList.children).map(serializeStageRow);
+            var promotions = promotionList ? Array.prototype.slice.call(promotionList.children).map(serializePromotionRow).filter(function (rule) {
+                return rule.target_form_id;
+            }) : [];
+            schemaField.value = JSON.stringify(schema);
+            stagesField.value = JSON.stringify(stages);
+            if (promotionRulesField) {
+                promotionRulesField.value = JSON.stringify(promotions);
+            }
             if (errorBox) {
                 if (errors.length) {
                     errorBox.hidden = false;
@@ -338,6 +604,7 @@
                 }
             }
             root.dataset.builderValid = errors.length ? "false" : "true";
+            renderLivePreview(schema, stages, promotions);
         }
 
         function bindRepeater(container, nestedReviewer) {
@@ -352,7 +619,11 @@
                     return;
                 }
                 if (nestedReviewer && event.target.closest("[data-add-reviewer]")) {
-                    container.querySelector("[data-reviewer-list]").appendChild(buildReviewerRow({ type: "user", value: "" }));
+                    var stageItem = event.target.closest(".workflow-repeater-item");
+                    var reviewerList = stageItem ? stageItem.querySelector("[data-reviewer-list]") : null;
+                    if (reviewerList) {
+                        reviewerList.appendChild(buildReviewerRow({ type: "user", value: "" }));
+                    }
                     syncHiddenFields();
                 }
             });
@@ -373,12 +644,50 @@
         if (!stageList.children.length) {
             stageList.appendChild(buildStageRow({ mode: "sequential", reviewers: [{ type: "role", value: "Admin" }] }));
         }
+        initialPromotions.forEach(function (rule) {
+            if (promotionList) {
+                promotionList.appendChild(buildPromotionRow(rule, availableBuilderForms));
+            }
+        });
 
         bindColorControls();
         bindBulkSelectToggles();
         bindUploadTriggers();
         bindRepeater(fieldList, false);
         bindRepeater(stageList, true);
+        if (promotionList) {
+            bindRepeater(promotionList, false);
+        }
+        if (previewForm) {
+            previewForm.addEventListener("input", function (event) {
+                var key = event.target.getAttribute("data-builder-preview-input");
+                if (!key) {
+                    return;
+                }
+                previewState[key] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+                syncHiddenFields();
+            });
+            previewForm.addEventListener("change", function (event) {
+                var key = event.target.getAttribute("data-builder-preview-input");
+                if (!key) {
+                    return;
+                }
+                previewState[key] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+                syncHiddenFields();
+            });
+        }
+        root.addEventListener("input", function (event) {
+            if (event.target.closest("[data-field-list]") || event.target.closest("[data-stage-list]") || event.target.closest("[data-promotion-list]")) {
+                return;
+            }
+            syncHiddenFields();
+        });
+        root.addEventListener("change", function (event) {
+            if (event.target.closest("[data-field-list]") || event.target.closest("[data-stage-list]") || event.target.closest("[data-promotion-list]")) {
+                return;
+            }
+            syncHiddenFields();
+        });
 
         var addFieldButton = root.querySelector("[data-add-field]");
         if (addFieldButton) {
@@ -391,6 +700,13 @@
         if (addStageButton) {
             addStageButton.addEventListener("click", function () {
                 stageList.appendChild(buildStageRow({ mode: "sequential", reviewers: [{ type: "user", value: "" }] }));
+                syncHiddenFields();
+            });
+        }
+        var addPromotionButton = root.querySelector("[data-add-promotion]");
+        if (addPromotionButton && promotionList) {
+            addPromotionButton.addEventListener("click", function () {
+                promotionList.appendChild(buildPromotionRow({ spawn_mode: "automatic" }, availableBuilderForms));
                 syncHiddenFields();
             });
         }

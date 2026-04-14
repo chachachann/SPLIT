@@ -3,6 +3,7 @@
 {% set workflow_sidebar_active = workflow_sidebar_active|default('') %}
 {% set workflow_sidebar_show_form_home = workflow_sidebar_show_form_home|default(false) %}
 {% set workflow_sidebar_show_edit_draft = workflow_sidebar_show_edit_draft|default(false) %}
+{% set workflow_sidebar_show_form_library = workflow_sidebar_show_form_library|default(true) %}
 {% set workflow_sidebar_show_my_requests = workflow_sidebar_show_my_requests|default(true) %}
 {% set workflow_sidebar_show_review_queue = workflow_sidebar_show_review_queue|default(true) %}
 {% set workflow_sidebar_form_home_label = workflow_sidebar_form_home_label|default('Form Home') %}
@@ -36,6 +37,13 @@
             <a class="menu-btn{% if workflow_sidebar_active == 'form_edit' %} active{% endif %}" href="{{ url_for('form_edit_submission', submission_id=workflow_sidebar_submission_id) }}"{% if workflow_sidebar_active == 'form_edit' %} aria-current="page"{% endif %}>
                 <span class="menu-icon">&#9998;</span>
                 <span class="label">{{ workflow_sidebar_edit_label }}</span>
+            </a>
+        {% endif %}
+
+        {% if workflow_sidebar_show_form_library %}
+            <a class="menu-btn{% if workflow_sidebar_active == 'form_library' %} active{% endif %}" href="{{ url_for('form_library') }}"{% if workflow_sidebar_active == 'form_library' %} aria-current="page"{% endif %}>
+                <span class="menu-icon">&#128194;</span>
+                <span class="label">Form Library</span>
             </a>
         {% endif %}
 

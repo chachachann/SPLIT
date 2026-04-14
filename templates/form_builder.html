@@ -69,6 +69,8 @@
                     <form method="POST" enctype="multipart/form-data" class="account-form" data-form-builder>
                         <input type="hidden" name="schema_json" value="[]">
                         <input type="hidden" name="review_stages_json" value="[]">
+                        <input type="hidden" name="promotion_rules_json" value="[]">
+                        <input type="hidden" name="force_delete_confirm" value="" data-force-delete-confirm>
                         <div class="workflow-builder-error" data-builder-error hidden></div>
 
                         <section class="panel">
@@ -85,6 +87,17 @@
                                     >
                                         Preview Form
                                     </a>
+                                    <button
+                                        type="submit"
+                                        name="action"
+                                        value="force-delete-form"
+                                        class="workflow-danger-btn"
+                                        formnovalidate
+                                        title="Permanently delete this form template and its filed forms."
+                                        onclick="var value = window.prompt('Type DELETE to force delete this form template and all related filed forms.'); if (!value) { return false; } this.form.querySelector('[data-force-delete-confirm]').value = value;"
+                                    >
+                                        Force Delete
+                                    </button>
                                 </div>
                             </div>
                             <div class="panel-body">
@@ -180,6 +193,16 @@
                                             <span class="field-label">Allow Multiple Active</span>
                                         </span>
                                     </label>
+                                    <label class="field workflow-bool-field" title="Require reviewers before the submission can complete or move to the next form.">
+                                        <span class="workflow-checkbox-inline">
+                                            <input type="checkbox" name="requires_review" value="1" {% if form.requires_review %}checked{% endif %}>
+                                            <span class="field-label">Require Review</span>
+                                        </span>
+                                    </label>
+                                    <label class="field" title="Optional number of days after submission before the request is marked unfinished or late.">
+                                        <span class="field-label">Deadline Days</span>
+                                        <input type="number" min="1" max="3650" name="deadline_days" value="{{ form.deadline_days or '' }}" placeholder="Example: 7">
+                                    </label>
                                 </div>
                             </div>
                         </section>
@@ -187,8 +210,51 @@
                         <section class="panel">
                             <div class="panel-header">
                                 <div class="workflow-panel-copy">
-                                    <h2>Access Control</h2>
-                                    <p>Users must match at least one selected role. If specific users are selected, access becomes role AND specific user.</p>
+                                    <h2>Live Preview</h2>
+                                    <p>Unsaved metadata, fields, deadlines, and promotion settings render here immediately while you build.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="workflow-builder-preview" data-builder-live-preview>
+                                    <div class="workflow-builder-preview-hero">
+                                        <article class="workflow-card quick-card-form" data-builder-preview-card></article>
+                                        <div class="workflow-builder-preview-summary" data-builder-preview-summary></div>
+                                    </div>
+                                    <div class="workflow-builder-preview-form" data-builder-preview-form></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Pool Assignment</h2>
+                                    <p>Promoted tabs for this template open to the template access pool. If claim review is configured, take requests wait for approval before assignment.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="field-grid">
+                                    <label class="field">
+                                        <span class="field-label">Claim Review Type</span>
+                                        <select class="workflow-select" name="assignment_review_type">
+                                            <option value="" {% if not form.assignment_review_type %}selected{% endif %}>No claim review</option>
+                                            <option value="role" {% if form.assignment_review_type == 'role' %}selected{% endif %}>Role</option>
+                                            <option value="user" {% if form.assignment_review_type == 'user' %}selected{% endif %}>User</option>
+                                        </select>
+                                    </label>
+                                    <label class="field">
+                                        <span class="field-label">Claim Reviewer</span>
+                                        <input type="text" name="assignment_review_value" value="{{ form.assignment_review_value or '' }}" placeholder="Role name or username">
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Submit Access</h2>
+                                    <p>These roles and users can start the template in Quick Access and become the default pool when this template is created as a promoted tab.</p>
                                 </div>
                             </div>
                             <div class="panel-body">
@@ -231,8 +297,52 @@
                         <section class="panel">
                             <div class="panel-header">
                                 <div class="workflow-panel-copy">
+                                    <h2>Library Visibility</h2>
+                                    <p>These roles or specific users can open filed forms from this template in the global Form Library. This does not grant submit access.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="field-grid">
+                                    <div class="field">
+                                        <span class="workflow-field-head">
+                                            <span class="field-label">Library Roles</span>
+                                            <button
+                                                type="button"
+                                                class="workflow-muted-btn workflow-select-toggle"
+                                                data-select-toggle
+                                                data-target-select="library_roles"
+                                                title="Select every role, or clear the current library role selection."
+                                            >
+                                                Select All
+                                            </button>
+                                        </span>
+                                        <select class="workflow-select" name="library_roles" multiple size="8" data-bulk-select="library_roles">
+                                            {% for role in form.available_roles %}
+                                                <option value="{{ role }}" {% if role in form.library_roles %}selected{% endif %}>{{ role }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <span class="workflow-help">Any matching role can open read-only library views for filed forms from this template.</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="workflow-field-head">
+                                            <span class="field-label">Specific Library Users</span>
+                                        </span>
+                                        <select class="workflow-select" name="library_users" multiple size="8" data-bulk-select="library_users">
+                                            {% for user in form.available_users %}
+                                                <option value="{{ user.username }}" {% if user.username in form.library_users %}selected{% endif %}>{{ user.fullname }} ({{ user.username }})</option>
+                                            {% endfor %}
+                                        </select>
+                                        <span class="workflow-help">Specific users can be granted library access even if they are not part of the selected roles.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
                                     <h2>Fields</h2>
-                                    <p>Add fields, default starting values, temporary hint text, validation bounds, and conditional visibility JSON.</p>
+                                    <p>Add fields, default starting values, privacy flags, validation bounds, and conditional visibility JSON.</p>
                                 </div>
                                 <button type="button" class="workflow-action-btn" data-add-field title="Add a new form field definition.">Add Field</button>
                             </div>
@@ -245,12 +355,49 @@
                             <div class="panel-header">
                                 <div class="workflow-panel-copy">
                                     <h2>Review Workflow</h2>
-                                    <p>Sequential stages advance reviewer by reviewer. Parallel stages require every reviewer in that stage to approve.</p>
+                                    <p>Sequential stages advance reviewer by reviewer. Parallel stages require every reviewer in that stage to approve. Disable review above if this form should complete directly on submit.</p>
                                 </div>
                                 <button type="button" class="workflow-action-btn" data-add-stage title="Add another review stage to the workflow.">Add Stage</button>
                             </div>
                             <div class="panel-body">
                                 <div class="workflow-repeater" data-stage-list></div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Promotions</h2>
+                                    <p>Each rule can spawn a different follow-up template under the same tracking number. Automatic rules always spawn. Reviewer choice rules are reserved for final approval selection.</p>
+                                </div>
+                                <button type="button" class="workflow-action-btn" data-add-promotion title="Add a new promotion target.">Add Promotion</button>
+                            </div>
+                            <div class="panel-body">
+                                <div class="workflow-repeater" data-promotion-list></div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <div class="workflow-panel-copy">
+                                    <h2>Danger Zone</h2>
+                                    <p>Force delete permanently removes this form template and every related filed form, task, comment, and file.</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="workflow-card-actions">
+                                    <button
+                                        type="submit"
+                                        name="action"
+                                        value="force-delete-form"
+                                        class="workflow-danger-btn"
+                                        formnovalidate
+                                        title="Permanently delete this form template and its filed forms."
+                                        onclick="var value = window.prompt('Type DELETE to force delete this form template and all related filed forms.'); if (!value) { return false; } this.form.querySelector('[data-force-delete-confirm]').value = value;"
+                                    >
+                                        Force Delete This Form
+                                    </button>
+                                </div>
                             </div>
                         </section>
 
@@ -266,6 +413,8 @@
 
     <script id="initial-form-schema" type="application/json">{{ form.schema|tojson }}</script>
     <script id="initial-review-stages" type="application/json">{{ form.review_stages|tojson }}</script>
+    <script id="initial-promotion-rules" type="application/json">{{ form.promotion_rules|tojson }}</script>
+    <script id="available-builder-forms" type="application/json">{{ form.available_forms|tojson }}</script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script src="{{ url_for('static', filename='chat.js') }}"></script>
     <script src="{{ url_for('static', filename='forms.js') }}"></script>

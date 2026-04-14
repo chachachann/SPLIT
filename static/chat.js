@@ -287,7 +287,10 @@
             sending: false,
             settingsOpen: false,
             unseenCount: 0,
-            pollHandle: 0
+            pollHandle: 0,
+            hasBootstrappedOverview: false,
+            overviewThreadSnapshot: {},
+            liveNotifications: {}
         };
 
         var refs = {
@@ -355,6 +358,124 @@
 
         function buildThreadKey(type, target) {
             return type && target ? type + "::" + target : "";
+        }
+
+        function buildOverviewThreadKey(item) {
+            if (!item) {
+                return "";
+            }
+            if (item.thread_type === "direct" && item.target_username) {
+                return buildThreadKey(item.thread_type, item.target_username);
+            }
+            return buildThreadKey(item.thread_type, item.room_key || item.title || "");
+        }
+
+        function getOverviewThreads(overview) {
+            return []
+                .concat((overview && overview.channels) || [])
+                .concat((overview && overview.role_groups) || [])
+                .concat((overview && overview.direct_threads) || []);
+        }
+
+        function buildOverviewSnapshot(overview) {
+            var snapshot = {};
+            getOverviewThreads(overview).forEach(function (item) {
+                var key = buildOverviewThreadKey(item);
+                if (!key) {
+                    return;
+                }
+                snapshot[key] = {
+                    key: key,
+                    roomKey: item.room_key || "",
+                    threadType: item.thread_type || "",
+                    target: item.thread_type === "direct" ? (item.target_username || "") : (item.room_key || ""),
+                    title: item.title || "Conversation",
+                    senderName: item.last_message_sender_name || "",
+                    senderUsername: item.last_message_sender_username || "",
+                    preview: item.last_message_preview || "",
+                    lastMessageAt: item.last_message_at || "",
+                    unreadCount: Number(item.unread_count || 0),
+                    isSelf: !!item.last_message_is_self
+                };
+            });
+            return snapshot;
+        }
+
+        function canUseBrowserNotifications() {
+            return typeof window !== "undefined" && "Notification" in window;
+        }
+
+        function requestBrowserNotificationPermission() {
+            if (!canUseBrowserNotifications() || Notification.permission !== "default") {
+                return;
+            }
+            Notification.requestPermission().catch(function () {
+                return;
+            });
+        }
+
+        function shouldShowLiveNotification(threadState) {
+            if (!threadState || !canUseBrowserNotifications() || Notification.permission !== "granted") {
+                return false;
+            }
+            if (threadState.isSelf || !threadState.lastMessageAt || threadState.unreadCount <= 0) {
+                return false;
+            }
+            if (!document.hidden && state.chatOpen && state.currentView === "thread") {
+                var activeKey = buildThreadKey(state.activeType, state.activeTarget);
+                if (activeKey && activeKey === threadState.key) {
+                    return false;
+                }
+            }
+            return document.hidden || !state.chatOpen || buildThreadKey(state.activeType, state.activeTarget) !== threadState.key;
+        }
+
+        function showLiveChatNotification(threadState) {
+            if (!shouldShowLiveNotification(threadState)) {
+                return;
+            }
+            if (state.liveNotifications[threadState.key] === threadState.lastMessageAt) {
+                return;
+            }
+
+            state.liveNotifications[threadState.key] = threadState.lastMessageAt;
+            var body = threadState.preview || "New message received.";
+            if (threadState.senderName) {
+                body = threadState.senderName + ": " + body;
+            }
+            var notification = new Notification(threadState.title || "New chat message", {
+                body: body,
+                tag: "split-chat-" + threadState.key,
+                silent: false
+            });
+            notification.onclick = function () {
+                window.focus();
+                openConversation(threadState.threadType, threadState.target || threadState.roomKey).catch(function () {
+                    return;
+                });
+                notification.close();
+            };
+        }
+
+        function maybeNotifyOverviewChanges(nextOverview) {
+            var nextSnapshot = buildOverviewSnapshot(nextOverview);
+            if (!state.hasBootstrappedOverview) {
+                state.overviewThreadSnapshot = nextSnapshot;
+                state.hasBootstrappedOverview = true;
+                return;
+            }
+
+            Object.keys(nextSnapshot).forEach(function (key) {
+                var previous = state.overviewThreadSnapshot[key];
+                var current = nextSnapshot[key];
+                var lastMessageChanged = !previous || previous.lastMessageAt !== current.lastMessageAt;
+                var unreadIncreased = !previous || current.unreadCount > previous.unreadCount;
+                if (lastMessageChanged && unreadIncreased) {
+                    showLiveChatNotification(current);
+                }
+            });
+
+            state.overviewThreadSnapshot = nextSnapshot;
         }
 
         function getLoadedOldestId() {
@@ -500,6 +621,8 @@
                 syncOpenState();
                 return;
             }
+
+            requestBrowserNotificationPermission();
 
             if (state.currentView === "thread" && !state.activeType) {
                 state.currentView = "list";
@@ -1179,6 +1302,7 @@
         }
 
         function syncOverview(overview) {
+            maybeNotifyOverviewChanges(overview);
             state.overview = overview || {
                 channels: [],
                 role_groups: [],

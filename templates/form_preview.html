@@ -104,15 +104,43 @@
                                     <strong>{{ form.schema|length }}</strong>
                                 </div>
                                 <div class="workflow-meta-row">
-                                    <span>Review Stages</span>
-                                    <strong>{{ form.review_stages|length }}</strong>
+                                    <span>Private Fields</span>
+                                    <strong>{{ form.schema|selectattr('is_private')|list|length }}</strong>
                                 </div>
+                                <div class="workflow-meta-row">
+                                    <span>Review Stages</span>
+                                    <strong>{{ form.review_stages|length if form.requires_review else 'Direct Complete' }}</strong>
+                                </div>
+                                {% if form.deadline_days %}
+                                    <div class="workflow-meta-row">
+                                        <span>Deadline</span>
+                                        <strong>{{ form.deadline_days }} day{{ '' if form.deadline_days == 1 else 's' }}</strong>
+                                    </div>
+                                {% endif %}
+                                {% if form.next_form_title %}
+                                    <div class="workflow-meta-row">
+                                        <span>Promotes To</span>
+                                        <strong>{{ form.next_form_title }}</strong>
+                                    </div>
+                                {% endif %}
                             </div>
 
                             {% if form.access_roles %}
+                                <div class="workflow-inline-note">Submit Access</div>
                                 <div class="workflow-pill-list">
                                     {% for role in form.access_roles %}
                                         <span class="workflow-pill">{{ role }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if form.library_roles or form.library_users %}
+                                <div class="workflow-inline-note">Library Visibility</div>
+                                <div class="workflow-pill-list">
+                                    {% for role in form.library_roles %}
+                                        <span class="workflow-pill">{{ role }}</span>
+                                    {% endfor %}
+                                    {% for user in form.library_users %}
+                                        <span class="workflow-pill">{{ user }}</span>
                                     {% endfor %}
                                 </div>
                             {% endif %}
@@ -234,10 +262,22 @@
                                                         <strong>{{ item.submitted_at or 'Not yet submitted' }}</strong>
                                                     </div>
                                                     <div class="workflow-meta-row">
+                                                        <span>Deadline</span>
+                                                        <strong>{{ item.deadline_at or 'Not set' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Deadline State</span>
+                                                        <strong>{{ item.deadline_state_label or 'None' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
                                                         <span>Schema Version</span>
                                                         <strong>{{ 'v' ~ item.schema_version_number if item.schema_version_number else 'Current' }}</strong>
                                                     </div>
                                                 </div>
+
+                                                {% if item.lineage_label %}
+                                                    <div class="workflow-inline-note">Workflow path: {{ item.lineage_label }}</div>
+                                                {% endif %}
 
                                                 {% if item.detail_rows %}
                                                     <div class="workflow-field-stack">

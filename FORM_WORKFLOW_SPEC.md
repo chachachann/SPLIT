@@ -1,873 +1,330 @@
-# Form Workflow Specification
+# Form Workflow Rebuild Specification
 
-## Purpose
+Release target: `v0.06.0a`
 
-This document defines a build-ready product specification for a dynamic form workflow system in SPLIT.
+## Terms
 
-The requested feature is not a simple "form creator." It is a controlled workflow engine with:
+- `Form Template`: the reusable structure, field rules, access settings, review logic, deadlines, and promotion rules.
+- `Filed Form`: one submitted instance of a template.
+- `Case`: the tracking-number container that groups one or many filed forms.
+- `Case Tab`: one filed form displayed inside a case view.
+- `Global Form Library`: the shared case list visible to all logged-in users.
+- `Quick Access`: the shared dashboard bucket for both fillable templates and open promoted work.
 
-- dynamic form templates
-- role-based and user-restricted access
-- quick access button publishing
-- draft and autosave behavior
-- conditional fields
-- file and image submissions
-- multi-stage review routing
-- automatic chained next forms
-- global tracking numbers with form prefixes
-- audit trail, history, and exports
-- in-app notifications now and SMTP-ready email later
+## Role Model
 
-## Product Positioning
+- Only `Developer` and the existing elevated regional-admin role in SPLIT can create or edit form templates.
+- No new platform role is introduced for this rebuild.
+- `Developer` and the existing elevated regional-admin role can archive whole cases.
+- Archived cases are visible only to `Developer` and the existing elevated regional-admin role.
 
-This feature should be treated as a first-class module in the existing platform.
+## Product Direction
 
-- `Developer` and `SuperAdmin` can access `Config`.
-- `Form Manager` and `SMTP Settings` belong under `Config`.
-- `Review Queue` and `My Requests` belong in the topbar beside chat and notifications.
-- Published forms appear in dashboard `Quick Actions` as cards.
+This module is not a simple form creator. It is a case-based workflow, assignment, and review system.
 
-## Recommended Architecture Decision
+The current one-submission model must evolve into:
 
-Do not force this feature into the current legacy `buttons` table directly.
+- case-level tracking
+- tabbed filed forms inside each case
+- one-to-many promotions
+- role-pool claiming
+- pending assignment approval
+- field-level privacy
 
-The current `buttons` table only supports:
+## Library Model
 
-- name
-- route
-- one required role
+### Global Form Library
 
-That model is too limited for:
+- The library is one shared page for all logged-in users.
+- The library lists `Cases`, not individual filed forms.
+- Each library row is identified by `tracking number`.
+- Each row shows a combined summary status for the whole case.
+- The library supports a `template` filter.
+- Library row previews must be safe metadata only, not field values.
 
-- role AND specific-user access
-- per-form icon and card styling
-- form status and publish control
-- chained workflow rules
-- reviewer assignment
-- field versioning
+### Case Detail
 
-Recommended approach:
+- Clicking a tracking number opens one case detail view.
+- Filed forms inside the case are rendered as tabs.
+- A promoted form appears as a new tab under the same tracking number.
+- Tabs the user is not allowed to access are completely hidden.
 
-- Keep the current `buttons` table for legacy/static modules.
-- Introduce dedicated form workflow tables.
-- Treat a published form as a form-defined quick action card, not as a legacy static button row.
+### Case Visibility
 
-## Core Terms
+A case appears in the library if the user can access at least one tab in the case, or the user is the requester.
 
-- `Form Template`: the reusable configuration created in `Form Manager`
-- `Form Version`: immutable field structure snapshot used for future submissions
-- `Submission`: one user request against one published form version
-- `Review Stage`: one level in the approval chain
-- `Reviewer Assignment`: a user or role queue responsible for a stage
-- `Promotion`: automatic creation of the next form after a qualifying workflow event
-- `Tracking Number`: global sequence prefixed by form-defined code
+### Archived Visibility
 
-## Permissions
+- Archived cases do not appear to normal users.
+- Archived cases remain available only to `Developer` and the existing elevated regional-admin role.
 
-### Platform-level permissions
+## Quick Access Model
 
-- `Developer` and `SuperAdmin` can create, edit, publish, archive, restore, and delete form templates.
-- `Developer` and `SuperAdmin` can manage any form template.
-- Form template editing is limited to `Developer` and `SuperAdmin`.
-- Review authority is not implied by `Developer` or `SuperAdmin`.
-- A user may view a submission without being allowed to approve it.
+Quick Access remains one shared UI bucket and contains two item types:
 
-### Submission visibility
+- published form templates the user can file
+- open promoted work tabs available to the user's role pool
 
-A submission is visible to:
+Quick Access does not split these into separate modules.
 
-- the submitter
-- assigned reviewers
-- the form creator
-- `Developer`
-- `SuperAdmin`
+## Access Model
 
-View access does not equal review authority.
+Template access must be split into separate rule sets.
 
-### Form access
+### Submit Access
 
-Published form access supports:
+Controls who can start and file a form template.
 
-- role access
-- optional specific-user restriction
+### Library Visibility
 
-When both are configured, access is:
+Controls who can view filed forms from that template in the global library and inside case tabs.
 
-- `role AND specific user`
+### Assignment Pool Access
 
-If the user has no access, the form card is hidden.
+Controls which roles or users can see an `Open` promoted tab and take it from the pool.
 
-### Review permissions
+### Assignment Approval Access
 
-Review access supports:
+Controls who can approve a `Pending Assignment`.
 
-- role-based reviewer assignment
-- specific-user reviewer assignment
-- both together
+### Review Access
 
-Review stages may be:
+Controls who can verify, accept, or reject the filed form during review workflow.
 
-- sequential
-- parallel
-- mixed
+## Privacy Model
 
-## Form Template Rules
-
-Each form template supports:
-
-- title
-- internal key / slug
-- description
-- quick action label
-- quick action icon
-- custom card style/color
-- form prefix for tracking numbers
-- form status
-- publish behavior
-- cancellation policy
-- multiple active submissions policy
-- access roles
-- access-specific users
-- review workflow definition
-- next-form promotion rules
-- inheritance visibility rules
-
-### Form statuses
-
-- `draft`
-- `published`
-- `archived`
-
-Behavior:
-
-- `draft`: not visible in Quick Actions
-- `published`: visible to allowed users in Quick Actions
-- `archived`: hidden from Quick Actions but retained in Config
-
-Published edits go live immediately for future submissions.
-Old submissions remain bound to their original version snapshot.
-
-## Field Builder
-
-### Supported field types in scope
-
-- short text
-- long text
-- number
-- date
-- dropdown
-- checkbox
-- image upload
-- file upload
-
-### Field configuration
+### Field Privacy
 
 Each field supports:
 
+- `public`
+- `private`
+
+Private fields are visible to:
+
+- requester
+- `Developer`
+- existing elevated regional-admin role
+- active accepter / verifier / reviewer
+- eligible users viewing an `Open` tab they can take
+
+### Attachment Privacy
+
+Attachments inherit the privacy of the field they belong to.
+
+### Reviewer Rule
+
+Nothing is private to the reviewers while reviewing the document.
+
+### Requester Rule
+
+The requester can see every tab in the case as read-only, including promoted tabs.
+
+## Template Builder Rebuild
+
+The builder must be rebuilt around typed sections instead of JSON-first editing.
+
+Required sections:
+
+- `Basics`
+- `Quick Access`
+- `Submit Access`
+- `Library Visibility`
+- `Assignment Pool`
+- `Assignment Approval`
+- `Fields`
+- `Review Workflow`
+- `Promotions`
+- `Preview`
+- `Publish`
+
+### Field Builder
+
+Each field must support:
+
 - label
-- internal field key
+- key
+- type
 - help text
-- required flag
-- sort order
+- required
 - default value
-- validation rules
-- conditional visibility rules
-- inheritance visibility rules for promoted stages
+- validation
+- conditional logic
+- privacy flag
+- hide on promotion
 
-### Required fields
+## Workflow Model
 
-"Important" means:
+### Base Rules
 
-- required to submit
-- visually marked with an asterisk
+- No-review templates complete immediately on submit.
+- A template can define default deadline rules.
+- A reviewer can override the deadline while approving or promoting.
+- Promotions can create one or many next filed forms.
+- Promoted filed forms stay under the same case and tracking number.
 
-### Validation
+### Promotion Rules
 
-Validation is configurable per field and may include:
+One filed form may promote into one, two, or more next templates.
 
-- min length
-- max length
-- numeric range
-- date rules
-- allowed values
-- allowed file types
+Each promotion target may define:
 
-### Conditional logic
+- target template
+- default deadline
+- open-pool behavior
+- direct assignment behavior
+- assignment approval requirement
 
-Conditional field logic is required in v1.
+One approval action may create a mixed set of next tabs, for example:
 
-Supported logic model:
+- one `Open` pool tab
+- one directly assigned tab
+- one tab with pending assignment approval
 
-- `AND`
-- `OR`
-- nested rule groups
-- operators:
-  - equals
-  - not equals
-  - contains
-  - greater than
-  - less than
-  - is empty
+## Assignment Model
 
-Conditional logic only uses normal field values, not uploaded files.
+### Open Pool
 
-## File Upload Rules
+- Promoted tabs default to `Open` for their allowed role pool unless a direct assignment rule says otherwise.
+- Eligible users can see full tab contents before taking the tab.
+- Eligible users can click `Take Form`.
 
-### Images
+### Claiming
 
-- up to 5 images per submission
-- up to 50 MB per file
+- Taking a form locks it immediately.
+- If the template has no assignment approver configured, assignment completes immediately.
+- If the template has an assignment approver configured, the tab moves to `Pending Assignment`.
 
-### Documents
+### Assignment Approval
 
-- up to 20 attachments per submission
-- up to 50 MB per file
+`Pending Assignment` can be approved or rejected by:
 
-### Allowed file types
+- existing elevated regional-admin role
+- `Developer`
+- configured assignment reviewer
 
-Allowed types are fixed globally, not form-specific.
+If rejected:
 
-Current requested set:
+- the tab returns to `Open`
 
-- SVG
-- PNG
-- JPEG / JPG
-- other supported photo formats
-- PDF
-- DOC
-- DOCX
-- XLS
-- XLSX
-- TXT
+### Reassignment
 
-Recommended implementation note:
+- Assigned tabs can be reopened back to `Open`
+- Assigned tabs can be reassigned directly to another user
 
-- normalize and validate against an explicit allowed extension set
-- do not allow unrestricted "other photo formats" without a defined list
+## Status Model
 
-## Submission Lifecycle
+### Tab Statuses
 
-### Submission statuses
+- `Open`
+- `Pending Assignment`
+- `Assigned`
+- `In Review`
+- `Completed`
+- `Rejected`
+- `Cancelled`
 
-- `draft`
-- `pending`
-- `accepted`
-- `rejected`
-- `cancelled`
-- `promoted`
-- `completed`
-- `archived`
+### Case Summary Status
 
-### Status meaning
+The library row uses a combined summary status with this priority:
 
-- `draft`: not yet formally submitted
-- `pending`: submitted and waiting for review
-- `accepted`: approved at a stage or approved without immediate promotion
-- `rejected`: rejected by any active reviewer
-- `cancelled`: cancelled by submitter before review action
-- `promoted`: forwarded automatically to a next form without needing acceptance
-- `completed`: final successful state when no next form remains
-- `archived`: hidden from active queues but still retained and searchable
+1. `In Review`
+2. `Pending Assignment`
+3. `Assigned`
+4. `Open`
+5. `Rejected`
+6. `Cancelled`
+7. `Completed`
 
-### Submission rules
+## Archive Rules
 
-- Drafts support manual save and autosave.
-- Tracking numbers are generated only on formal submit, not on draft create.
-- Tracking numbers remain the same even if the submission is cancelled and resubmitted.
-- Users may delete their own drafts.
-- Drafts do not expire.
-- Reviewers cannot edit submitted field values.
+- Archive happens at the whole-case level only.
+- Pending or otherwise active cases cannot be archived.
+- Only `Developer` and the existing elevated regional-admin role can archive.
 
-### Multiple submissions
+## Required Data Model Direction
 
-One user may submit multiple active submissions for the same form if the form allows it.
+The current schema must evolve toward these core entities:
 
-There is no global hard limit per user per form.
+- `workflow_cases`
+- `workflow_case_tabs`
+- `workflow_template_submit_access`
+- `workflow_template_library_visibility`
+- `workflow_template_assignment_pools`
+- `workflow_template_assignment_reviewers`
+- `workflow_template_promotions`
+- `workflow_tab_assignments`
+- `workflow_tab_assignment_history`
+- `workflow_tab_values`
+- `workflow_tab_files`
 
-## Cancellation Rules
+The current `forms` and `form_submissions` tables can be migrated incrementally, but the final target is case-based, not standalone-submission-based.
 
-- Only allowed before any reviewer acts.
-- Submitter must provide a mandatory cancellation reason.
-- A form creator can disable cancellation for a specific form template.
-- Cancelled submissions remain visible and auditable.
-- Cancelled submissions may later be archived by admins.
+## Required Routes and Screens
 
-## Review Workflow Model
+### Dashboard
 
-### Stage model
+- add `Form Library` to the main dashboard sidebar for everyone
+- keep `Quick Access` for both fillable templates and open promoted work
 
-A form can define multiple review stages.
+### Shared Library
 
-Each stage contains:
+- `/forms/manage/library`
+- shared case list for all logged-in users
+- case rows by tracking number
+- filters by template, status, requester, assignee, deadline
 
-- stage order
-- stage type: sequential or parallel
-- reviewers by role
-- reviewers by specific user
-- stage rule metadata
+### Case Detail
 
-### Sequential stages
+- `/forms/cases/<tracking_number>`
+- tabbed filed forms
+- hidden-tab enforcement
+- read-only and action modes based on access
 
-- Later reviewers may see the submission before their turn.
-- Later reviewers are fully read-only until activated.
-- They cannot approve, reject, or comment before active turn.
+### Template Builder
 
-### Parallel stages
+- rebuilt admin-only builder
+- typed controls for access, privacy, assignment, review, and promotions
 
-- All assigned reviewers in the active parallel stage must approve for the stage to pass.
-- A rejection by any active reviewer immediately rejects the whole submission.
-
-### Rejection behavior
-
-- Rejection ends the current submission path.
-- Rejection reason is mandatory.
-- Resubmission reopens with the same tracking number rather than generating a new one.
-
-### Reviewer comments
-
-- One shared comment thread per submission
-- each comment shows author identity and timestamp
-- comments are visible to any actor who can view the submission
-
-Acceptance note:
-
-- optional
-
-## Promotion and Chained Forms
-
-### Promotion rules
-
-A form may define one or more next-form routes.
-
-Promotion may be triggered by:
-
-- declared rule
-- reviewer decision
-- field-value rule
-- status event
-
-Conflict priority:
-
-- declared rules always win
-
-### Promotion behavior
-
-- Next forms are created automatically.
-- Promotion can target:
-  - specific user
-  - role queue
-  - both
-- If the submission is forwarded without requiring acceptance first, the current submission becomes `promoted`.
-- If a final stage succeeds and no next form exists, the submission becomes `completed`.
-
-### Inherited data
-
-Promoted forms inherit previous-stage data as:
-
-- read-only snapshot
-
-Rules:
-
-- later edits to old stages do not mutate inherited values
-- previous-stage data can be expanded via a toggle in the UI
-- some inherited fields may be hidden after promotion
-- admins can still see hidden-after-promotion fields in audit and export views
-
-## Visibility Model for Promoted Forms
-
-Next-form access can be controlled through:
-
-- role-based access
-- specific-user restriction
-
-This allows:
-
-- chain forms available to anyone with the target button role
-- chain forms limited further to named users
-
-## Audit Trail
-
-Maximum audit trail is required.
-
-Audit events should include at minimum:
-
-- form created
-- form edited
-- form published
-- form archived
-- form restored
-- form deleted
-- form version created
-- field added
-- field edited
-- field removed
-- submission draft saved
-- submission submitted
-- submission cancelled
-- submission resubmitted
-- reviewer stage activated
-- reviewer approved
-- reviewer rejected
-- comment added
-- next form promoted
-- assignment created
-- assignment changed
-- submission archived
-- submission restored
-- export generated
-
-Each audit entry should capture:
-
-- event type
-- actor username
-- actor full name snapshot
-- target entity type
-- target entity id
-- tracking number if applicable
-- JSON change payload
-- timestamp
-
-## Notifications
-
-### v1
-
-- in-app notifications required
-- SMTP configuration present but email sending can be enabled later
-
-### later email behavior
-
-Email should support notifying concerned users for:
-
-- submission created
-- review assigned
-- accepted
-- rejected
-- cancelled
-- promoted
-- completed
-
-## Export Requirements
-
-Export is required in v1 for users who can view the form.
-
-Required export types:
-
-- CSV submissions
-- PDF submission summary
-- CSV audit logs
-
-## UI Placement
-
-### Config
-
-Visible only to `Developer` and `SuperAdmin`.
-
-Config sections for this feature:
-
-- `Form Manager`
-- `SMTP Settings`
-
-### Topbar
-
-Global user surfaces:
-
-- `Review Queue`
-- `My Requests`
-
-These should live beside the chat and notification controls, not inside Config.
-
-### Dashboard Quick Actions
-
-Every published form appears as a Quick Action card for allowed users.
-
-Quick Action cards support:
-
-- preset or uploaded icon
-- custom label
-- custom card color/style
-
-## Recommended Data Model
-
-The following tables are recommended.
-
-### Form templates
-
-`forms`
-
-- id
-- form_key
-- title
-- description
-- quick_label
-- quick_icon_type
-- quick_icon_value
-- quick_card_style_json
-- tracking_prefix
-- status
-- allow_cancel
-- allow_multiple_active
-- created_by_username
-- updated_by_username
-- created_at
-- updated_at
-- archived_at
-
-### Form versioning
-
-`form_versions`
-
-- id
-- form_id
-- version_number
-- schema_json
-- is_active
-- created_by_username
-- created_at
-
-### Form fields
-
-`form_fields`
-
-- id
-- form_version_id
-- field_key
-- label
-- field_type
-- help_text
-- is_required
-- sort_order
-- default_value_json
-- validation_json
-- conditional_logic_json
-- inherit_visibility_mode
-- created_at
-
-### Access control
-
-`form_access_roles`
-
-- id
-- form_id
-- role_name
-
-`form_access_users`
-
-- id
-- form_id
-- username
-
-### Reviewer definition
-
-`form_review_stages`
-
-- id
-- form_id
-- stage_number
-- stage_name
-- stage_mode
-- can_view_early
-- created_at
-
-`form_review_stage_roles`
-
-- id
-- stage_id
-- role_name
-- sort_order
-
-`form_review_stage_users`
-
-- id
-- stage_id
-- username
-- sort_order
-
-### Promotion rules
-
-`form_promotions`
-
-- id
-- form_id
-- rule_name
-- priority_order
-- trigger_type
-- condition_json
-- next_form_id
-- assignment_mode
-- target_role_name
-- target_username
-- inherit_visibility_json
-- created_at
-
-### Submission header
-
-`form_submissions`
-
-- id
-- tracking_number
-- tracking_prefix
-- form_id
-- form_version_id
-- submitter_username
-- current_status
-- current_stage_number
-- parent_submission_id
-- root_submission_id
-- cancel_reason
-- reject_reason
-- acceptance_note
-- submitted_at
-- completed_at
-- archived_at
-- created_at
-- updated_at
-
-### Submission data
-
-`form_submission_values`
-
-- id
-- submission_id
-- field_key
-- value_json
-- created_at
-
-### Submission files
-
-`form_submission_files`
-
-- id
-- submission_id
-- field_key
-- original_name
-- stored_name
-- file_ext
-- mime_type
-- file_size_bytes
-- file_kind
-- uploaded_by_username
-- created_at
-
-### Reviewer tasks
-
-`form_review_tasks`
-
-- id
-- submission_id
-- stage_id
-- assigned_role_name
-- assigned_username
-- task_order
-- is_active
-- task_status
-- acted_at
-- acted_by_username
-- action_note
-- created_at
-
-### Shared comments
-
-`form_submission_comments`
-
-- id
-- submission_id
-- author_username
-- author_fullname_snapshot
-- body
-- created_at
-
-### In-app notifications
-
-`form_notifications`
-
-- id
-- username
-- event_type
-- title
-- message
-- link_url
-- is_read
-- created_at
-
-### Audit log
-
-`form_audit_log`
-
-- id
-- event_type
-- actor_username
-- actor_fullname_snapshot
-- entity_type
-- entity_id
-- tracking_number
-- payload_json
-- created_at
-
-### SMTP config
-
-`smtp_settings`
-
-- id
-- host
-- port
-- username
-- password_encrypted
-- from_email
-- from_name
-- use_tls
-- updated_by_username
-- updated_at
-
-## Recommended Routes / Screens
-
-### Config area
-
-`/settings`
-
-- add `Form Manager`
-- add `SMTP Settings`
-
-### Form management
-
-`/forms/manage`
-
-- form list
-- filters by status
-- create form
-- edit form
-- publish / archive / restore
-- version history
-
-### Form builder
-
-`/forms/manage/<form_key>/builder`
-
-- metadata editor
-- field builder
-- conditional logic builder
-- access settings
-- review stage settings
-- promotion settings
-
-### User submission view
-
-`/forms/my-requests`
-
-- list own submissions
-- status filters
-- search by tracking number
-- view timeline
-- view comments
-- cancel eligible submissions
-- delete drafts
-
-### Review queue
-
-`/forms/review-queue`
-
-- items awaiting action
-- filters by form, status, date, assigned reviewer
-- read-only access to future stages
-- action controls only for active tasks
-
-### Submission detail
-
-`/forms/submissions/<tracking_number>`
-
-- summary header
-- current status
-- stage progress
-- comment thread
-- field values
-- inherited prior-stage data
-- attachments
-- audit timeline
-
-## State Machine Summary
-
-### Draft path
-
-`draft -> pending`
-
-### Review outcomes
-
-`pending -> rejected`
-
-`pending -> accepted`
-
-`pending -> promoted`
-
-`accepted -> completed`
-
-`accepted -> promoted`
-
-### User action
-
-`pending -> cancelled`
-
-### Admin lifecycle
-
-`rejected -> archived`
-
-`cancelled -> archived`
-
-`completed -> archived`
-
-## MVP Recommendation
-
-Build in phases even if the full design is already defined.
+## Migration Strategy
 
 ### Phase 1
 
-- form templates
-- form versions
-- field builder
-- role access
-- specific-user restriction
-- quick access publishing
-- draft/autosave
-- file upload rules
-- tracking numbers
-- my requests
-- review queue
-- sequential review
-- basic parallel review
-- in-app notifications
-- audit log
+- make the Form Library globally reachable
+- filter library rows by actual visibility
+- hide archived cases from normal users
+- document the new case-based model
 
 ### Phase 2
 
-- nested conditional logic builder UI polish
-- automatic promotions to next forms
-- inherited read-only snapshots
-- hidden-after-promotion field rules
-- export suite
-- SMTP settings persistence
+- split template access into submit, library, pool, assignment-approval, and review rules
+- add field privacy flags
 
 ### Phase 3
 
-- email delivery
-- advanced reporting
-- admin analytics
-- performance tuning for large submission volumes
+- introduce case and tab tables
+- move library from submission rows to case rows
 
-## Risks and Complexity
+### Phase 4
 
-Highest complexity areas:
+- replace single next-form promotion with one-to-many promotion rules
+- add open pool, take form, pending assignment, approve assignment, reject assignment
 
-- grouped conditional logic builder
-- mixed sequential + parallel review engine
-- automatic promotion with assignment routing
-- keeping old submission structure immutable while forms evolve
-- full audit coverage without missing edge cases
+### Phase 5
 
-The feature is achievable, but only if schema versioning and workflow state rules are designed first and implemented consistently.
+- rebuild the template builder UI on top of the new model
 
-## Implementation Notes for This Codebase
+## Implementation Note
 
-- integrate form management with the existing `Config` access model already used by `Developer` and `SuperAdmin`
-- keep `Review Queue` and `My Requests` in the topbar rather than burying them under `Config`
-- reuse existing notification patterns for in-app alerts
-- add dedicated workflow tables rather than overloading the current legacy `buttons` table
-- treat published forms as dashboard quick cards generated from form metadata and access rules
+The rebuild must preserve the important working features already in the codebase:
 
+- published-form quick access
+- autosave drafts
+- direct-complete no-review forms
+- deadlines and late-state labeling
+- review queues
+- comments
+- audit trail
+- existing notification behavior
+
+The rebuild should replace the current access model, not layer more special cases onto it.

@@ -28,6 +28,11 @@
             <span class="label">Form Manager</span>
         </a>
 
+        <a class="menu-btn{% if form_admin_sidebar_active == 'form_library' %} active{% endif %}" href="{{ url_for('form_library') }}"{% if form_admin_sidebar_active == 'form_library' %} aria-current="page"{% endif %}>
+            <span class="menu-icon">&#128194;</span>
+            <span class="label">Form Library</span>
+        </a>
+
         <a class="menu-btn{% if form_admin_sidebar_active == 'smtp_settings' %} active{% endif %}" href="{{ url_for('smtp_settings') }}"{% if form_admin_sidebar_active == 'smtp_settings' %} aria-current="page"{% endif %}>
             <span class="menu-icon">&#9993;</span>
             <span class="label">SMTP Settings</span>

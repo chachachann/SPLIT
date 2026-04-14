@@ -20,15 +20,24 @@ from split_app.routes.profiles import profile, profile_theme_sync, review_profil
 from split_app.routes.settings import settings
 from split_app.routes.workflow import (
     form_autosave_submission,
+    form_case_detail,
     form_edit_submission,
     form_home,
+    form_library,
     form_preview,
     form_submission_cancel,
     form_submission_comment,
+    form_submission_archive,
+    form_submission_delete_archived,
+    form_submission_delete_pending,
     form_submission_delete_draft,
     form_submission_detail,
+    form_submission_reassign,
     form_submission_reopen,
+    form_submission_reopen_pool,
     form_submission_review,
+    form_submission_review_assignment,
+    form_submission_take,
     forms_builder,
     forms_manage,
     my_requests,
@@ -62,6 +71,8 @@ app.add_url_rule("/chat/favorites/toggle", endpoint="chat_favorite_toggle", view
 app.add_url_rule("/chat/favorites/move", endpoint="chat_favorite_move", view_func=login_required(chat_favorite_move), methods=["POST"])
 app.add_url_rule("/settings", endpoint="settings", view_func=admin_or_developer_required(settings), methods=["GET", "POST"])
 app.add_url_rule("/forms/manage", endpoint="forms_manage", view_func=admin_or_developer_required(forms_manage), methods=["GET", "POST"])
+app.add_url_rule("/forms/manage/library", endpoint="form_library", view_func=login_required(form_library), methods=["GET"])
+app.add_url_rule("/forms/cases/<case_tracking_number>", endpoint="form_case_detail", view_func=login_required(form_case_detail), methods=["GET"])
 app.add_url_rule("/forms/manage/<form_key>", endpoint="forms_builder", view_func=admin_or_developer_required(forms_builder), methods=["GET", "POST"])
 app.add_url_rule("/forms/manage/<form_key>/preview", endpoint="form_preview", view_func=admin_or_developer_required(form_preview), methods=["GET"])
 app.add_url_rule("/smtp-settings", endpoint="smtp_settings", view_func=admin_or_developer_required(smtp_settings), methods=["GET", "POST"])
@@ -79,7 +90,14 @@ app.add_url_rule("/forms/submissions/<int:submission_id>/comment", endpoint="for
 app.add_url_rule("/forms/submissions/<int:submission_id>/cancel", endpoint="form_submission_cancel", view_func=login_required(form_submission_cancel), methods=["POST"])
 app.add_url_rule("/forms/submissions/<int:submission_id>/reopen", endpoint="form_submission_reopen", view_func=login_required(form_submission_reopen), methods=["POST"])
 app.add_url_rule("/forms/submissions/<int:submission_id>/delete-draft", endpoint="form_submission_delete_draft", view_func=login_required(form_submission_delete_draft), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/delete-pending", endpoint="form_submission_delete_pending", view_func=login_required(form_submission_delete_pending), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/archive", endpoint="form_submission_archive", view_func=login_required(form_submission_archive), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/delete-archived", endpoint="form_submission_delete_archived", view_func=login_required(form_submission_delete_archived), methods=["POST"])
 app.add_url_rule("/forms/submissions/<int:submission_id>/review", endpoint="form_submission_review", view_func=login_required(form_submission_review), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/take", endpoint="form_submission_take", view_func=login_required(form_submission_take), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/assignment-review", endpoint="form_submission_review_assignment", view_func=login_required(form_submission_review_assignment), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/reopen-pool", endpoint="form_submission_reopen_pool", view_func=login_required(form_submission_reopen_pool), methods=["POST"])
+app.add_url_rule("/forms/submissions/<int:submission_id>/reassign", endpoint="form_submission_reassign", view_func=login_required(form_submission_reassign), methods=["POST"])
 app.add_url_rule("/account-manager", endpoint="account_manager", view_func=admin_or_developer_required(account_manager), methods=["GET", "POST"])
 app.add_url_rule("/news-manager", endpoint="news_manager", view_func=admin_or_developer_required(news_manager), methods=["GET", "POST"])
 app.add_url_rule("/news/<slug>", endpoint="news_post", view_func=news_post, methods=["GET"])

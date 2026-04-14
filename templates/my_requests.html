@@ -36,7 +36,7 @@
     {% for item in requests %}
         {% if item.status == 'draft' %}
             {% set counts.draft = counts.draft + 1 %}
-        {% elif item.status == 'pending' %}
+        {% elif item.status in ['pending', 'open', 'assigned', 'pending_assignment'] %}
             {% set counts.pending = counts.pending + 1 %}
         {% else %}
             {% set counts.resolved = counts.resolved + 1 %}
@@ -168,10 +168,22 @@
                                                         <strong>{{ item.requester_display_name }}</strong>
                                                     </div>
                                                     <div class="workflow-meta-row">
+                                                        <span>Deadline</span>
+                                                        <strong>{{ item.deadline_at or 'Not set' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
+                                                        <span>Deadline State</span>
+                                                        <strong>{{ item.deadline_state_label or 'None' }}</strong>
+                                                    </div>
+                                                    <div class="workflow-meta-row">
                                                         <span>Schema Version</span>
                                                         <strong>{{ 'v' ~ item.schema_version_number if item.schema_version_number else 'Current' }}</strong>
                                                     </div>
                                                 </div>
+
+                                                {% if item.lineage_label %}
+                                                    <div class="workflow-inline-note">Workflow path: {{ item.lineage_label }}</div>
+                                                {% endif %}
 
                                                 {% if item.detail_rows %}
                                                     <div class="workflow-field-stack">
@@ -199,7 +211,7 @@
 
                                                 <div class="workflow-card-actions">
                                                     {% if item.is_editable %}
-                                                        <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">Continue Draft</a>
+                                                        <a class="btn-primary" href="{{ url_for('form_edit_submission', submission_id=item.id) }}">{{ 'Continue Work' if item.status == 'assigned' else 'Continue Draft' }}</a>
                                                     {% else %}
                                                         <a class="btn-secondary" href="{{ url_for('form_submission_detail', submission_id=item.id) }}">Open Request</a>
                                                     {% endif %}
