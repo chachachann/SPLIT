@@ -1,19 +1,17 @@
 {% set notification_items = topbar_notifications if topbar_notifications is defined else (notifications if notifications is defined else []) %}
-<details class="notification-menu">
+<details class="notification-menu" data-notification-menu>
     <summary class="notification-trigger" aria-label="Open notifications">
         <span class="notification-bell" aria-hidden="true">&#128276;</span>
-        {% if unread_notifications %}
-            <span class="notification-badge">{{ unread_notifications }}</span>
-        {% endif %}
+        <span class="notification-badge" data-notification-badge{% if not unread_notifications %} hidden{% endif %}>{{ unread_notifications }}</span>
     </summary>
 
     <div class="notification-dropdown">
         <div class="notification-dropdown-header">
             <strong>Notifications</strong>
-            <span>{{ unread_notifications }} unread</span>
+            <span data-notification-unread-label>{{ unread_notifications }} unread</span>
         </div>
 
-        <div class="notification-dropdown-list">
+        <div class="notification-dropdown-list" data-notification-list>
             {% if notification_items %}
                 {% for notification in notification_items %}
                     <article
@@ -34,12 +32,12 @@
                         <div class="notification-dropdown-details">
                             <div class="notification-message-body">{{ notification.message_html|safe }}</div>
                             {% if notification.link_url %}
-                                <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
+                                <a class="notification-link" href="{{ url_for('notification_open', notification_key=notification.notification_key) }}">Open Link</a>
                             {% endif %}
                         </div>
 
                         <div class="notification-dropdown-actions">
-                            <form method="POST" action="{{ url_for('notification_action') }}">
+                            <form method="POST" action="{{ url_for('notification_action') }}" data-notification-action-form>
                                 <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
                                 {% if notification.is_read %}
                                     <input type="hidden" name="action" value="mark-unread" data-action-input>
@@ -50,7 +48,7 @@
                                 {% endif %}
                             </form>
 
-                            <form method="POST" action="{{ url_for('notification_action') }}">
+                            <form method="POST" action="{{ url_for('notification_action') }}" data-notification-action-form>
                                 <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
                                 <input type="hidden" name="action" value="hide">
                                 <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
@@ -59,7 +57,7 @@
                     </article>
                 {% endfor %}
             {% else %}
-                <div class="notification-empty">No active notifications.</div>
+                <div class="notification-empty" data-notification-empty>No active notifications.</div>
             {% endif %}
         </div>
     </div>

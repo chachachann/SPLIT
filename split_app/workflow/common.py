@@ -59,6 +59,7 @@ FIELD_TYPES = {
     "file_upload",
 }
 STAGE_MODES = {"sequential", "parallel"}
+WORKFLOW_QUEUE_KEYS = {"my_requests", "review_queue"}
 
 
 def ensure_form_workflow_folders():
@@ -214,6 +215,49 @@ def _build_preview(value, limit=140):
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _workflow_notification_target_exists(connection, link_url):
+    clean_link = str(link_url or "").strip()
+    if not clean_link:
+        return True
+    if re.match(r"^[a-z][a-z0-9+.-]*://", clean_link, re.IGNORECASE):
+        return True
+
+    cursor = connection.cursor()
+    if clean_link.startswith("/forms/submissions/"):
+        submission_id = clean_link.split("/forms/submissions/", 1)[1].split("?", 1)[0].strip("/").split("/", 1)[0]
+        if not submission_id.isdigit():
+            return False
+        cursor.execute("SELECT id FROM form_submissions WHERE id = ?", (int(submission_id),))
+        return bool(cursor.fetchone())
+
+    if clean_link.startswith("/forms/cases/"):
+        tracking_number = clean_link.split("/forms/cases/", 1)[1].split("?", 1)[0].strip("/")
+        if not tracking_number:
+            return False
+        cursor.execute("SELECT id FROM workflow_cases WHERE tracking_number = ?", (tracking_number,))
+        return bool(cursor.fetchone())
+
+    if clean_link.startswith("/forms/manage/"):
+        form_key = clean_link.split("/forms/manage/", 1)[1].split("?", 1)[0].strip("/").split("/", 1)[0]
+        if not form_key:
+            return False
+        cursor.execute("SELECT id FROM forms WHERE form_key = ?", (form_key,))
+        return bool(cursor.fetchone())
+
+    if clean_link.startswith("/forms/"):
+        form_key = clean_link.split("/forms/", 1)[1].split("?", 1)[0].strip("/").split("/", 1)[0]
+        if not form_key:
+            return False
+        cursor.execute("SELECT id FROM forms WHERE form_key = ?", (form_key,))
+        return bool(cursor.fetchone())
+
+    return True
+
+
+def workflow_notification_target_exists(connection, link_url):
+    return _workflow_notification_target_exists(connection, link_url)
 
 
 def ensure_form_workflow_schema(connection):
@@ -407,6 +451,16 @@ def ensure_form_workflow_schema(connection):
             is_read INTEGER NOT NULL DEFAULT 0,
             is_hidden INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS form_queue_view_states (
+            username TEXT NOT NULL,
+            queue_key TEXT NOT NULL,
+            last_viewed_at TEXT NOT NULL,
+            PRIMARY KEY (username, queue_key)
         )
         """
     )
@@ -688,12 +742,27 @@ def get_form_notifications_for_user(username):
         (username,),
     )
     items = []
+    stale_notification_ids = []
     for row in cursor.fetchall():
         item = dict(row)
+        if not _workflow_notification_target_exists(connection, item.get("link_url")):
+            stale_notification_ids.append(int(item["id"]))
+            continue
         item["notification_key"] = f"form:{item['id']}"
         item["message_preview"] = _build_preview(item.get("message"))
         item["message_html"] = "<p>" + escape(item.get("message") or "") + "</p>"
         items.append(item)
+    if stale_notification_ids:
+        placeholders = ", ".join("?" for _ in stale_notification_ids)
+        connection.execute(
+            f"""
+            UPDATE form_user_notifications
+            SET is_hidden = 1, is_read = 1
+            WHERE username = ? AND id IN ({placeholders})
+            """,
+            (username, *stale_notification_ids),
+        )
+        connection.commit()
     connection.close()
     return items
 
@@ -730,6 +799,46 @@ def set_form_notification_state(username, notification_key, *, is_read=None, is_
         WHERE id = ? AND username = ?
         """,
         (next_read, next_hidden, notification_id, username),
+    )
+    connection.commit()
+    connection.close()
+    return True
+
+
+def get_workflow_queue_last_viewed_at(username, queue_key):
+    clean_username = (username or "").strip()
+    clean_queue_key = (queue_key or "").strip().lower()
+    if not clean_username or clean_queue_key not in WORKFLOW_QUEUE_KEYS:
+        return ""
+    connection = connect_db()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT last_viewed_at
+        FROM form_queue_view_states
+        WHERE lower(username) = lower(?) AND queue_key = ?
+        """,
+        (clean_username, clean_queue_key),
+    )
+    row = cursor.fetchone()
+    connection.close()
+    return (row["last_viewed_at"] or "").strip() if row else ""
+
+
+def mark_workflow_queue_viewed(username, queue_key, viewed_at=None):
+    clean_username = (username or "").strip()
+    clean_queue_key = (queue_key or "").strip().lower()
+    if not clean_username or clean_queue_key not in WORKFLOW_QUEUE_KEYS:
+        return False
+    timestamp = (viewed_at or "").strip() or timestamp_now()
+    connection = connect_db()
+    connection.execute(
+        """
+        INSERT INTO form_queue_view_states (username, queue_key, last_viewed_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(username, queue_key) DO UPDATE SET last_viewed_at = excluded.last_viewed_at
+        """,
+        (clean_username, clean_queue_key, timestamp),
     )
     connection.commit()
     connection.close()

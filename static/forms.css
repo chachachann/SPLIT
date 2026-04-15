@@ -334,6 +334,151 @@
     font-weight: 800;
 }
 
+.workflow-repeater-toggle {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.workflow-repeater-summary {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.workflow-repeater-meta {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.workflow-repeater-toggle-icon {
+    flex: 0 0 auto;
+    color: var(--muted);
+    transition: transform 0.16s ease;
+}
+
+.workflow-field-item[data-collapsed="false"] .workflow-repeater-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.workflow-repeater-content {
+    display: grid;
+    gap: 12px;
+}
+
+.workflow-edit-bucket {
+    display: grid;
+    gap: 22px;
+}
+
+.workflow-edit-section {
+    display: grid;
+    gap: 14px;
+}
+
+.workflow-edit-section + .workflow-edit-section {
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+}
+
+.workflow-edit-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.workflow-edit-section-body {
+    display: grid;
+    gap: 12px;
+}
+
+.workflow-builder-field-preview {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.workflow-builder-field-card {
+    gap: 14px;
+}
+
+.workflow-builder-field-card.is-dragging {
+    opacity: 0.58;
+    border-style: dashed;
+}
+
+.workflow-builder-field-topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.workflow-builder-field-handle {
+    flex: 0 0 auto;
+    padding-top: 1px;
+    color: var(--muted);
+    cursor: grab;
+    user-select: none;
+}
+
+.workflow-builder-field-display-surface {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.workflow-builder-field-display-surface:focus-visible {
+    outline: 2px solid rgba(67, 228, 147, 0.35);
+    outline-offset: 4px;
+}
+
+.workflow-builder-field-display-surface .workflow-field-block * {
+    pointer-events: none;
+}
+
+.workflow-builder-field-delete {
+    min-width: 38px;
+    padding: 0 10px;
+}
+
+.workflow-builder-field-editor {
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+}
+
+.workflow-builder-field-editor-head {
+    display: grid;
+    gap: 6px;
+}
+
+.workflow-builder-field-card[data-collapsed="true"] .workflow-builder-field-editor {
+    display: none;
+}
+
+.workflow-builder-field-card[data-collapsed="false"] .workflow-builder-field-display-surface {
+    display: none;
+}
+
 .workflow-danger-btn,
 .workflow-muted-btn,
 .workflow-action-btn {
@@ -1046,6 +1191,140 @@ html[data-theme="light"] .workflow-tab-link.is-active {
     background: rgba(67, 228, 147, 0.14);
 }
 
+html[data-theme="light"] .workflow-card-meta,
+html[data-theme="light"] .workflow-inline-note,
+html[data-theme="light"] .workflow-meta-row span {
+    color: #627468;
+}
+
+html[data-theme="light"] .workflow-pill {
+    background: rgba(255, 255, 255, 0.82);
+    color: #3f5144;
+}
+
+html[data-theme="light"] .workflow-pill-on_time,
+html[data-theme="light"] .workflow-status-pill.status-completed,
+html[data-theme="light"] .workflow-status-pill.status-accepted,
+html[data-theme="light"] .workflow-viewer-preview-pill {
+    color: #276845;
+    border-color: rgba(39, 104, 69, 0.18);
+    background: rgba(67, 228, 147, 0.16);
+}
+
+html[data-theme="light"] .workflow-pill-due,
+html[data-theme="light"] .workflow-status-pill.status-pending {
+    color: #7b5610;
+    border-color: rgba(201, 151, 41, 0.22);
+    background: rgba(255, 196, 95, 0.18);
+}
+
+html[data-theme="light"] .workflow-pill-late,
+html[data-theme="light"] .workflow-pill-unfinished,
+html[data-theme="light"] .workflow-status-pill.status-rejected,
+html[data-theme="light"] .workflow-status-pill.status-cancelled {
+    color: #8a3434;
+    border-color: rgba(173, 73, 73, 0.18);
+    background: rgba(255, 120, 120, 0.14);
+}
+
+html[data-theme="light"] .workflow-status-pill.status-archived {
+    color: #56636d;
+    border-color: rgba(99, 111, 121, 0.18);
+    background: rgba(164, 178, 191, 0.14);
+}
+
+.workflow-library-page .btn-primary,
+.workflow-library-page .workflow-case-open-btn {
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(67, 228, 147, 0.28);
+    background: linear-gradient(135deg, rgba(67, 228, 147, 0.96), rgba(25, 186, 115, 0.92));
+    color: #062517 !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        0 10px 22px rgba(5, 17, 12, 0.24);
+}
+
+.workflow-library-page a.btn-primary,
+.workflow-library-page a.btn-primary:visited,
+.workflow-library-page .workflow-card a.btn-primary,
+.workflow-library-page .workflow-card a.btn-primary:visited,
+.workflow-library-page a.workflow-case-open-btn,
+.workflow-library-page a.workflow-case-open-btn:visited,
+.workflow-library-page .workflow-card a.workflow-case-open-btn,
+.workflow-library-page .workflow-card a.workflow-case-open-btn:visited {
+    color: #062517 !important;
+    text-decoration: none;
+}
+
+.workflow-library-page .btn-primary:hover,
+.workflow-library-page .workflow-case-open-btn:hover {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 14px 28px rgba(5, 17, 12, 0.30),
+        0 0 18px rgba(67, 228, 147, 0.18);
+}
+
+.workflow-library-page .btn-primary:active,
+.workflow-library-page .workflow-case-open-btn:active {
+    transform: translateY(0) scale(0.985);
+}
+
+html[data-theme="dark"] .workflow-library-page .workflow-card,
+html[data-theme="dark"] .workflow-library-page .workflow-viewer-card,
+html[data-theme="dark"] .workflow-library-page .workflow-meta-row {
+    background: linear-gradient(180deg, rgba(25, 35, 29, 0.94), rgba(18, 26, 22, 0.98));
+    border-color: rgba(136, 170, 149, 0.14);
+}
+
+html[data-theme="dark"] .workflow-library-page .workflow-pill,
+html[data-theme="dark"] .workflow-library-page .workflow-status-pill,
+html[data-theme="dark"] .workflow-library-page .workflow-viewer-preview-pill {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="dark"] .workflow-library-page .workflow-card-meta,
+html[data-theme="dark"] .workflow-library-page .workflow-inline-note {
+    color: #9aaea2;
+}
+
+html[data-theme="dark"] .workflow-library-page .workflow-viewer-preview-pill,
+html[data-theme="dark"] .workflow-library-page .workflow-pill-on_time,
+html[data-theme="dark"] .workflow-library-page .workflow-status-pill.status-completed,
+html[data-theme="dark"] .workflow-library-page .workflow-status-pill.status-accepted {
+    color: #c9f7dc;
+    border-color: rgba(67, 228, 147, 0.20);
+    background: rgba(67, 228, 147, 0.12);
+}
+
+html[data-theme="dark"] .workflow-library-page .workflow-action-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(136, 170, 149, 0.18);
+    color: #d9e8de;
+}
+
+html[data-theme="light"] .workflow-library-page .btn-primary,
+html[data-theme="light"] .workflow-library-page .workflow-case-open-btn {
+    border-color: rgba(201, 151, 41, 0.22);
+    background: linear-gradient(135deg, #1ea764, #ffd14f);
+    color: #13281d !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.44),
+        0 12px 24px rgba(97, 108, 91, 0.14);
+}
+
+html[data-theme="light"] .workflow-library-page a.btn-primary,
+html[data-theme="light"] .workflow-library-page a.btn-primary:visited,
+html[data-theme="light"] .workflow-library-page .workflow-card a.btn-primary,
+html[data-theme="light"] .workflow-library-page .workflow-card a.btn-primary:visited,
+html[data-theme="light"] .workflow-library-page a.workflow-case-open-btn,
+html[data-theme="light"] .workflow-library-page a.workflow-case-open-btn:visited,
+html[data-theme="light"] .workflow-library-page .workflow-card a.workflow-case-open-btn,
+html[data-theme="light"] .workflow-library-page .workflow-card a.workflow-case-open-btn:visited {
+    color: #13281d !important;
+}
+
 @media (max-width: 1080px) {
     .workflow-detail-grid {
         grid-template-columns: 1fr;
@@ -1121,13 +1400,6 @@ html[data-theme="light"] .workflow-tab-link.is-active {
 
     .workflow-toolbar-field {
         min-width: 100%;
-    }
-
-    .workflow-card-actions > *,
-    .workflow-inline-actions > * {
-        width: auto;
-        max-width: 100%;
-        flex: 0 0 auto;
     }
 
     .workflow-topbar-link {

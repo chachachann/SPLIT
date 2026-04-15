@@ -211,8 +211,8 @@
     </div>
 
     <script id="workflow-edit-schema" type="application/json">{{ schema|tojson }}</script>
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
-    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ asset_url('app.js') }}"></script>
+    <script src="{{ asset_url('chat.js') }}"></script>
     <script src="{{ url_for('static', filename='forms.js') }}"></script>
 </body>
 </html>

@@ -637,21 +637,6 @@ def init_db():
             (DEFAULT_MARQUEE_STYLE, timestamp_now()),
         )
 
-    cursor.execute("SELECT COUNT(*) AS total FROM marquee_items")
-    if cursor.fetchone()["total"] == 0:
-        default_marquee_items = [
-            ("Dedicated website of DAR-NIR for Project SPLIT automation.", 1),
-            ("Use your assigned credentials to access the system.", 2),
-            ("Contact the administrator if you need account assistance.", 3),
-        ]
-        cursor.executemany(
-            """
-            INSERT INTO marquee_items (message, sort_order, created_at)
-            VALUES (?, ?, ?)
-            """,
-            [(message, sort_order, timestamp_now()) for message, sort_order in default_marquee_items],
-        )
-
     cursor.execute(
         """
         UPDATE news_posts

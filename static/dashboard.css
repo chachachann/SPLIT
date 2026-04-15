@@ -181,6 +181,10 @@
     justify-content: center;
 }
 
+.notification-badge[hidden] {
+    display: none !important;
+}
+
 .notification-dropdown {
     position: absolute;
     top: calc(100% + 10px);

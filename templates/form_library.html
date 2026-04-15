@@ -23,13 +23,13 @@
     </script>
 
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('app.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('dashboard.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('account_manager.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('chat.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('forms.css') }}">
 </head>
-<body>
+<body class="workflow-library-page">
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
     {% set counts = namespace(total=cases|length, unfinished=0, late=0, promoted=0) %}
@@ -208,7 +208,7 @@
                                             {% endif %}
 
                                             <div class="workflow-card-actions">
-                                                <a class="btn-primary" href="{{ url_for('form_case_detail', case_tracking_number=item.tracking_number) }}">Open Case</a>
+                                                <a class="btn-primary workflow-case-open-btn" href="{{ url_for('form_case_detail', case_tracking_number=item.tracking_number) }}">Open Case</a>
                                                 {% if item.can_archive_case %}
                                                     <form method="POST" action="{{ url_for('form_submission_archive', submission_id=item.primary_submission_id) }}">
                                                         <button type="submit" class="workflow-action-btn" onclick="return confirm('Archive this case?');">Archive Case</button>
@@ -238,7 +238,7 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
-    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ asset_url('app.js') }}"></script>
+    <script src="{{ asset_url('chat.js') }}"></script>
 </body>
 </html>

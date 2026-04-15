@@ -23,11 +23,11 @@
     </script>
 
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='account_manager.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('app.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('dashboard.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('account_manager.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('chat.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('forms.css') }}">
 </head>
 <body>
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
@@ -246,7 +246,7 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
-    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ asset_url('app.js') }}"></script>
+    <script src="{{ asset_url('chat.js') }}"></script>
 </body>
 </html>

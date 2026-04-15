@@ -39,72 +39,7 @@
                 {% if is_authenticated %}
                     {% include '_chat_widget.html' %}
                     {% include '_workflow_topbar_links.html' %}
-
-                    <details class="notification-menu">
-                        <summary class="notification-trigger" aria-label="Open notifications">
-                            <span class="notification-bell" aria-hidden="true">&#128276;</span>
-                            {% if unread_notifications %}
-                                <span class="notification-badge">{{ unread_notifications }}</span>
-                            {% endif %}
-                        </summary>
-
-                        <div class="notification-dropdown">
-                            <div class="notification-dropdown-header">
-                                <strong>Notifications</strong>
-                                <span>{{ unread_notifications }} unread</span>
-                            </div>
-
-                            <div class="notification-dropdown-list">
-                                {% if topbar_notifications %}
-                                    {% for notification in topbar_notifications %}
-                                        <article
-                                            class="notification-dropdown-item notification-dropdown-item-{{ notification.style_key }}{% if not notification.is_read %} is-unread{% endif %}"
-                                            data-notification-card
-                                            data-notification-read="{{ 'false' if not notification.is_read else 'true' }}"
-                                            data-notification-expanded="false"
-                                        >
-                                            <div class="notification-dropdown-meta">{{ notification.sender_name }} &#8226; {{ notification.created_at }}</div>
-                                            <strong>{{ notification.title }}</strong>
-                                            <p class="notification-dropdown-preview">{{ notification.message_preview }}</p>
-
-                                            <form method="POST" action="{{ url_for('notification_action') }}" hidden data-mark-read-form>
-                                                <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                <input type="hidden" name="action" value="mark-read">
-                                            </form>
-
-                                            <div class="notification-dropdown-details">
-                                                <div class="notification-message-body">{{ notification.message_html|safe }}</div>
-                                                {% if notification.link_url %}
-                                                    <a class="notification-link" href="{{ notification.link_url }}" target="_blank" rel="noopener noreferrer">Open Link</a>
-                                                {% endif %}
-                                            </div>
-
-                                            <div class="notification-dropdown-actions">
-                                                <form method="POST" action="{{ url_for('notification_action') }}">
-                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                    {% if notification.is_read %}
-                                                        <input type="hidden" name="action" value="mark-unread" data-action-input>
-                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Unread</button>
-                                                    {% else %}
-                                                        <input type="hidden" name="action" value="mark-read" data-action-input>
-                                                        <button type="submit" class="notification-action-btn" data-action-button>Mark Read</button>
-                                                    {% endif %}
-                                                </form>
-
-                                                <form method="POST" action="{{ url_for('notification_action') }}">
-                                                    <input type="hidden" name="notification_key" value="{{ notification.notification_key }}">
-                                                    <input type="hidden" name="action" value="hide">
-                                                    <button type="submit" class="notification-action-btn notification-action-btn-hide">Hide</button>
-                                                </form>
-                                            </div>
-                                        </article>
-                                    {% endfor %}
-                                {% else %}
-                                    <div class="notification-empty">No active notifications.</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </details>
+                    {% include '_topbar_notification_menu.html' %}
                 {% endif %}
 
                 <div class="theme-switcher" aria-label="Theme settings">
@@ -155,56 +90,11 @@
         </article>
     </main>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ asset_url('app.js') }}"></script>
     {% if is_authenticated %}
-        <script src="{{ url_for('static', filename='chat.js') }}"></script>
+        <script src="{{ asset_url('chat.js') }}"></script>
         <script>
             (function () {
-                function syncNotificationVisualState(card, isRead) {
-                    card.setAttribute("data-notification-read", isRead ? "true" : "false");
-                    card.classList.toggle("is-unread", !isRead);
-
-                    var actionInput = card.querySelector("[data-action-input]");
-                    var actionButton = card.querySelector("[data-action-button]");
-                    if (actionInput) {
-                        actionInput.value = isRead ? "mark-unread" : "mark-read";
-                    }
-                    if (actionButton) {
-                        actionButton.textContent = isRead ? "Mark Unread" : "Mark Read";
-                    }
-                }
-
-                Array.prototype.slice.call(document.querySelectorAll("[data-notification-card]")).forEach(function (card) {
-                    card.addEventListener("click", function (event) {
-                        if (event.target.closest("button, a, form, summary")) {
-                            return;
-                        }
-
-                        var isExpanded = card.getAttribute("data-notification-expanded") === "true";
-                        card.setAttribute("data-notification-expanded", isExpanded ? "false" : "true");
-                        card.classList.toggle("is-expanded", !isExpanded);
-
-                        if (card.getAttribute("data-notification-read") === "true" || card.getAttribute("data-notification-pending") === "true") {
-                            return;
-                        }
-
-                        var markReadForm = card.querySelector("[data-mark-read-form]");
-                        if (markReadForm) {
-                            card.setAttribute("data-notification-pending", "true");
-                            syncNotificationVisualState(card, true);
-                            var formData = new FormData(markReadForm);
-                            fetch(markReadForm.action, {
-                                method: "POST",
-                                body: formData,
-                                headers: { "X-Requested-With": "XMLHttpRequest" }
-                            }).catch(function () {
-                                syncNotificationVisualState(card, false);
-                            }).finally(function () {
-                                card.removeAttribute("data-notification-pending");
-                            });
-                        }
-                    });
-                });
             })();
         </script>
     {% endif %}

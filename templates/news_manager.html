@@ -603,58 +603,14 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
-    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ asset_url('app.js') }}"></script>
+    <script src="{{ asset_url('chat.js') }}"></script>
     <script>
         (function () {
             var cards = Array.prototype.slice.call(document.querySelectorAll("[data-post-card]"));
             var imageInput = document.getElementById("news-image-input");
             var imageTrigger = document.querySelector("[data-image-trigger]");
             var imageSelected = document.querySelector("[data-image-selected]");
-            function syncNotificationVisualState(card, isRead) {
-                card.setAttribute("data-notification-read", isRead ? "true" : "false");
-                card.classList.toggle("is-unread", !isRead);
-
-                var actionInput = card.querySelector("[data-action-input]");
-                var actionButton = card.querySelector("[data-action-button]");
-                if (actionInput) {
-                    actionInput.value = isRead ? "mark-unread" : "mark-read";
-                }
-                if (actionButton) {
-                    actionButton.textContent = isRead ? "Mark Unread" : "Mark Read";
-                }
-            }
-            Array.prototype.slice.call(document.querySelectorAll("[data-notification-card]")).forEach(function (card) {
-                card.addEventListener("click", function (event) {
-                    if (event.target.closest("button, a, form, summary")) {
-                        return;
-                    }
-
-                    var isExpanded = card.getAttribute("data-notification-expanded") === "true";
-                    card.setAttribute("data-notification-expanded", isExpanded ? "false" : "true");
-                    card.classList.toggle("is-expanded", !isExpanded);
-
-                    if (card.getAttribute("data-notification-read") === "true" || card.getAttribute("data-notification-pending") === "true") {
-                        return;
-                    }
-
-                    var markReadForm = card.querySelector("[data-mark-read-form]");
-                    if (markReadForm) {
-                        card.setAttribute("data-notification-pending", "true");
-                        syncNotificationVisualState(card, true);
-                        var formData = new FormData(markReadForm);
-                        fetch(markReadForm.action, {
-                            method: "POST",
-                            body: formData,
-                            headers: { "X-Requested-With": "XMLHttpRequest" }
-                        }).catch(function () {
-                            syncNotificationVisualState(card, false);
-                        }).finally(function () {
-                            card.removeAttribute("data-notification-pending");
-                        });
-                    }
-                });
-            });
 
             if (imageInput && imageTrigger) {
                 imageTrigger.addEventListener("click", function () {

@@ -14,7 +14,7 @@ from split_app.routes.chat import (
     chat_send,
     chat_thread,
 )
-from split_app.routes.dashboard import dashboard, notification_action
+from split_app.routes.dashboard import dashboard, notification_action, notification_open
 from split_app.routes.news import news_manager, news_post
 from split_app.routes.profiles import profile, profile_theme_sync, review_profile_password_request, user_profile_view
 from split_app.routes.settings import settings
@@ -25,6 +25,7 @@ from split_app.routes.workflow import (
     form_home,
     form_library,
     form_preview,
+    form_start,
     form_submission_cancel,
     form_submission_comment,
     form_submission_archive,
@@ -61,6 +62,7 @@ app.add_url_rule("/", endpoint="login", view_func=login, methods=["GET", "POST"]
 app.add_url_rule("/logout", endpoint="logout", view_func=logout, methods=["GET"])
 app.add_url_rule("/dashboard", endpoint="dashboard", view_func=login_required(dashboard), methods=["GET"])
 app.add_url_rule("/notifications/action", endpoint="notification_action", view_func=login_required(notification_action), methods=["POST"])
+app.add_url_rule("/notifications/open", endpoint="notification_open", view_func=login_required(notification_open), methods=["GET"])
 app.add_url_rule("/chat/bootstrap", endpoint="chat_bootstrap", view_func=login_required(chat_bootstrap), methods=["GET"])
 app.add_url_rule("/chat/thread", endpoint="chat_thread", view_func=login_required(chat_thread), methods=["GET"])
 app.add_url_rule("/chat/send", endpoint="chat_send", view_func=login_required(chat_send), methods=["POST"])
@@ -82,6 +84,7 @@ app.add_url_rule("/users/<username>", endpoint="user_profile_view", view_func=lo
 app.add_url_rule("/profile/password-requests/<int:request_id>/review", endpoint="review_profile_password_request", view_func=login_required(review_profile_password_request), methods=["POST"])
 app.add_url_rule("/forms/my-requests", endpoint="my_requests", view_func=login_required(my_requests), methods=["GET"])
 app.add_url_rule("/forms/review-queue", endpoint="review_queue", view_func=login_required(review_queue), methods=["GET"])
+app.add_url_rule("/forms/<form_key>/start", endpoint="form_start", view_func=login_required(form_start), methods=["GET"])
 app.add_url_rule("/forms/<form_key>", endpoint="form_home", view_func=login_required(form_home), methods=["GET", "POST"])
 app.add_url_rule("/forms/submissions/<int:submission_id>/edit", endpoint="form_edit_submission", view_func=login_required(form_edit_submission), methods=["GET", "POST"])
 app.add_url_rule("/forms/submissions/<int:submission_id>/autosave", endpoint="form_autosave_submission", view_func=login_required(form_autosave_submission), methods=["POST"])

@@ -156,13 +156,39 @@ def get_combined_workflow_counts(current_roles=None):
     }
 
 
+def discard_flash_message(message_text):
+    flashes = session.get("_flashes") or []
+    if not flashes:
+        return
+    filtered = [item for item in flashes if len(item) < 2 or item[1] != message_text]
+    if filtered:
+        session["_flashes"] = filtered
+    else:
+        session.pop("_flashes", None)
+    session.modified = True
+
+
 def inject_shell_context():
+    def asset_url(filename):
+        clean_filename = (filename or "").strip().replace("/", os.sep)
+        version = ""
+        if clean_filename:
+            try:
+                asset_path = os.path.join(current_app.static_folder, clean_filename)
+                version = str(int(os.path.getmtime(asset_path)))
+            except (OSError, TypeError, ValueError):
+                version = ""
+        if version:
+            return url_for("static", filename=filename, v=version)
+        return url_for("static", filename=filename)
+
     return {
         "current_theme": session.get("theme_preference", "dark"),
         "current_avatar_url": session.get("avatar_url", ""),
         "current_avatar_initials": session.get("avatar_initials", ""),
         "current_display_name": session.get("fullname", ""),
         "current_username": session.get("user", ""),
+        "asset_url": asset_url,
     }
 
 

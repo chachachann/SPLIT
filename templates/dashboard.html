@@ -23,10 +23,10 @@
     </script>
 
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/SPLIT_Logo.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('app.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('dashboard.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('chat.css') }}">
+    <link rel="stylesheet" href="{{ asset_url('forms.css') }}">
 </head>
 <body>
     <div id="backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
@@ -134,8 +134,6 @@
                             {% for item in marquee['items'] %}
                                 <span class="marquee">{{ item.message }}</span>
                             {% endfor %}
-                        {% else %}
-                            <span class="marquee">No marquee items have been configured yet.</span>
                         {% endif %}
                     </div>
                 </div>
@@ -208,7 +206,7 @@
                                 {% for form in workflow_forms %}
                                     <a
                                         class="quick-card quick-card-form quick-card-tone-{{ form.quick_card_style.tone or 'mint' }}"
-                                        href="{{ url_for('form_home', form_key=form.form_key) }}"
+                                        href="{{ url_for('form_start', form_key=form.form_key) }}"
                                         style="--quick-accent: {{ form.quick_card_style.accent or '#43e493' }}"
                                     >
                                         <span class="quick-icon quick-icon-form">
@@ -236,8 +234,8 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
-    <script src="{{ url_for('static', filename='chat.js') }}"></script>
+    <script src="{{ asset_url('app.js') }}"></script>
+    <script src="{{ asset_url('chat.js') }}"></script>
     <script src="{{ url_for('static', filename='forms.js') }}"></script>
     <script>
         function syncDashboardLayout() {
@@ -284,52 +282,6 @@
         window.addEventListener("DOMContentLoaded", function () {
             setPanelState("news-panel", true);
             syncDashboardLayout();
-
-            function syncNotificationVisualState(card, isRead) {
-                card.setAttribute("data-notification-read", isRead ? "true" : "false");
-                card.classList.toggle("is-unread", !isRead);
-
-                var actionInput = card.querySelector("[data-action-input]");
-                var actionButton = card.querySelector("[data-action-button]");
-                if (actionInput) {
-                    actionInput.value = isRead ? "mark-unread" : "mark-read";
-                }
-                if (actionButton) {
-                    actionButton.textContent = isRead ? "Mark Unread" : "Mark Read";
-                }
-            }
-
-            Array.prototype.slice.call(document.querySelectorAll("[data-notification-card]")).forEach(function (card) {
-                card.addEventListener("click", function (event) {
-                    if (event.target.closest("button, a, form, summary")) {
-                        return;
-                    }
-
-                    var isExpanded = card.getAttribute("data-notification-expanded") === "true";
-                    card.setAttribute("data-notification-expanded", isExpanded ? "false" : "true");
-                    card.classList.toggle("is-expanded", !isExpanded);
-
-                    if (card.getAttribute("data-notification-read") === "true" || card.getAttribute("data-notification-pending") === "true") {
-                        return;
-                    }
-
-                    var markReadForm = card.querySelector("[data-mark-read-form]");
-                    if (markReadForm) {
-                        card.setAttribute("data-notification-pending", "true");
-                        syncNotificationVisualState(card, true);
-                        var formData = new FormData(markReadForm);
-                        fetch(markReadForm.action, {
-                            method: "POST",
-                            body: formData,
-                            headers: { "X-Requested-With": "XMLHttpRequest" }
-                        }).catch(function () {
-                            syncNotificationVisualState(card, false);
-                        }).finally(function () {
-                            card.removeAttribute("data-notification-pending");
-                        });
-                    }
-                });
-            });
         });
     </script>
 </body>

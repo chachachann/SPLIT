@@ -60,6 +60,49 @@ def _form_requires_review(form):
     return bool(form and form.get("requires_review") and (form.get("review_stages") or []))
 
 
+def _reviewer_is_actionable(connection, reviewer):
+    if not isinstance(reviewer, dict):
+        return False
+    reviewer_type = str(reviewer.get("type") or "").strip().lower()
+    reviewer_value = str(reviewer.get("value") or "").strip()
+    if not reviewer_type or not reviewer_value:
+        return False
+    if reviewer_type == "user":
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT 1 FROM users WHERE lower(username) = lower(?) LIMIT 1",
+            (reviewer_value,),
+        )
+        return bool(cursor.fetchone())
+    if reviewer_type == "role":
+        return bool(_role_members(connection, reviewer_value))
+    return False
+
+
+def _effective_review_stages(connection, form):
+    if not form or not form.get("requires_review"):
+        return []
+    stages = []
+    for raw_stage in form.get("review_stages") or []:
+        if not isinstance(raw_stage, dict):
+            continue
+        reviewers = [
+            reviewer
+            for reviewer in (raw_stage.get("reviewers") or [])
+            if _reviewer_is_actionable(connection, reviewer)
+        ]
+        if not reviewers:
+            continue
+        stages.append(
+            {
+                "name": raw_stage.get("name") or f"Stage {len(stages) + 1}",
+                "mode": raw_stage.get("mode") or "sequential",
+                "reviewers": reviewers,
+            }
+        )
+    return stages
+
+
 def _compute_deadline_at(form, submitted_at):
     deadline_days = form.get("deadline_days")
     if deadline_days in (None, ""):
@@ -1689,8 +1732,8 @@ def submit_submission(submission_id, username, role_names, form_data, form_files
         connection.close()
         return False, " ".join(errors[:3]), None
 
-    stages = form.get("review_stages") or []
-    requires_review = _form_requires_review(form)
+    stages = _effective_review_stages(connection, form)
+    requires_review = bool(stages)
     tracking_number = submission.get("tracking_number") or _allocate_tracking_number(connection, form["tracking_prefix"])
     submitted_at = submission.get("submitted_at") or timestamp_now()
     deadline_at = _compute_deadline_at(form, submitted_at)
@@ -3157,7 +3200,7 @@ def review_submission_action(submission_id, task_id, username, fullname, role_na
             (submission_id, username, (fullname or "").strip() or username, note, acted_at),
         )
 
-    stages = form.get("review_stages") or []
+    stages = _effective_review_stages(connection, form)
     stage_index = int(task["stage_index"])
     stage = stages[stage_index] if 0 <= stage_index < len(stages) else {"mode": "parallel", "reviewers": []}
 

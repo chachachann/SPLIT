@@ -12,6 +12,7 @@ from split_app.workflow.common import (
     FORM_STATUSES,
     STAGE_MODES,
     ensure_form_workflow_folders,
+    get_workflow_queue_last_viewed_at,
     _audit,
     _field_key,
     _json_dumps,
@@ -831,53 +832,108 @@ def get_workflow_topbar_counts(username, role_names):
     if not username:
         return {"my_requests": 0, "review_queue": 0}
     normalized_roles = {role.casefold() for role in (role_names or [])}
+    last_my_requests_viewed_at = get_workflow_queue_last_viewed_at(username, "my_requests")
+    last_review_queue_viewed_at = get_workflow_queue_last_viewed_at(username, "review_queue")
     connection = connect_db()
     cursor = connection.cursor()
-    cursor.execute(
-        """
-        SELECT COUNT(*) AS total
-        FROM form_submissions
-        WHERE (owner_username = ? OR requester_username = ?)
-          AND status != 'archived'
-        """,
-        (username, username),
-    )
-    my_requests = cursor.fetchone()["total"]
-    if normalized_roles:
-        role_placeholders = ", ".join("?" for _ in normalized_roles)
+    if last_my_requests_viewed_at:
         cursor.execute(
-            f"""
+            """
             SELECT COUNT(*) AS total
-            FROM form_review_tasks
-            WHERE is_active = 1
-              AND task_status = 'pending'
-              AND (
-                    (reviewer_type = 'user' AND lower(reviewer_value) = lower(?))
-                    OR (reviewer_type = 'role' AND lower(reviewer_value) IN ({role_placeholders}))
-              )
+            FROM form_submissions
+            WHERE (owner_username = ? OR requester_username = ?)
+              AND status != 'archived'
+              AND datetime(updated_at) > datetime(?)
             """,
-            (username, *normalized_roles),
+            (username, username, last_my_requests_viewed_at),
         )
     else:
         cursor.execute(
             """
             SELECT COUNT(*) AS total
-            FROM form_review_tasks
-            WHERE is_active = 1
-              AND task_status = 'pending'
-              AND reviewer_type = 'user'
-              AND lower(reviewer_value) = lower(?)
+            FROM form_submissions
+            WHERE (owner_username = ? OR requester_username = ?)
+              AND status != 'archived'
             """,
-            (username,),
+            (username, username),
         )
+    my_requests = cursor.fetchone()["total"]
+    if normalized_roles:
+        role_placeholders = ", ".join("?" for _ in normalized_roles)
+        if last_review_queue_viewed_at:
+            cursor.execute(
+                f"""
+                SELECT COUNT(*) AS total
+                FROM form_review_tasks
+                WHERE is_active = 1
+                  AND task_status = 'pending'
+                  AND datetime(COALESCE(updated_at, created_at)) > datetime(?)
+                  AND (
+                        (reviewer_type = 'user' AND lower(reviewer_value) = lower(?))
+                        OR (reviewer_type = 'role' AND lower(reviewer_value) IN ({role_placeholders}))
+                  )
+                """,
+                (last_review_queue_viewed_at, username, *normalized_roles),
+            )
+        else:
+            cursor.execute(
+                f"""
+                SELECT COUNT(*) AS total
+                FROM form_review_tasks
+                WHERE is_active = 1
+                  AND task_status = 'pending'
+                  AND (
+                        (reviewer_type = 'user' AND lower(reviewer_value) = lower(?))
+                        OR (reviewer_type = 'role' AND lower(reviewer_value) IN ({role_placeholders}))
+                  )
+                """,
+                (username, *normalized_roles),
+            )
+    else:
+        if last_review_queue_viewed_at:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM form_review_tasks
+                WHERE is_active = 1
+                  AND task_status = 'pending'
+                  AND datetime(COALESCE(updated_at, created_at)) > datetime(?)
+                  AND reviewer_type = 'user'
+                  AND lower(reviewer_value) = lower(?)
+                """,
+                (last_review_queue_viewed_at, username),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM form_review_tasks
+                WHERE is_active = 1
+                  AND task_status = 'pending'
+                  AND reviewer_type = 'user'
+                  AND lower(reviewer_value) = lower(?)
+                """,
+                (username,),
+            )
     review_queue = cursor.fetchone()["total"]
-    cursor.execute(
-        """
-        SELECT assignment_review_type, assignment_review_value
-        FROM form_submissions
-        WHERE status = 'pending_assignment'
-        """
-    )
+    if last_review_queue_viewed_at:
+        cursor.execute(
+            """
+            SELECT assignment_review_type, assignment_review_value
+            FROM form_submissions
+            WHERE status = 'pending_assignment'
+              AND datetime(updated_at) > datetime(?)
+            """,
+            (last_review_queue_viewed_at,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT assignment_review_type, assignment_review_value
+            FROM form_submissions
+            WHERE status = 'pending_assignment'
+            """
+        )
     assignment_queue = 0
     for row in cursor.fetchall():
         reviewer_type = str(row["assignment_review_type"] or "").strip().lower()

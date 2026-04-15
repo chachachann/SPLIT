@@ -1,4 +1,16 @@
 (function () {
+    var FIELD_TYPE_LABELS = {
+        short_text: "Short Text",
+        long_text: "Long Text",
+        number: "Number",
+        date: "Date",
+        calendar: "Date Picker",
+        dropdown: "Dropdown",
+        checkbox: "Checkbox",
+        image_upload: "Image Upload",
+        file_upload: "File Upload"
+    };
+
     function parseJsonScript(id) {
         var node = document.getElementById(id);
         if (!node) {
@@ -27,17 +39,20 @@
         return field.default_value || "";
     }
 
-    function buildPreviewFieldMarkup(field, value) {
+    function buildPreviewFieldMarkup(field, value, options) {
+        options = options || {};
         var safeId = "builder_preview__" + (field.key || "field");
         var label = escapeHtml(field.label || field.key || "Field");
         var helpText = field.help_text ? '<div class="workflow-field-help">' + escapeHtml(field.help_text) + "</div>" : "";
         var required = field.required ? '<span class="workflow-field-required">*</span>' : "";
+        var disabled = options.disabled ? " disabled" : "";
+        var previewBinding = options.disabled ? "" : ' data-builder-preview-input="' + escapeHtml(field.key) + '"';
         if (field.type === "long_text") {
             return [
                 '<div class="workflow-field-block">',
                 '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
                 helpText,
-                '<textarea id="' + safeId + '" class="workflow-textarea" data-builder-preview-input="' + escapeHtml(field.key) + '"',
+                '<textarea id="' + safeId + '" class="workflow-textarea"' + previewBinding + disabled,
                 field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "",
                 ">" + escapeHtml(value) + "</textarea>",
                 "</div>"
@@ -48,7 +63,7 @@
                 '<div class="workflow-field-block">',
                 '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
                 helpText,
-                '<input id="' + safeId + '" type="number" data-builder-preview-input="' + escapeHtml(field.key) + '" value="' + escapeHtml(value) + '"',
+                '<input id="' + safeId + '" type="number"' + previewBinding + ' value="' + escapeHtml(value) + '"' + disabled,
                 field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "",
                 ">",
                 "</div>"
@@ -60,8 +75,8 @@
                 '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
                 helpText,
                 '<div class="workflow-date-input">',
-                '<input id="' + safeId + '" type="date" data-builder-preview-input="' + escapeHtml(field.key) + '" value="' + escapeHtml(value) + '">',
-                '<button type="button" class="workflow-muted-btn workflow-calendar-trigger" disabled>Calendar</button>',
+                '<input id="' + safeId + '" type="date"' + previewBinding + ' value="' + escapeHtml(value) + '"' + disabled + '>',
+                '<button type="button" class="workflow-muted-btn workflow-calendar-trigger"' + disabled + '>Calendar</button>',
                 "</div>",
                 "</div>"
             ].join("");
@@ -71,7 +86,7 @@
                 '<div class="workflow-field-block">',
                 '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
                 helpText,
-                '<select id="' + safeId + '" class="workflow-select" data-builder-preview-input="' + escapeHtml(field.key) + '">',
+                '<select id="' + safeId + '" class="workflow-select"' + previewBinding + disabled + '>',
                 '<option value="">' + escapeHtml(field.placeholder || "Select an option") + "</option>",
                 (field.options || []).map(function (option) {
                     var selected = String(option) === String(value) ? ' selected' : "";
@@ -87,7 +102,7 @@
                 '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
                 helpText,
                 '<label class="role-option-pill workflow-checkbox-row" for="' + safeId + '">',
-                '<input id="' + safeId + '" type="checkbox" data-builder-preview-input="' + escapeHtml(field.key) + '"' + (value ? " checked" : "") + ">",
+                '<input id="' + safeId + '" type="checkbox"' + previewBinding + (value ? " checked" : "") + disabled + ">",
                 '<span class="role-option-name">Checked</span>',
                 "</label>",
                 "</div>"
@@ -98,7 +113,7 @@
                 '<div class="workflow-field-block">',
                 '<label class="workflow-field-label"><span>' + label + "</span>" + required + "</label>",
                 helpText,
-                '<input type="file" disabled>',
+                '<input type="file"' + disabled + '>',
                 '<div class="workflow-input-note">' + escapeHtml(field.type === "image_upload" ? "Image upload field preview." : "Document upload field preview.") + "</div>",
                 "</div>"
             ].join("");
@@ -107,20 +122,99 @@
             '<div class="workflow-field-block">',
             '<label class="workflow-field-label" for="' + safeId + '"><span>' + label + "</span>" + required + "</label>",
             helpText,
-            '<input id="' + safeId + '" type="text" data-builder-preview-input="' + escapeHtml(field.key) + '" value="' + escapeHtml(value) + '"',
+            '<input id="' + safeId + '" type="text"' + previewBinding + ' value="' + escapeHtml(value) + '"' + disabled,
             field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "",
             ">",
             "</div>"
         ].join("");
     }
 
-    function buildFieldRow(field) {
+    function fieldTypeLabel(type) {
+        return FIELD_TYPE_LABELS[type] || "Field";
+    }
+
+    function setFieldCardCollapsed(item, collapsed) {
+        var content = item.querySelector("[data-repeater-content]");
+        var surface = item.querySelector("[data-field-open]");
+        if (!content || !surface) {
+            return;
+        }
+        var isCollapsed = !!collapsed;
+        item.dataset.collapsed = isCollapsed ? "true" : "false";
+        content.hidden = isCollapsed;
+        surface.hidden = !isCollapsed;
+        surface.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+    }
+
+    function syncFieldCardPresentation(item) {
+        if (!item) {
+            return;
+        }
+        var labelInput = item.querySelector('[data-field-prop="label"]');
+        var keyInput = item.querySelector('[data-field-prop="key"]');
+        var typeSelect = item.querySelector('[data-field-prop="type"]');
+        var requiredInput = item.querySelector('[data-field-prop="required"]');
+        var privateInput = item.querySelector('[data-field-prop="is_private"]');
+        var openSurface = item.querySelector("[data-field-open]");
+        var removeButton = item.querySelector("[data-remove-item]");
+        var editorTitle = item.querySelector("[data-field-editor-title]");
+        var title = (labelInput && labelInput.value.trim()) || "Field";
+        var metaParts = [fieldTypeLabel(typeSelect ? typeSelect.value : "")];
+        if (keyInput && keyInput.value.trim()) {
+            metaParts.push(keyInput.value.trim());
+        }
+        if (requiredInput && requiredInput.checked) {
+            metaParts.push("Required");
+        }
+        if (privateInput && privateInput.checked) {
+            metaParts.push("Private");
+        }
+        if (openSurface) {
+            openSurface.setAttribute("aria-label", "Edit " + title);
+            openSurface.setAttribute("title", "Edit " + title + " (" + metaParts.join(" | ") + ")");
+        }
+        if (removeButton) {
+            removeButton.setAttribute("title", "Delete " + title);
+            removeButton.setAttribute("aria-label", "Delete " + title);
+        }
+        if (editorTitle) {
+            editorTitle.textContent = "Edit " + title;
+        }
+    }
+
+    function syncFieldDisplayPreview(item) {
+        if (!item) {
+            return;
+        }
+        var preview = item.querySelector("[data-field-display-preview]");
+        if (!preview) {
+            return;
+        }
+        var field = serializeFieldRow(item);
+        preview.innerHTML = buildPreviewFieldMarkup(field, previewDefaultValue(field), { disabled: true });
+    }
+
+    function buildFieldRow(field, options) {
+        options = options || {};
         var item = document.createElement("div");
-        item.className = "workflow-repeater-item";
+        item.className = "workflow-repeater-item workflow-field-item workflow-builder-field-card";
+        item.setAttribute("data-field-editor-item", "");
+        item.draggable = true;
+        item.dataset.keyMode = options.keyMode || (field.key ? "manual" : "auto");
         item.innerHTML = [
-            '<div class="workflow-repeater-head">',
-            '<div class="workflow-repeater-title">Field</div>',
-            '<button type="button" class="workflow-danger-btn" data-remove-item title="Remove this field from the form schema.">Remove</button>',
+            '<div class="workflow-builder-field-topbar">',
+            '<span class="workflow-builder-field-handle" data-drag-handle title="Drag to rearrange this field." aria-hidden="true">&#9776;</span>',
+            '<button type="button" class="workflow-danger-btn workflow-builder-field-delete" data-remove-item title="Delete this field.">X</button>',
+            "</div>",
+            '<div class="workflow-builder-field-display-surface" data-field-open role="button" tabindex="0" aria-expanded="false">',
+            '<div class="workflow-builder-field-preview" data-field-display-preview></div>',
+            "</div>",
+            '<div class="workflow-repeater-content workflow-builder-field-editor" data-repeater-content>',
+            '<div class="workflow-builder-field-editor-head">',
+            '<div class="workflow-panel-copy">',
+            '<h3 data-field-editor-title>Edit Field</h3>',
+            '<p>Update this field here, then save to collapse it back into the preview.</p>',
+            "</div>",
             "</div>",
             '<div class="field-grid">',
             '<label class="field"><span class="field-label">Label</span><input type="text" data-field-prop="label"></label>',
@@ -130,7 +224,7 @@
             '<option value="long_text">Long Text</option>',
             '<option value="number">Number</option>',
             '<option value="date">Date</option>',
-            '<option value="calendar">Calendar</option>',
+            '<option value="calendar">Date Picker</option>',
             '<option value="dropdown">Dropdown</option>',
             '<option value="checkbox">Checkbox</option>',
             '<option value="image_upload">Image Upload</option>',
@@ -146,6 +240,10 @@
             '<label class="field workflow-bool-field" title="Require this field before the form can be submitted."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="required"><span class="field-label">Required</span></span></label>',
             '<label class="field workflow-bool-field" title="Hide this field from read-only library viewers unless they are part of the active workflow, the requester, or an elevated admin user."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="is_private"><span class="field-label">Private Field</span></span></label>',
             '<label class="field workflow-bool-field" title="Hide this field after the submission is promoted to later workflow stages."><span class="workflow-checkbox-inline"><input type="checkbox" data-field-prop="hide_on_promotion"><span class="field-label">Hide After Promotion</span></span></label>',
+            "</div>",
+            '<div class="workflow-inline-actions">',
+            '<button type="button" class="workflow-action-btn" data-save-field>Save Field</button>',
+            "</div>",
             "</div>"
         ].join("");
 
@@ -162,6 +260,9 @@
         item.querySelector('[data-field-prop="required"]').checked = !!field.required;
         item.querySelector('[data-field-prop="is_private"]').checked = !!(field.is_private || field.private);
         item.querySelector('[data-field-prop="hide_on_promotion"]').checked = !!field.hide_on_promotion;
+        syncFieldCardPresentation(item);
+        syncFieldDisplayPreview(item);
+        setFieldCardCollapsed(item, !!options.collapsed);
         return item;
     }
 
@@ -345,7 +446,9 @@
         var schemaField = root.querySelector('[name="schema_json"]');
         var stagesField = root.querySelector('[name="review_stages_json"]');
         var promotionRulesField = root.querySelector('[name="promotion_rules_json"]');
-        var fieldList = root.querySelector("[data-field-list]");
+        var previewEmpty = root.querySelector("[data-builder-preview-empty]");
+        var previewForm = root.querySelector("[data-builder-preview-form]");
+        var fieldList = previewForm;
         var stageList = root.querySelector("[data-stage-list]");
         var promotionList = root.querySelector("[data-promotion-list]");
         var errorBox = root.querySelector("[data-builder-error]");
@@ -355,8 +458,6 @@
         var availableBuilderForms = parseJsonScript("available-builder-forms") || [];
         var previewCard = root.querySelector("[data-builder-preview-card]");
         var previewSummary = root.querySelector("[data-builder-preview-summary]");
-        var previewForm = root.querySelector("[data-builder-preview-form]");
-        var previewState = {};
 
         function selectedOptionLabel(selectName) {
             var select = root.querySelector('[name="' + selectName + '"]');
@@ -372,6 +473,56 @@
                 return String(form.id) === targetId;
             });
             return match ? match.title : "";
+        }
+
+        function currentFieldItems() {
+            return Array.prototype.slice.call(fieldList.querySelectorAll("[data-field-editor-item]"));
+        }
+
+        function slugifyFieldKey(value) {
+            var slug = String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+            return slug || "field";
+        }
+
+        function generateUniqueFieldKey(labelValue, currentItem) {
+            var baseKey = slugifyFieldKey(labelValue);
+            var candidate = baseKey;
+            var existingKeys = new Set(currentFieldItems().filter(function (item) {
+                return item !== currentItem;
+            }).map(function (item) {
+                var keyInput = item.querySelector('[data-field-prop="key"]');
+                return String((keyInput && keyInput.value) || "").trim().toLowerCase();
+            }).filter(Boolean));
+            var suffix = 2;
+            while (existingKeys.has(candidate.toLowerCase())) {
+                candidate = baseKey + "_" + String(suffix);
+                suffix += 1;
+            }
+            return candidate;
+        }
+
+        function syncAutoFieldKey(item) {
+            if (!item || item.dataset.keyMode !== "auto") {
+                return;
+            }
+            var labelInput = item.querySelector('[data-field-prop="label"]');
+            var keyInput = item.querySelector('[data-field-prop="key"]');
+            if (!labelInput || !keyInput) {
+                return;
+            }
+            keyInput.value = generateUniqueFieldKey(labelInput.value, item);
+        }
+
+        function expandFieldEditor(item) {
+            if (!item) {
+                return;
+            }
+            collapseOtherFieldCards(item);
+            setFieldCardCollapsed(item, false);
         }
 
         function collectPreviewMetadata(schema, stages, promotions) {
@@ -415,23 +566,6 @@
                 return;
             }
             var metadata = collectPreviewMetadata(schema, stages, promotions);
-            schema.forEach(function (field) {
-                if (!field.key) {
-                    return;
-                }
-                if (!(field.key in previewState)) {
-                    previewState[field.key] = previewDefaultValue(field);
-                }
-            });
-            Object.keys(previewState).forEach(function (key) {
-                if (!schema.some(function (field) { return field.key === key; })) {
-                    delete previewState[key];
-                }
-            });
-
-            var visibleFields = schema.filter(function (field) {
-                return evaluateGroup(field.conditional_logic, previewState);
-            });
 
             previewCard.style.setProperty("--quick-accent", metadata.cardAccent);
             previewCard.innerHTML = [
@@ -458,14 +592,6 @@
                 '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(String(metadata.promotionCount)) + '</strong><span>Promotions</span></div>',
                 '<div class="workflow-builder-preview-stat"><strong>' + escapeHtml(metadata.allowCancel ? "Yes" : "No") + '</strong><span>Cancel</span></div>'
             ].join("");
-
-            if (!visibleFields.length) {
-                previewForm.innerHTML = '<div class="workflow-empty">No visible fields are configured for this preview state yet.</div>';
-                return;
-            }
-            previewForm.innerHTML = visibleFields.map(function (field) {
-                return buildPreviewFieldMarkup(field, previewState[field.key]);
-            }).join("");
         }
 
         function bindColorControls() {
@@ -582,7 +708,12 @@
 
         function syncHiddenFields() {
             var errors = [];
-            var schema = Array.prototype.slice.call(fieldList.children).map(function (item) {
+            var fieldItems = Array.prototype.slice.call(fieldList.querySelectorAll("[data-field-editor-item]"));
+            fieldItems.forEach(function (item) {
+                syncFieldCardPresentation(item);
+                syncFieldDisplayPreview(item);
+            });
+            var schema = fieldItems.map(function (item) {
                 return serializeFieldRow(item, errors);
             });
             var stages = Array.prototype.slice.call(stageList.children).map(serializeStageRow);
@@ -604,11 +735,56 @@
                 }
             }
             root.dataset.builderValid = errors.length ? "false" : "true";
+            if (previewEmpty) {
+                previewEmpty.hidden = schema.length > 0;
+            }
             renderLivePreview(schema, stages, promotions);
         }
 
+        function collapseOtherFieldCards(activeItem) {
+            Array.prototype.slice.call(fieldList.querySelectorAll("[data-field-editor-item]")).forEach(function (item) {
+                if (item !== activeItem) {
+                    setFieldCardCollapsed(item, true);
+                }
+            });
+        }
+
+        function getDragAfterField(container, y, draggedItem) {
+            var draggableItems = Array.prototype.slice.call(container.querySelectorAll("[data-field-editor-item]")).filter(function (item) {
+                return item !== draggedItem;
+            });
+            var closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+            draggableItems.forEach(function (item) {
+                var box = item.getBoundingClientRect();
+                var offset = y - box.top - (box.height / 2);
+                if (offset < 0 && offset > closest.offset) {
+                    closest = { offset: offset, element: item };
+                }
+            });
+            return closest.element;
+        }
+
         function bindRepeater(container, nestedReviewer) {
+            var draggedFieldItem = null;
             container.addEventListener("click", function (event) {
+                if (container === fieldList) {
+                    var openFieldButton = event.target.closest("[data-field-open]");
+                    if (openFieldButton) {
+                        expandFieldEditor(openFieldButton.closest("[data-field-editor-item]"));
+                        return;
+                    }
+                    var saveFieldButton = event.target.closest("[data-save-field]");
+                    if (saveFieldButton) {
+                        var saveItem = saveFieldButton.closest("[data-field-editor-item]");
+                        syncHiddenFields();
+                        setFieldCardCollapsed(saveItem, true);
+                        var previewSurface = saveItem ? saveItem.querySelector("[data-field-open]") : null;
+                        if (previewSurface) {
+                            previewSurface.focus();
+                        }
+                        return;
+                    }
+                }
                 var removeButton = event.target.closest("[data-remove-item]");
                 if (removeButton) {
                     var item = removeButton.closest(".workflow-repeater-item");
@@ -627,16 +803,83 @@
                     syncHiddenFields();
                 }
             });
-            container.addEventListener("input", syncHiddenFields);
-            container.addEventListener("change", syncHiddenFields);
+            container.addEventListener("keydown", function (event) {
+                if (container !== fieldList) {
+                    return;
+                }
+                var openFieldButton = event.target.closest("[data-field-open]");
+                if (openFieldButton && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    expandFieldEditor(openFieldButton.closest("[data-field-editor-item]"));
+                }
+            });
+            container.addEventListener("input", function (event) {
+                if (container === fieldList) {
+                    var fieldItem = event.target.closest("[data-field-editor-item]");
+                    if (fieldItem && event.target.matches('[data-field-prop="label"]')) {
+                        syncAutoFieldKey(fieldItem);
+                    }
+                    if (fieldItem && event.target.matches('[data-field-prop="key"]')) {
+                        fieldItem.dataset.keyMode = "manual";
+                    }
+                }
+                syncHiddenFields();
+            });
+            container.addEventListener("change", function (event) {
+                if (container === fieldList) {
+                    var fieldItem = event.target.closest("[data-field-editor-item]");
+                    if (fieldItem && event.target.matches('[data-field-prop="type"]')) {
+                        syncFieldCardPresentation(fieldItem);
+                    }
+                }
+                syncHiddenFields();
+            });
+            if (container === fieldList) {
+                container.addEventListener("dragstart", function (event) {
+                    var item = event.target.closest("[data-field-editor-item]");
+                    if (!item || !event.target.closest("[data-drag-handle]")) {
+                        event.preventDefault();
+                        return;
+                    }
+                    draggedFieldItem = item;
+                    item.classList.add("is-dragging");
+                    if (event.dataTransfer) {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", item.querySelector('[data-field-prop="key"]').value || "field");
+                    }
+                });
+                container.addEventListener("dragover", function (event) {
+                    if (!draggedFieldItem) {
+                        return;
+                    }
+                    event.preventDefault();
+                    var nextItem = getDragAfterField(container, event.clientY, draggedFieldItem);
+                    if (!nextItem) {
+                        container.appendChild(draggedFieldItem);
+                    } else if (nextItem !== draggedFieldItem) {
+                        container.insertBefore(draggedFieldItem, nextItem);
+                    }
+                });
+                container.addEventListener("drop", function (event) {
+                    if (!draggedFieldItem) {
+                        return;
+                    }
+                    event.preventDefault();
+                });
+                container.addEventListener("dragend", function () {
+                    if (!draggedFieldItem) {
+                        return;
+                    }
+                    draggedFieldItem.classList.remove("is-dragging");
+                    draggedFieldItem = null;
+                    syncHiddenFields();
+                });
+            }
         }
 
         initialSchema.forEach(function (field) {
-            fieldList.appendChild(buildFieldRow(field));
+            fieldList.appendChild(buildFieldRow(field, { collapsed: true }));
         });
-        if (!fieldList.children.length) {
-            fieldList.appendChild(buildFieldRow({ type: "short_text" }));
-        }
 
         initialStages.forEach(function (stage) {
             stageList.appendChild(buildStageRow(stage));
@@ -658,32 +901,14 @@
         if (promotionList) {
             bindRepeater(promotionList, false);
         }
-        if (previewForm) {
-            previewForm.addEventListener("input", function (event) {
-                var key = event.target.getAttribute("data-builder-preview-input");
-                if (!key) {
-                    return;
-                }
-                previewState[key] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
-                syncHiddenFields();
-            });
-            previewForm.addEventListener("change", function (event) {
-                var key = event.target.getAttribute("data-builder-preview-input");
-                if (!key) {
-                    return;
-                }
-                previewState[key] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
-                syncHiddenFields();
-            });
-        }
         root.addEventListener("input", function (event) {
-            if (event.target.closest("[data-field-list]") || event.target.closest("[data-stage-list]") || event.target.closest("[data-promotion-list]")) {
+            if (event.target.closest("[data-builder-preview-form]") || event.target.closest("[data-stage-list]") || event.target.closest("[data-promotion-list]")) {
                 return;
             }
             syncHiddenFields();
         });
         root.addEventListener("change", function (event) {
-            if (event.target.closest("[data-field-list]") || event.target.closest("[data-stage-list]") || event.target.closest("[data-promotion-list]")) {
+            if (event.target.closest("[data-builder-preview-form]") || event.target.closest("[data-stage-list]") || event.target.closest("[data-promotion-list]")) {
                 return;
             }
             syncHiddenFields();
@@ -692,8 +917,14 @@
         var addFieldButton = root.querySelector("[data-add-field]");
         if (addFieldButton) {
             addFieldButton.addEventListener("click", function () {
-                fieldList.appendChild(buildFieldRow({ type: "short_text" }));
+                var item = buildFieldRow({ type: "short_text" }, { collapsed: false, keyMode: "auto" });
+                fieldList.appendChild(item);
                 syncHiddenFields();
+                expandFieldEditor(item);
+                var labelInput = item.querySelector('[data-field-prop="label"]');
+                if (labelInput) {
+                    labelInput.focus();
+                }
             });
         }
         var addStageButton = root.querySelector("[data-add-stage]");

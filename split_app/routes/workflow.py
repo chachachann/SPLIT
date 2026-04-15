@@ -1,7 +1,7 @@
 from flask import abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 from split_app.services.profiles import get_password_change_requests_for_user, get_password_change_review_queue
-from split_app.workflow.common import get_form_notifications_for_user
+from split_app.workflow.common import get_form_notifications_for_user, mark_workflow_queue_viewed
 from split_app.workflow.runtime import (
     add_submission_comment,
     admin_delete_pending_submission,
@@ -36,7 +36,7 @@ from split_app.workflow.templates import (
     list_forms_for_manager,
     save_form_definition,
 )
-from split_app.support import get_combined_workflow_counts, get_current_roles, get_topbar_notifications
+from split_app.support import discard_flash_message, get_combined_workflow_counts, get_current_roles, get_topbar_notifications
 
 
 def forms_manage():
@@ -254,6 +254,8 @@ def smtp_settings():
 
 def my_requests():
     current_roles = get_current_roles()
+    discard_flash_message("Form not found.")
+    mark_workflow_queue_viewed(session.get("user"), "my_requests")
     topbar_notifications, unread_notifications = get_topbar_notifications()
     return render_template(
         "my_requests.html",
@@ -269,6 +271,8 @@ def my_requests():
 
 def review_queue():
     current_roles = get_current_roles()
+    discard_flash_message("Form not found.")
+    mark_workflow_queue_viewed(session.get("user"), "review_queue")
     topbar_notifications, unread_notifications = get_topbar_notifications()
     return render_template(
         "review_queue.html",
@@ -282,13 +286,29 @@ def review_queue():
     )
 
 
+def _redirect_to_started_submission(submission_id, current_roles):
+    ok, _message, _payload = get_submission_editor_context(submission_id, session.get("user"), current_roles)
+    if ok:
+        return redirect(url_for("form_edit_submission", submission_id=submission_id))
+    return redirect(url_for("form_submission_detail", submission_id=submission_id))
+
+
+def form_start(form_key):
+    current_roles = get_current_roles()
+    ok, message, submission_id = start_form_draft(form_key, session.get("user"), current_roles)
+    if not ok or not submission_id:
+        flash(message, "error")
+        return redirect(url_for("dashboard"))
+    return _redirect_to_started_submission(submission_id, current_roles)
+
+
 def form_home(form_key):
     current_roles = get_current_roles()
     if request.method == "POST":
         ok, message, submission_id = start_form_draft(form_key, session.get("user"), current_roles)
         flash(message, "success" if ok else "error")
         if ok and submission_id:
-            return redirect(url_for("form_edit_submission", submission_id=submission_id))
+            return _redirect_to_started_submission(submission_id, current_roles)
         return redirect(url_for("form_home", form_key=form_key))
 
     ok, message, payload = get_form_home_context(form_key, session.get("user"), current_roles)

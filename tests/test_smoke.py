@@ -60,6 +60,7 @@ class SmokeTests(unittest.TestCase):
     def setUp(self):
         self.client = self.app.test_client()
         connection = logic.connect_db()
+        connection.execute("DELETE FROM form_queue_view_states")
         connection.execute(
             """
             DELETE FROM chat_favorites
@@ -126,6 +127,7 @@ class SmokeTests(unittest.TestCase):
         for endpoint in {
             "login",
             "dashboard",
+            "notification_open",
             "chat_bootstrap",
             "chat_message_update",
             "chat_message_delete",
@@ -135,6 +137,7 @@ class SmokeTests(unittest.TestCase):
             "form_library",
             "form_case_detail",
             "form_preview",
+            "form_start",
             "form_home",
             "form_submission_archive",
             "form_submission_delete_archived",
@@ -208,6 +211,444 @@ class SmokeTests(unittest.TestCase):
         response = self.client.get("/forms/manage/library")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Form Library", response.data)
+
+    def test_quick_action_form_start_route_redirects_directly_to_editor(self):
+        unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
+        ok, message, form_key = workflow_templates.create_form_template(f"Codex Quick Start {unique_suffix}", "RO_Admin")
+        self.assertTrue(ok, message)
+
+        payload = {
+            "title": f"Codex Quick Start {unique_suffix}",
+            "description": "Quick action should open the fill-up form immediately.",
+            "quick_label": "Quick",
+            "tracking_prefix": "QSTR",
+            "status": "published",
+            "allow_cancel": True,
+            "allow_multiple_active": True,
+            "requires_review": False,
+            "deadline_days": "",
+            "next_form_id": "",
+            "assignment_review_type": "",
+            "assignment_review_value": "",
+            "access_roles": ["Staff"],
+            "access_users": [],
+            "library_roles": ["Staff"],
+            "library_users": [],
+            "schema_json": '[{"label":"Applicant Name","key":"applicant_name","type":"short_text","required":true}]',
+            "review_stages_json": "[]",
+            "promotion_rules_json": "[]",
+            "quick_icon_type": "text",
+            "quick_icon_value": "QS",
+            "card_accent": "#43e493",
+            "card_tone": "mint",
+        }
+        ok, message = workflow_templates.save_form_definition(form_key, payload, "RO_Admin")
+        self.assertTrue(ok, message)
+
+        self._login_as_user("codex_target", "Codex Target")
+        response = self.client.get(f"/forms/{form_key}/start", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/forms/submissions/", response.headers["Location"])
+        self.assertTrue(response.headers["Location"].endswith("/edit"))
+
+        dashboard_response = self.client.get("/dashboard")
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertIn(f'/forms/{form_key}/start'.encode("utf-8"), dashboard_response.data)
+
+    def test_quick_action_form_start_route_uses_request_detail_when_existing_pending_request_blocks_new_draft(self):
+        unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
+        ok, message, form_key = workflow_templates.create_form_template(f"Codex Quick Reopen {unique_suffix}", "RO_Admin")
+        self.assertTrue(ok, message)
+
+        payload = {
+            "title": f"Codex Quick Reopen {unique_suffix}",
+            "description": "Quick action should reopen the existing request when multiple active is disabled.",
+            "quick_label": "Reopen",
+            "tracking_prefix": "QROP",
+            "status": "published",
+            "allow_cancel": True,
+            "allow_multiple_active": False,
+            "requires_review": True,
+            "deadline_days": "",
+            "next_form_id": "",
+            "assignment_review_type": "",
+            "assignment_review_value": "",
+            "access_roles": ["Staff"],
+            "access_users": [],
+            "library_roles": ["Staff"],
+            "library_users": [],
+            "schema_json": '[{"label":"Applicant Name","key":"applicant_name","type":"short_text","required":true}]',
+            "review_stages_json": '[{"name":"Stage 1","mode":"sequential","reviewers":[{"type":"user","value":"RO_Admin"}]}]',
+            "promotion_rules_json": "[]",
+            "quick_icon_type": "text",
+            "quick_icon_value": "QR",
+            "card_accent": "#43e493",
+            "card_tone": "mint",
+        }
+        ok, message = workflow_templates.save_form_definition(form_key, payload, "RO_Admin")
+        self.assertTrue(ok, message)
+
+        ok, message, submission_id = workflow_runtime.start_form_draft(form_key, "codex_target", ["Staff"])
+        self.assertTrue(ok, message)
+        ok, message, _submitted = workflow_runtime.submit_submission(
+            submission_id,
+            "codex_target",
+            ["Staff"],
+            {"field__applicant_name": "Quick Reopen"},
+            {},
+            remove_file_ids=[],
+        )
+        self.assertTrue(ok, message)
+
+        self._login_as_user("codex_target", "Codex Target")
+        response = self.client.get(f"/forms/{form_key}/start", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith(f"/forms/submissions/{submission_id}"))
+
+    def test_my_requests_badge_clears_after_opening_page_once(self):
+        unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
+        ok, message, form_key = workflow_templates.create_form_template(f"Codex Request Badge {unique_suffix}", "RO_Admin")
+        self.assertTrue(ok, message)
+
+        payload = {
+            "title": f"Codex Request Badge {unique_suffix}",
+            "description": "My Requests badge should clear after first open",
+            "quick_label": "Badge",
+            "tracking_prefix": "BDGE",
+            "status": "published",
+            "allow_cancel": True,
+            "allow_multiple_active": True,
+            "requires_review": False,
+            "deadline_days": "",
+            "next_form_id": "",
+            "assignment_review_type": "",
+            "assignment_review_value": "",
+            "access_roles": ["Staff"],
+            "access_users": [],
+            "library_roles": ["Staff"],
+            "library_users": [],
+            "schema_json": '[{"label":"Applicant Name","key":"applicant_name","type":"short_text","required":true}]',
+            "review_stages_json": "[]",
+            "promotion_rules_json": "[]",
+            "quick_icon_type": "text",
+            "quick_icon_value": "BG",
+            "card_accent": "#43e493",
+            "card_tone": "mint",
+        }
+        ok, message = workflow_templates.save_form_definition(form_key, payload, "RO_Admin")
+        self.assertTrue(ok, message)
+
+        ok, message, submission_id = workflow_runtime.start_form_draft(form_key, "codex_target", ["Staff"])
+        self.assertTrue(ok, message)
+        ok, message, _submitted = workflow_runtime.submit_submission(
+            submission_id,
+            "codex_target",
+            ["Staff"],
+            {"field__applicant_name": "Badge Target"},
+            {},
+            remove_file_ids=[],
+        )
+        self.assertTrue(ok, message)
+
+        before_counts = workflow_templates.get_workflow_topbar_counts("codex_target", ["Staff"])
+        self.assertEqual(before_counts["my_requests"], 1)
+
+        self._login_as_user("codex_target", "Codex Target")
+        response = self.client.get("/forms/my-requests")
+        self.assertEqual(response.status_code, 200)
+
+        after_open_counts = workflow_templates.get_workflow_topbar_counts("codex_target", ["Staff"])
+        self.assertEqual(after_open_counts["my_requests"], 0)
+
+        connection = logic.connect_db()
+        connection.execute(
+            """
+            UPDATE form_submissions
+            SET updated_at = '2099-01-01 00:00:00'
+            WHERE id = ?
+            """,
+            (submission_id,),
+        )
+        connection.commit()
+        connection.close()
+
+        refreshed_counts = workflow_templates.get_workflow_topbar_counts("codex_target", ["Staff"])
+        self.assertEqual(refreshed_counts["my_requests"], 1)
+
+    def test_my_requests_route_hides_active_tab_badge(self):
+        unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
+        ok, message, form_key = workflow_templates.create_form_template(f"Codex Active Tab {unique_suffix}", "RO_Admin")
+        self.assertTrue(ok, message)
+
+        payload = {
+            "title": f"Codex Active Tab {unique_suffix}",
+            "description": "Active My Requests tab should not show its own badge",
+            "quick_label": "Active",
+            "tracking_prefix": "ACTV",
+            "status": "published",
+            "allow_cancel": True,
+            "allow_multiple_active": True,
+            "requires_review": False,
+            "deadline_days": "",
+            "next_form_id": "",
+            "assignment_review_type": "",
+            "assignment_review_value": "",
+            "access_roles": ["Staff"],
+            "access_users": [],
+            "library_roles": ["Staff"],
+            "library_users": [],
+            "schema_json": '[{"label":"Applicant Name","key":"applicant_name","type":"short_text","required":true}]',
+            "review_stages_json": "[]",
+            "promotion_rules_json": "[]",
+            "quick_icon_type": "text",
+            "quick_icon_value": "AT",
+            "card_accent": "#43e493",
+            "card_tone": "mint",
+        }
+        ok, message = workflow_templates.save_form_definition(form_key, payload, "RO_Admin")
+        self.assertTrue(ok, message)
+
+        ok, message, submission_id = workflow_runtime.start_form_draft(form_key, "codex_target", ["Staff"])
+        self.assertTrue(ok, message)
+        ok, message, _submitted = workflow_runtime.submit_submission(
+            submission_id,
+            "codex_target",
+            ["Staff"],
+            {"field__applicant_name": "Active Badge"},
+            {},
+            remove_file_ids=[],
+        )
+        self.assertTrue(ok, message)
+
+        self._login_as_user("codex_target", "Codex Target")
+        response = self.client.get("/forms/my-requests")
+        self.assertEqual(response.status_code, 200)
+        page = response.data.decode("utf-8")
+        self.assertIn('workflow-topbar-link is-active', page)
+        self.assertNotIn('<span class="workflow-topbar-badge">', page)
+
+    def test_stale_form_notifications_are_hidden_automatically(self):
+        connection = logic.connect_db()
+        connection.execute(
+            """
+            INSERT INTO form_user_notifications (
+                username,
+                title,
+                message,
+                link_url,
+                style_key,
+                sender_name,
+                is_read,
+                is_hidden,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, 'warning', 'System', 0, 0, ?)
+            """,
+            (
+                "RO_Admin",
+                "Broken workflow link",
+                "This points to a missing submission.",
+                "/forms/submissions/999999",
+                logic.timestamp_now(),
+            ),
+        )
+        connection.commit()
+        connection.close()
+
+        items = support.get_form_notifications_for_user("RO_Admin")
+        self.assertFalse(any(item["title"] == "Broken workflow link" for item in items))
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT is_read, is_hidden
+            FROM form_user_notifications
+            WHERE username = ? AND title = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            ("RO_Admin", "Broken workflow link"),
+        )
+        row = cursor.fetchone()
+        connection.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["is_read"], 1)
+        self.assertEqual(row["is_hidden"], 1)
+
+    def test_stale_profile_password_notifications_are_hidden_automatically(self):
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM password_change_requests WHERE status = 'pending'")
+        cursor.execute("SELECT id FROM users WHERE lower(username) = lower(?)", ("RO_Admin",))
+        admin_user_id = cursor.fetchone()["id"]
+        cursor.execute(
+            """
+            INSERT INTO profile_notifications (
+                user_id,
+                title,
+                message,
+                link_url,
+                style_key,
+                sender_name,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                admin_user_id,
+                "Password change request pending",
+                "Codex Target submitted a password change request.",
+                "/forms/review-queue",
+                "warning",
+                "Codex Target",
+                logic.timestamp_now(),
+            ),
+        )
+        notification_id = cursor.lastrowid
+        connection.commit()
+        connection.close()
+
+        items = logic.get_profile_notifications_for_user("RO_Admin")
+        self.assertFalse(any(item["notification_key"] == f"profile:{notification_id}" for item in items))
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT is_read, is_hidden
+            FROM profile_notification_states
+            WHERE user_id = ? AND notification_key = ?
+            """,
+            (admin_user_id, f"profile:{notification_id}"),
+        )
+        row = cursor.fetchone()
+        connection.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["is_read"], 1)
+        self.assertEqual(row["is_hidden"], 1)
+
+    def test_review_queue_discards_stale_form_not_found_flash(self):
+        self._login_as_admin()
+        with self.client.session_transaction() as session_data:
+            session_data["_flashes"] = [("error", "Form not found.")]
+
+        response = self.client.get("/forms/review-queue")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Form not found.", response.data)
+
+    def test_notification_action_marks_fresh_db_notification_read(self):
+        ok, message = content_services.create_notification(
+            "Codex Fresh DB Read Test",
+            "Fresh notification should persist read state.",
+            ["All"],
+            "info",
+            actor_username="RO_Admin",
+            actor_fullname="Regional Admin",
+        )
+        self.assertTrue(ok, message)
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id
+            FROM notifications
+            WHERE title = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            ("Codex Fresh DB Read Test",),
+        )
+        notification_id = cursor.fetchone()["id"]
+        connection.close()
+
+        self._login_as_user("RO_RITS", "Chan")
+        response = self.client.post(
+            "/notifications/action",
+            data={"notification_key": f"db:{notification_id}", "action": "mark-read"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        self.assertEqual(response.status_code, 204)
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT is_read, is_hidden
+            FROM notification_user_states
+            WHERE username = ? AND notification_key = ?
+            """,
+            ("RO_RITS", f"db:{notification_id}"),
+        )
+        row = cursor.fetchone()
+        connection.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["is_read"], 1)
+        self.assertEqual(row["is_hidden"], 0)
+
+    def test_notification_open_redirects_valid_internal_queue_link(self):
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute("SELECT id FROM users WHERE lower(username) = lower(?)", ("RO_Admin",))
+        user_id = cursor.fetchone()["id"]
+        cursor.execute(
+            """
+            INSERT INTO profile_notifications (
+                user_id,
+                title,
+                message,
+                link_url,
+                style_key,
+                sender_name,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                "Codex Internal Queue Link",
+                "Open the review queue from notifications.",
+                "/forms/review-queue",
+                "info",
+                "System",
+                logic.timestamp_now(),
+            ),
+        )
+        notification_id = cursor.lastrowid
+        connection.commit()
+        connection.close()
+
+        self._login_as_admin()
+        response = self.client.get(
+            f"/notifications/open?notification_key=profile:{notification_id}",
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/forms/review-queue"))
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT is_read, is_hidden
+            FROM profile_notification_states
+            WHERE user_id = ? AND notification_key = ?
+            """,
+            (user_id, f"profile:{notification_id}"),
+        )
+        row = cursor.fetchone()
+        connection.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["is_read"], 1)
+        self.assertEqual(row["is_hidden"], 0)
+
+    def test_notification_js_uses_action_attribute_instead_of_shadowed_form_property(self):
+        app_js_path = os.path.join(os.path.dirname(__file__), "..", "static", "app.js")
+        with open(app_js_path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn('form.getAttribute("action")', source)
+        self.assertNotIn("fetch(form.action", source)
 
     def test_form_library_is_filtered_to_visible_submissions(self):
         unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
@@ -513,6 +954,127 @@ class SmokeTests(unittest.TestCase):
         reviewer_field_keys = {field["key"] for field in reviewer_payload["visible_fields"]}
         self.assertEqual({"public_note", "secret_note"}, reviewer_field_keys)
         self.assertTrue(reviewer_payload["can_view_private_fields"])
+
+    def test_submission_without_actionable_reviewers_completes_immediately(self):
+        unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
+        ok, message, form_key = workflow_templates.create_form_template(f"Codex No Reviewer {unique_suffix}", "RO_Admin")
+        self.assertTrue(ok, message)
+
+        payload = {
+            "title": f"Codex No Reviewer {unique_suffix}",
+            "description": "Forms with no live reviewer targets should complete immediately",
+            "quick_label": "NR",
+            "tracking_prefix": "NOREV",
+            "status": "published",
+            "allow_cancel": True,
+            "allow_multiple_active": True,
+            "requires_review": True,
+            "deadline_days": "",
+            "next_form_id": "",
+            "assignment_review_type": "",
+            "assignment_review_value": "",
+            "access_roles": ["Staff"],
+            "access_users": ["codex_target"],
+            "library_roles": [],
+            "library_users": [],
+            "schema_json": '[{"label":"Applicant Name","key":"applicant_name","type":"short_text","required":true}]',
+            "review_stages_json": '[{"name":"Approval","mode":"parallel","reviewers":[{"type":"role","value":"GhostRole"}]}]',
+            "promotion_rules_json": "[]",
+            "quick_icon_type": "text",
+            "quick_icon_value": "NR",
+            "card_accent": "#43e493",
+            "card_tone": "mint",
+        }
+        ok, message = workflow_templates.save_form_definition(form_key, payload, "RO_Admin")
+        self.assertTrue(ok, message)
+
+        ok, message, submission_id = workflow_runtime.start_form_draft(form_key, "codex_target", ["Staff"])
+        self.assertTrue(ok, message)
+        ok, message, submitted = workflow_runtime.submit_submission(
+            submission_id,
+            "codex_target",
+            ["Staff"],
+            {"field__applicant_name": "No Reviewer"},
+            {},
+            remove_file_ids=[],
+        )
+        self.assertTrue(ok, message)
+        self.assertEqual(submitted["status"], "completed")
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute("SELECT id FROM form_review_tasks WHERE submission_id = ?", (submission_id,))
+        self.assertEqual(cursor.fetchall(), [])
+        connection.close()
+
+    def test_submission_drops_dead_reviewers_but_keeps_live_ones(self):
+        unique_suffix = logic.timestamp_now().replace(" ", "-").replace(":", "")
+        ok, message, form_key = workflow_templates.create_form_template(f"Codex Mixed Reviewers {unique_suffix}", "RO_Admin")
+        self.assertTrue(ok, message)
+
+        payload = {
+            "title": f"Codex Mixed Reviewers {unique_suffix}",
+            "description": "Dead reviewers should not block live reviewers",
+            "quick_label": "MR",
+            "tracking_prefix": "MIXREV",
+            "status": "published",
+            "allow_cancel": True,
+            "allow_multiple_active": True,
+            "requires_review": True,
+            "deadline_days": "",
+            "next_form_id": "",
+            "assignment_review_type": "",
+            "assignment_review_value": "",
+            "access_roles": ["Staff"],
+            "access_users": ["codex_target"],
+            "library_roles": [],
+            "library_users": [],
+            "schema_json": '[{"label":"Applicant Name","key":"applicant_name","type":"short_text","required":true}]',
+            "review_stages_json": (
+                '[{"name":"Approval","mode":"parallel","reviewers":['
+                '{"type":"user","value":"ghost_user"},'
+                '{"type":"role","value":"Staff"}]}]'
+            ),
+            "promotion_rules_json": "[]",
+            "quick_icon_type": "text",
+            "quick_icon_value": "MR",
+            "card_accent": "#43e493",
+            "card_tone": "mint",
+        }
+        ok, message = workflow_templates.save_form_definition(form_key, payload, "RO_Admin")
+        self.assertTrue(ok, message)
+
+        ok, message, submission_id = workflow_runtime.start_form_draft(form_key, "codex_target", ["Staff"])
+        self.assertTrue(ok, message)
+        ok, message, submitted = workflow_runtime.submit_submission(
+            submission_id,
+            "codex_target",
+            ["Staff"],
+            {"field__applicant_name": "Mixed Reviewer"},
+            {},
+            remove_file_ids=[],
+        )
+        self.assertTrue(ok, message)
+        self.assertEqual(submitted["status"], "pending")
+
+        connection = logic.connect_db()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT reviewer_type, reviewer_value, task_status
+            FROM form_review_tasks
+            WHERE submission_id = ?
+            ORDER BY id
+            """,
+            (submission_id,),
+        )
+        tasks = cursor.fetchall()
+        connection.close()
+
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["reviewer_type"], "role")
+        self.assertEqual(tasks[0]["reviewer_value"], "Staff")
+        self.assertEqual(tasks[0]["task_status"], "pending")
 
     def test_create_marquee_item_rejects_duplicate_active_message(self):
         unique_message = f"codex-marquee-{logic.timestamp_now()}"

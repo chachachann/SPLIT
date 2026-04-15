@@ -482,6 +482,46 @@ def create_profile_notifications(connection, user_ids, title, message, link_url=
         )
 
 
+_PENDING_PASSWORD_NOTIFICATION_TITLE = "Password change request pending"
+_PENDING_PASSWORD_NOTIFICATION_SUFFIX = " submitted a password change request."
+
+
+def _extract_pending_password_request_subject(message):
+    text = " ".join(str(message or "").split()).strip()
+    if not text.endswith(_PENDING_PASSWORD_NOTIFICATION_SUFFIX):
+        return ""
+    return text[: -len(_PENDING_PASSWORD_NOTIFICATION_SUFFIX)].strip()
+
+
+def _pending_password_request_subjects(connection):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT u.username, u.fullname
+        FROM password_change_requests r
+        INNER JOIN users u ON u.id = r.requester_user_id
+        WHERE r.status = 'pending'
+        """
+    )
+    subjects = set()
+    for row in cursor.fetchall():
+        fullname = (row["fullname"] or "").strip()
+        username = (row["username"] or "").strip()
+        if fullname:
+            subjects.add(fullname)
+        if username:
+            subjects.add(username)
+    return subjects
+
+
+def _is_pending_password_review_notification(item):
+    return (
+        " ".join(str(item.get("title") or "").split()).strip() == _PENDING_PASSWORD_NOTIFICATION_TITLE
+        and str(item.get("link_url") or "").strip() == "/forms/review-queue"
+        and bool(_extract_pending_password_request_subject(item.get("message")))
+    )
+
+
 def get_profile_notifications_for_user(username):
     from logic import get_user_row_by_username
 
@@ -517,9 +557,11 @@ def get_profile_notifications_for_user(username):
         (user_row["id"], *notification_keys),
     )
     state_map = {row["notification_key"]: dict(row) for row in cursor.fetchall()}
-    connection.close()
+    pending_request_subjects = _pending_password_request_subjects(connection)
 
     visible_items = []
+    stale_notification_keys = []
+    seen_pending_subjects = set()
     for item in items:
         notification_key = f"profile:{item['id']}"
         state = state_map.get(notification_key, {})
@@ -529,9 +571,36 @@ def get_profile_notifications_for_user(username):
         item["message_html"] = render_notification_markup(item.get("message"))
         item["is_read"] = bool(state.get("is_read"))
         item["is_hidden"] = bool(state.get("is_hidden"))
+        if _is_pending_password_review_notification(item):
+            subject = _extract_pending_password_request_subject(item.get("message"))
+            if subject not in pending_request_subjects or subject in seen_pending_subjects:
+                stale_notification_keys.append(notification_key)
+                continue
+            seen_pending_subjects.add(subject)
         if item["is_hidden"]:
             continue
         visible_items.append(item)
+    if stale_notification_keys:
+        now = timestamp_now()
+        connection.executemany(
+            """
+            INSERT INTO profile_notification_states (
+                user_id,
+                notification_key,
+                is_read,
+                is_hidden,
+                updated_at
+            )
+            VALUES (?, ?, 1, 1, ?)
+            ON CONFLICT(user_id, notification_key) DO UPDATE SET
+                is_read = 1,
+                is_hidden = 1,
+                updated_at = excluded.updated_at
+            """,
+            [(user_row["id"], key, now) for key in stale_notification_keys],
+        )
+        connection.commit()
+    connection.close()
     return visible_items
 
 
@@ -914,6 +983,7 @@ def save_profile_preferences(username, theme, *, audit_event="profile.preference
 
 def get_profile_request_counts(username, role_names):
     from logic import get_user_row_by_username
+    from split_app.workflow.common import get_workflow_queue_last_viewed_at
 
     connection = connect_db()
     user_row = get_user_row_by_username(connection, username)
@@ -922,25 +992,50 @@ def get_profile_request_counts(username, role_names):
         return {"my_requests": 0, "review_queue": 0}
 
     cursor = connection.cursor()
-    cursor.execute(
-        """
-        SELECT COUNT(*) AS total
-        FROM password_change_requests
-        WHERE requester_user_id = ? AND status != 'archived'
-        """,
-        (user_row["id"],),
-    )
-    my_requests = int(cursor.fetchone()["total"] or 0)
-    role_keys = {str(role or "").casefold() for role in (role_names or [])}
-    review_queue = 0
-    if role_keys & {"developer", "superadmin"}:
+    last_my_requests_viewed_at = get_workflow_queue_last_viewed_at(username, "my_requests")
+    last_review_queue_viewed_at = get_workflow_queue_last_viewed_at(username, "review_queue")
+    if last_my_requests_viewed_at:
         cursor.execute(
             """
             SELECT COUNT(*) AS total
             FROM password_change_requests
-            WHERE status = 'pending'
+            WHERE requester_user_id = ?
+              AND status != 'archived'
+              AND datetime(updated_at) > datetime(?)
             """,
+            (user_row["id"], last_my_requests_viewed_at),
         )
+    else:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM password_change_requests
+            WHERE requester_user_id = ? AND status != 'archived'
+            """,
+            (user_row["id"],),
+        )
+    my_requests = int(cursor.fetchone()["total"] or 0)
+    role_keys = {str(role or "").casefold() for role in (role_names or [])}
+    review_queue = 0
+    if role_keys & {"developer", "superadmin"}:
+        if last_review_queue_viewed_at:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM password_change_requests
+                WHERE status = 'pending'
+                  AND datetime(updated_at) > datetime(?)
+                """,
+                (last_review_queue_viewed_at,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM password_change_requests
+                WHERE status = 'pending'
+                """,
+            )
         review_queue = int(cursor.fetchone()["total"] or 0)
 
     connection.close()
